@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# MCP server config (holds Trello API key/token)
+.mcp.json
+
 # typescript
 *.tsbuildinfo
 
