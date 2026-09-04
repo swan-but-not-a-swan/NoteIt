@@ -2,6 +2,7 @@ import { Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from "reac
 import { Feather } from "@expo/vector-icons";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
+import { hexToRgba } from "@/lib/color";
 import { CropperContent } from "./ThumbnailCropper";
 
 type Props = {
@@ -20,18 +21,9 @@ type Props = {
   onPickThumbnail: () => void;
   /** Omit to hide the "Remove photo" action entirely (e.g. while nothing's picked). */
   onRemoveThumbnail?: () => void;
-  /** The freshly-picked, uncropped photo. Its presence — not a separate
-   *  boolean — is what switches this modal's content to the cropper. Only
-   *  one <Modal> is ever open (iOS refuses to present a second native modal
-   *  on top of one already up, silently ignoring the attempt rather than
-   *  erroring), and there's no separate "is cropping" state to fall out of
-   *  sync with whether there's actually a photo to crop. */
   cropSourceUri?: string | null;
   onCropCancel: () => void;
   onCropConfirm: (croppedUri: string) => void;
-  /** Only rendered when mode is "edit" — there's nothing to delete yet
-   *  while creating. The confirmation prompt and the actual delete are the
-   *  caller's responsibility; this just surfaces the entry point. */
   onDelete?: () => void;
   error?: string;
   colors: ThemeColors;
@@ -39,9 +31,7 @@ type Props = {
   onSave: () => void;
 };
 
-// Fully controlled: this component holds no state of its own. The screen
-// (or whatever owns the business logic) supplies name/color/error and
-// receives change/cancel/save callbacks — this file only renders them.
+
 export default function NewFolder({
   visible,
   mode,
@@ -83,9 +73,20 @@ export default function NewFolder({
           onPress={() => {}}
           style={[styles.card, { backgroundColor: colors.bg, borderColor: colors.line }]}
         >
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            {mode === "edit" ? "Edit folder" : "New folder"}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={[styles.title, { color: colors.textPrimary }]}>
+              {mode === "edit" ? "Edit folder" : "New folder"}
+            </Text>
+            {mode === "edit" && onDelete != null && (
+              <Pressable
+                onPress={onDelete}
+                hitSlop={8}
+                style={[styles.deleteButton, { backgroundColor: hexToRgba(colors.error, 0.15) }]}
+              >
+                <Feather name="trash-2" size={16} color={colors.error} />
+              </Pressable>
+            )}
+          </View>
 
           <View
             style={[
@@ -191,10 +192,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 20,
   },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
   title: {
     fontFamily: fonts.frauncesSemiBold,
     fontSize: 18,
-    marginBottom: 16,
+  },
+  deleteButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
   },
   nameRow: {
     flexDirection: "row",

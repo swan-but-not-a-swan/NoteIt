@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { DARK_THEME, FOLDER_SWATCHES } from "@/theme/colors";
 import TopBar, { SettingsButton } from "../components/TopBar";
 import PoweredByFooter from "../components/PoweredByFooter";
@@ -8,29 +8,13 @@ import { getFoldersFromStorage, loadFoldersWithCounts, saveFoldersToStorage } fr
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native"
 import { FolderListItemModel } from "../models/FolderListItemModel";
+import { FolderModel } from "../models/FolderModel";
 import * as Crypto from "expo-crypto";
-import { Directory, File, Paths } from "expo-file-system";
+import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
+import { deleteThumbnailFile, getThumbnailFileUri, thumbnailFileValidator } from "@/lib/ThumbnailHelper";
 
-// expo-file-system's newer API (v19+) is class-based and mostly synchronous
-// — no more FileSystem.documentDirectory / copyAsync / deleteAsync strings
-// and Promises. Paths.document is the persistent, backed-up directory
-// (equivalent to the old documentDirectory, not cacheDirectory).
-//
-// Built lazily, not as a module-level constant: `Paths.document` isn't
-// backed by a real native filesystem on web, and constructing a Directory
-// eagerly at import time crashed the entire screen the instant this file
-// was imported — before anything even tried to use it.
-function getThumbnailDir() {
-    return new Directory(Paths.document, "folder-thumbnails");
-}
-
-function deleteThumbnailFile(uri: string) {
-    const file = new File(uri);
-    if (file.exists) {
-        file.delete(); // throws if missing, hence the exists check — this makes it idempotent
-    }
-}
+const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 
 export default function Home() {
     // TODO (business logic): swap DARK_THEME for real theme-mode state once
@@ -42,53 +26,96 @@ export default function Home() {
     const [newFolderColor, setNewFolderColor] = useState(FOLDER_SWATCHES[0]);
     const [newFolderError, setNewFolderError] = useState<string | undefined>(undefined);
     const [newFolderThumbnailUri, setNewFolderThumbnailUri] = useState<string | null>(null);
+    const [originalFolderThumbnailUri, setOriginalFolderThumbnailUri] = useState<string | null>(null);
     const [cropSourceUri, setCropSourceUri] = useState<string | null>(null);
-
+    const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
     const [folders, setFolders] = useState<FolderListItemModel[]>([]);
-    const getFolders = async () => {
+
+    const getFoldersWithCounts = async () => {
         const data = await loadFoldersWithCounts();
         setFolders(data);
     };
 
     useFocusEffect(
         useCallback(() => {
-            getFolders();
+            getFoldersWithCounts();
         }, []),
     );
 
     const openNewFolder = () => {
+        setEditingFolderId(null);
         setNewFolderName("");
         setNewFolderColor(FOLDER_SWATCHES[0]);
         setNewFolderError(undefined);
         setNewFolderThumbnailUri(null);
+        setOriginalFolderThumbnailUri(null);
+        setCropSourceUri(null);
+        setShowNewFolder(true);
+    };
+
+    const onEditFolder = (folder: FolderModel) => {
+        setEditingFolderId(folder.id);
+        setNewFolderName(folder.name);
+        setNewFolderColor(folder.accent);
+        setNewFolderError(undefined);
+        setNewFolderThumbnailUri(folder.coverUri ?? null);
+        setOriginalFolderThumbnailUri(folder.coverUri ?? null);
         setCropSourceUri(null);
         setShowNewFolder(true);
     };
 
     const cancelNewFolder = () => {
-        // The folder was never saved, so a picked-but-unused thumbnail would
-        // otherwise leak as an orphaned file — same "no dangling references,
-        // no wasted files" discipline as everywhere else.
-        if (newFolderThumbnailUri != null) {
-            deleteThumbnailFile(newFolderThumbnailUri);
+        // *The folder was never saved, so orphaned files are deleted when the operation is canceled.
+
+
+        if (newFolderThumbnailUri !== originalFolderThumbnailUri) 
+        {
+            if(newFolderThumbnailUri != null) 
+            {
+                deleteThumbnailFile(newFolderThumbnailUri);
+            }
+            else
+            {
+                setNewFolderThumbnailUri(originalFolderThumbnailUri);
+            }
         }
+        setEditingFolderId(null);
         setShowNewFolder(false);
     };
 
-    const pickThumbnail = async () => {
-        if (Platform.OS === "web") {
-            // expo-file-system's persistent Directory/File API (used a few
-            // steps later, in confirmCroppedThumbnail) has no real native
-            // filesystem to back it on web — it throws there every time.
-            // Failing fast here means you don't walk through the whole crop
-            // UI just to hit a wall at the very end.
-            setNewFolderError("Photo thumbnails aren't supported in the web preview — test this on a device or simulator.");
-            return;
-        }
+    const confirmDeleteFolder = () => {
+        if (editingFolderId == null) return;
+        const folderId = editingFolderId;
 
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-            setNewFolderError("Allow photo library access to set a thumbnail.");
+        Alert.alert(
+            "Delete folder?",
+            "Its notes will be moved out of the folder. This can't be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Delete", style: "destructive", onPress: () => performDeleteFolder(folderId) },
+            ],
+        );
+    };
+
+    const performDeleteFolder = async (folderId: string) => {
+        // TODO (business logic): remove this folder from storage and reassign
+        // its notes so they aren't orphaned — see groupNotesByFolder's
+        // `note.folderId ?? "gallery"` fallback in FileStorage.ts, which already
+        // expects notes with no folder. Roughly:
+        //   1. getFoldersFromStorage() + getNotesFromStorage()
+        //   2. delete the folder's thumbnail file if coverUri != null (deleteThumbnailFile)
+        //   3. set folderId: null on any note whose folderId matches this folder,
+        //      persist via a new saveNotesToStorage (FileStorage.ts has no such
+        //      helper yet — saveFoldersToStorage is the pattern to mirror)
+        //   4. saveFoldersToStorage with this folder removed
+        // Finish with the same close-and-refresh calls as saveNewFolder below:
+        //   setEditingFolderId(null); setShowNewFolder(false); await getFoldersWithCounts();
+    };
+
+    const pickThumbnail = async () => {
+        const validationError = await thumbnailFileValidator();
+        if (validationError != null) {
+            setNewFolderError(validationError);
             return;
         }
 
@@ -97,28 +124,24 @@ export default function Home() {
         });
         if (result.canceled) return;
 
-        // NewFolder's own modal stays open throughout — setting this just
-        // switches what it renders inside that same modal, to the cropper.
+        // *NewFolder's own modal stays open throughout — setting this just
+        // *switches what it renders inside that same modal, to the cropper.
         setCropSourceUri(result.assets[0].uri);
-    };
+    }
 
     const confirmCroppedThumbnail = (croppedUri: string) => {
-        // A previous pick-then-crop this session (before ever saving) would
-        // otherwise be orphaned the moment it's replaced.
-        if (newFolderThumbnailUri != null) {
+        //*delete any orphaned thumbail from previous(failed to save) crop session
+        if (newFolderThumbnailUri != null && newFolderThumbnailUri !== originalFolderThumbnailUri) {
             deleteThumbnailFile(newFolderThumbnailUri);
         }
 
-        const thumbnailDir = getThumbnailDir();
-        thumbnailDir.create({ intermediates: true, idempotent: true });
-        const dest = new File(thumbnailDir, `${Crypto.randomUUID()}.jpg`);
-        new File(croppedUri).copy(dest); // file written before...
-        setNewFolderThumbnailUri(dest.uri); // ...the reference is kept
+        const destUri = getThumbnailFileUri(getThumbnailDir(), croppedUri);
+        setNewFolderThumbnailUri(destUri); // ...the reference is kept
         setCropSourceUri(null); // back to the form, still the same modal
     };
-
+    
     const removeNewFolderThumbnail = () => {
-        if (newFolderThumbnailUri != null) {
+        if (newFolderThumbnailUri != null && editingFolderId == null) {
             deleteThumbnailFile(newFolderThumbnailUri);
         }
         setNewFolderThumbnailUri(null);
@@ -132,25 +155,45 @@ export default function Home() {
         }
 
         const existing = await getFoldersFromStorage();
-        
+        //*checks duplicate, rejects if the name is same as any other folder except the one being edited
         const isDuplicate = existing.some(
-            (folder) => folder.name.trim().toLowerCase() === trimmed.toLowerCase()
+            (folder) => folder.id !== editingFolderId &&
+                folder.name.trim().toLowerCase() === trimmed.toLowerCase()
         );
+
         if (isDuplicate) {
             setNewFolderError("A folder with that name already exists.");
             return;
         }
 
-        const newFolder = {
-            id: Crypto.randomUUID(),
-            name: trimmed,
-            accent: newFolderColor,
-            Visible: true,
-            coverUri: newFolderThumbnailUri,
-        };
+        let updatedExisting: FolderModel[];
+
+        //* if editing, update the existing folder; else creating, add a new folder to the list
+        if (editingFolderId != null) 
+        {
+            updatedExisting = existing.map((folder) =>
+                folder.id === editingFolderId
+                    ? { ...folder, name: trimmed, accent: newFolderColor, coverUri: newFolderThumbnailUri }
+                    : folder
+            );
+        }
+        else
+        {
+            const newFolder = {
+                id: Crypto.randomUUID(),
+                name: trimmed,
+                accent: newFolderColor,
+                Visible: true,
+                coverUri: newFolderThumbnailUri,
+            };
+            updatedExisting = [...existing, newFolder];
+        }
         
-        await saveFoldersToStorage([...existing, newFolder]);
-        await getFolders();
+        await saveFoldersToStorage(updatedExisting);
+        if (editingFolderId != null && originalFolderThumbnailUri != null && originalFolderThumbnailUri !== newFolderThumbnailUri) {
+            deleteThumbnailFile(originalFolderThumbnailUri);
+        }
+        await getFoldersWithCounts();
         setShowNewFolder(false);
     };
 
@@ -174,11 +217,7 @@ export default function Home() {
                 items={folders}
                 colors={colors}
                 onOpenFolder={() => {}}
-                onEditFolder={() => {
-                    // TODO (business logic): edit mode — prefill name/color from
-                    // the tapped folder and save by updating in place rather
-                    // than appending. Not part of this pass.
-                }}
+                onEditFolder={onEditFolder}
                 onNewFolder={openNewFolder}
             />
 
@@ -186,7 +225,7 @@ export default function Home() {
 
             <NewFolder
                 visible={showNewFolder}
-                mode="create"
+                mode={editingFolderId != null ? "edit" : "create"}
                 name={newFolderName}
                 onNameChange={setNewFolderName}
                 color={newFolderColor}
@@ -198,6 +237,7 @@ export default function Home() {
                 cropSourceUri={cropSourceUri}
                 onCropCancel={() => setCropSourceUri(null)}
                 onCropConfirm={confirmCroppedThumbnail}
+                onDelete={editingFolderId != null ? confirmDeleteFolder : undefined}
                 error={newFolderError}
                 colors={colors}
                 onCancel={cancelNewFolder}
