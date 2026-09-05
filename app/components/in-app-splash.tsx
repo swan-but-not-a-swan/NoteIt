@@ -19,8 +19,18 @@ export default function InAppSplash({ onFinish }: Props) {
   const glowOpacity = useRef(new Animated.Value(0.55)).current;
   const lockupOpacity = useRef(new Animated.Value(0)).current;
   const lockupY = useRef(new Animated.Value(14)).current;
+  const finished = useRef(false);
 
   useEffect(() => {
+    // Guards against calling onFinish (which navigates away) twice, and lets
+    // the safety-net timeout below and the animation's own completion race
+    // each other without double-firing.
+    const finish = () => {
+      if (finished.current) return;
+      finished.current = true;
+      onFinish();
+    };
+
     const breathe = Animated.loop(
       Animated.sequence([
         Animated.parallel([
@@ -63,12 +73,20 @@ export default function InAppSplash({ onFinish }: Props) {
           delay: 150,
           useNativeDriver: true,
         }),
-        Animated.spring(lockupY, {
+        // A timing animation with a back-out easing reads almost identically
+        // to the settle of a spring, but (unlike Animated.spring) always
+        // finishes in a fixed, predictable duration — react-native-web's
+        // JS-fallback animation driver (used since useNativeDriver isn't
+        // available on web) doesn't reliably detect when a spring comes to
+        // rest, which was silently stalling this whole sequence forever on
+        // web and never calling onFinish, leaving the app stuck on the
+        // splash screen.
+        Animated.timing(lockupY, {
           toValue: 0,
+          duration: 700,
           delay: 150,
+          easing: Easing.out(Easing.back(1.4)),
           useNativeDriver: true,
-          damping: 14,
-          stiffness: 120,
         }),
       ]),
       Animated.delay(1300),
@@ -79,10 +97,19 @@ export default function InAppSplash({ onFinish }: Props) {
       }),
     ]).start(() => {
       breathe.stop();
-      onFinish();
+      finish();
     });
 
-    return () => breathe.stop();
+    // Belt-and-suspenders: whatever the cause, the splash must never be able
+    // to block navigation forever. The animation above totals ~2.55s: if
+    // finish() hasn't already fired by 4s, something's wrong with the
+    // animation itself rather than the app, so move on anyway.
+    const safetyTimeout = setTimeout(finish, 4000);
+
+    return () => {
+      breathe.stop();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   return (

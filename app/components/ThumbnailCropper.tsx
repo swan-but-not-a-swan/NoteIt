@@ -168,7 +168,7 @@ export function CropperContent({
     ],
   }));
 
-  const handleConfirm = async () => {
+  const handleConfirmAsync = async () => {
     if (natural == null || saving) return;
     setSaving(true);
     try {
@@ -199,7 +199,7 @@ export function CropperContent({
           <Text style={styles.topBarAction}>Cancel</Text>
         </Pressable>
         <Text style={[styles.topBarTitle, { color: colors.textPrimary }]}>Crop thumbnail</Text>
-        <Pressable onPress={handleConfirm} hitSlop={8} disabled={saving || natural == null}>
+        <Pressable onPress={handleConfirmAsync} hitSlop={8} disabled={saving || natural == null}>
           <Text style={[styles.topBarAction, { color: colors.accent, opacity: saving || natural == null ? 0.5 : 1 }]}>
             {saving ? "Saving…" : "Use Photo"}
           </Text>

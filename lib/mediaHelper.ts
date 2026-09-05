@@ -10,7 +10,7 @@ export function deleteThumbnailFile(uri: string) {
     }
 }
 
-export async function thumbnailFileValidator():Promise<string|undefined>
+export async function thumbnailFileValidatorAsync():Promise<string|undefined>
 {
     if (Platform.OS === "web") 
     {
@@ -30,5 +30,14 @@ export function getThumbnailFileUri(destDir: Directory, croppedUri: string): str
     destDir.create({ intermediates: true, idempotent: true });
     const dest = new File(destDir, `${Crypto.randomUUID()}.jpg`);
     new File(croppedUri).copy(dest); // file written before...
+    return dest.uri;
+}
+
+export function getNoteMediaFileUri(
+    destDir: Directory, mediaUri: string, mediaExtension: string): string
+{
+    destDir.create({ intermediates: true, idempotent: true });
+    const dest = new File(destDir, `${Crypto.randomUUID()}.${mediaExtension}`);
+    new File(mediaUri).copy(dest);
     return dest.uri;
 }

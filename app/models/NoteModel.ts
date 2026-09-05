@@ -1,5 +1,14 @@
 export type NoteModel = {
     id: string;
-    folderId: string;
-    //TODO add note and media properties
+    mediaUri: string;
+    note: string;
+    date: string;
+    tagIds: string[];
+    folderId: string | null;
+    createdAt: string;
+}
+
+export type TagModel = {
+    id: string;
+    title: string;
 }

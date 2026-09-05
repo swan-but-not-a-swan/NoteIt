@@ -48,9 +48,6 @@ type SettingsButtonProps = {
   onPress: () => void;
 };
 
-// Reusable icon-button in the TopBar's own visual style — named for its
-// current use (the Folders tab's settings entry point), but any screen
-// needing a single-icon action in the `right` slot can reuse it.
 export function SettingsButton({ colors, onPress }: SettingsButtonProps) {
   return (
     <Pressable
