@@ -21,9 +21,7 @@ import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatDayDate } from "@/lib/date";
 import { FolderModel } from "../models/FolderModel";
-import { TagModel } from "../models/NoteModel";
-
-export type NoteMediaType = "image" | "video";
+import { NoteMediaType, TagModel } from "../models/NoteModel";
 
 type Props = {
   visible: boolean;

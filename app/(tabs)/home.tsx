@@ -1,13 +1,17 @@
 import { Alert, Platform, StyleSheet, View } from "react-native";
 import { DateTimePickerAndroid, DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { DARK_THEME, FOLDER_SWATCHES } from "@/theme/colors";
 import TopBar, { SettingsButton } from "../components/TopBar";
-import BottomTabBar from "../components/BottomTabBar";
+import BottomTabBar, { MainTab } from "../components/BottomTabBar";
 import FoldersList from "../components/FoldersList";
+import GalleryGrid from "../components/GalleryGrid";
 import NewFolder from "../components/NewFolder";
-import AddNote, { NoteMediaType } from "../components/AddNote";
-import { getFoldersFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync, saveNoteToStorageAsync, saveTagsToStorageAsync } from "../persistence/FileStorage";
-import { useCallback, useState } from "react";
+import AddNote from "../components/AddNote";
+import ViewNote from "../components/ViewNote";
+import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync, saveNoteToStorageAsync, saveTagsToStorageAsync } from "../persistence/FileStorage";
+import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native"
 import { useRouter } from "expo-router";
 import { FolderListItemModel } from "../models/FolderListItemModel";
@@ -15,12 +19,33 @@ import { FolderModel } from "../models/FolderModel";
 import * as Crypto from "expo-crypto";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import { deleteThumbnailFile, getNoteMediaFileUri, getThumbnailFileUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
+import { deleteThumbnailFile, getNoteMediaFileUri, getThumbnailFileUri, getThumbnailFromImageAsync, getThumbnailFromVideo, SourceMedia, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
 import { todayISO } from "@/lib/date";
-import { NoteModel, TagModel } from "../models/NoteModel";
+import { NoteMediaType, NoteModel, TagModel } from "../models/NoteModel";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 const getNoteMediaDir = () => new Directory(Paths.document, "note-media");
+
+// Slides its content in from the side matching `dir` (or renders in place
+// when null, e.g. on first mount). Give it a `key` that changes whenever the
+// active tab changes so it remounts and the animation replays each switch —
+// same trick as the reference's `key={tab}` + CSS entrance animation.
+function SlideInPage({ dir, children }: { dir: "forward" | "backward" | null; children: React.ReactNode }) {
+    const translateX = useSharedValue(dir === "forward" ? 70 : dir === "backward" ? -70 : 0);
+    const opacity = useSharedValue(dir != null ? 0 : 1);
+
+    useEffect(() => {
+        translateX.value = withTiming(0, { duration: 280 });
+        opacity.value = withTiming(1, { duration: 280 });
+    }, []);
+
+    const style = useAnimatedStyle(() => ({
+        transform: [{ translateX: translateX.value }],
+        opacity: opacity.value,
+    }));
+
+    return <Animated.View style={[styles.page, style]}>{children}</Animated.View>;
+}
 
 export default function Home() {
     // TODO (business logic): swap DARK_THEME for real theme-mode state once
@@ -40,6 +65,7 @@ export default function Home() {
     const [noteText, setNoteText] = useState("");
     const [noteMediaUri, setNoteMediaUri] = useState<string | null>(null);
     const [noteMediaType, setNoteMediaType] = useState<NoteMediaType | null>(null);
+    const [noteMediaMimeType, setNoteMediaMimeType] = useState<string | null>(null);
     const [noteDate, setNoteDate] = useState(todayISO());
     const [noteTags, setNoteTags] = useState<string[]>([]);
     const [noteTagInput, setNoteTagInput] = useState("");
@@ -48,6 +74,18 @@ export default function Home() {
     const [noteError, setNoteError] = useState<string | undefined>(undefined);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [storedTags, setStoredTags] = useState<TagModel[]>([]);
+
+    const [notes, setNotes] = useState<NoteModel[]>([]);
+    const [activeTab, setActiveTab] = useState<MainTab>("folders");
+    // 'forward' (folders -> gallery) slides the incoming screen in from the
+    // right; 'backward' (gallery -> folders) from the left — same as an iOS
+    // push/pop transition. Switching the tab and starting this animation
+    // happen in the same call, so the header changes the instant the swipe
+    // (or tab tap) resolves, instead of trying to track a live scroll
+    // position — that's what made the previous drag-following pager feel
+    // laggy and left the header out of sync.
+    const [tabDir, setTabDir] = useState<"forward" | "backward" | null>(null);
+    const [viewingNote, setViewingNote] = useState<NoteModel | null>(null);
 
     const getFoldersWithCountsAsync = async () => {
         const data = await loadFoldersWithCountsAsync();
@@ -58,8 +96,44 @@ export default function Home() {
         useCallback(() => {
             getFoldersWithCountsAsync();
             getTagsFromStorageAsync().then(setStoredTags);
+            getNotesFromStorageAsync().then(setNotes);
         }, []),
     );
+
+    const switchTab = (tab: MainTab) => {
+        setActiveTab((current) => {
+            if (tab === current) return current;
+            setTabDir(tab === "gallery" ? "forward" : "backward");
+            return tab;
+        });
+    };
+
+    const tabSwipeAxis = useSharedValue<"x" | "y" | null>(null);
+    const tabSwipeGesture = Gesture.Pan()
+        .onStart(() => {
+            tabSwipeAxis.value = null;
+        })
+        .onUpdate((e) => {
+            if (tabSwipeAxis.value === null) {
+                if (Math.abs(e.translationX) > 10 || Math.abs(e.translationY) > 10) {
+                    tabSwipeAxis.value = Math.abs(e.translationX) > Math.abs(e.translationY) ? "x" : "y";
+                }
+            }
+        })
+        .onEnd((e) => {
+            if (tabSwipeAxis.value === "x" && Math.abs(e.translationX) > 70) {
+                runOnJS(switchTab)(e.translationX < 0 ? "gallery" : "folders");
+            }
+            tabSwipeAxis.value = null;
+        });
+
+    const openNote = (note: NoteModel) => {
+        setViewingNote(note);
+    };
+
+    const closeNote = () => {
+        setViewingNote(null);
+    };
 
     const openNewFolder = () => {
         setEditingFolderId(null);
@@ -76,6 +150,7 @@ export default function Home() {
         setNoteText("");
         setNoteMediaUri(null);
         setNoteMediaType(null);
+        setNoteMediaMimeType(null);
         setNoteDate(todayISO());
         setNoteTags([]);
         setNoteTagInput("");
@@ -129,7 +204,11 @@ export default function Home() {
 
         const asset = result.assets[0];
         setNoteMediaUri(asset.uri);
-        setNoteMediaType(asset.type === "video" ? "video" : "image");
+        //*checks whether the media is image or video
+        setNoteMediaType(
+            asset.type === "video" || asset.mimeType?.startsWith("video/") === true ? "video" : "image",
+        );
+        setNoteMediaMimeType(asset.mimeType ?? null);
         setNoteError(undefined);
     };
 
@@ -140,6 +219,7 @@ export default function Home() {
         //TODO business logic
         setNoteMediaUri(null);
         setNoteMediaType(null);
+        setNoteMediaMimeType(null);
     };
 
     const onChangeNoteDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -192,14 +272,34 @@ export default function Home() {
             return;
         }
         //* Save media to app storage
-        const destUri = getNoteMediaFileUri(getNoteMediaDir(), noteMediaUri, "jpg");
-        setNoteMediaUri(destUri); 
-        //* Save tags to storage 
+        const notemediaType: NoteMediaType = noteMediaType ?? "image";
+        const source:SourceMedia = { uri: noteMediaUri, mimeType: noteMediaMimeType};
+        const destUri = getNoteMediaFileUri(getNoteMediaDir(),source,notemediaType);
+        setNoteMediaUri(destUri);
+        //* get thumbnail of the media and save it to app storage — a video's
+        //* first frame, or a tile-sized copy of a photo so the gallery isn't
+        //* decoding full camera resolution per cell. Both are generated into
+        //* the cache directory, so both get copied into app storage to survive
+        //* an OS cache sweep. Generation can throw on an unsupported codec —
+        //* the note is still worth saving, the tiles just fall back to a
+        //* placeholder (photos fall back to their full-size media).
+        let coverUri: string | null = null;
+        try {
+            const generatedUri = notemediaType === "video"
+                ? await getThumbnailFromVideo(destUri)
+                : await getThumbnailFromImageAsync(destUri);
+            coverUri = getThumbnailFileUri(getNoteMediaDir(), generatedUri);
+        } catch {
+            coverUri = null;
+        }
+        //* Save tags to storage
         const noteTagIds = await saveTagsAsync();
         //* Connect note to folder if one is selected, else null (gallery)
         const newNote: NoteModel = {
             id: Crypto.randomUUID(),
             mediaUri: destUri,
+            mediaType: notemediaType,
+            thumbnailUri: coverUri,
             note: noteText,
             date: noteDate,
             tagIds: noteTagIds,
@@ -212,6 +312,7 @@ export default function Home() {
         setShowAddNote(false);
         await getFoldersWithCountsAsync();
         await getTagsFromStorageAsync().then(setStoredTags); //* reload folders and tags to reflect changes
+        await getNotesFromStorageAsync().then(setNotes); //* reload notes so Gallery reflects the new one
     };
 
     const onEditFolder = (folder: FolderModel) => {
@@ -359,7 +460,7 @@ export default function Home() {
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <TopBar
-                title="Your folders"
+                title={activeTab === "folders" ? "Your folders" : "Gallery"}
                 colors={colors}
                 right={
                     <SettingsButton
@@ -369,22 +470,41 @@ export default function Home() {
                 }
             />
 
-            <FoldersList
-                items={folders}
-                colors={colors}
-                onOpenFolder={() => {}}
-                onEditFolder={onEditFolder}
-                onNewFolder={openNewFolder}
-            />
+            <GestureDetector gesture={tabSwipeGesture}>
+                <View style={styles.pager}>
+                    {activeTab === "folders" ? (
+                        <SlideInPage key="folders" dir={tabDir}>
+                            <FoldersList
+                                items={folders}
+                                colors={colors}
+                                onOpenFolder={(id) => router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })}
+                                onEditFolder={onEditFolder}
+                                onNewFolder={openNewFolder}
+                            />
+                        </SlideInPage>
+                    ) : (
+                        <SlideInPage key="gallery" dir={tabDir}>
+                            <GalleryGrid notes={notes} colors={colors} onOpenNote={openNote} />
+                        </SlideInPage>
+                    )}
+                </View>
+            </GestureDetector>
 
             <BottomTabBar
-                activeTab="folders"
-                onSelectTab={() => {
-                    // TODO (business logic): navigate to the Gallery screen
-                    // once it exists.
-                }}
+                activeTab={activeTab}
+                onSelectTab={switchTab}
                 onAdd={openAddNote}
                 colors={colors}
+            />
+
+            <ViewNote
+                visible={viewingNote != null}
+                colors={colors}
+                title="Gallery"
+                notes={notes}
+                startId={viewingNote?.id ?? null}
+                tags={storedTags}
+                onClose={closeNote}
             />
 
             <AddNote
@@ -446,6 +566,12 @@ export default function Home() {
 
 const styles = StyleSheet.create({
     container: {
+        flex: 1,
+    },
+    pager: {
+        flex: 1,
+    },
+    page: {
         flex: 1,
     },
 });

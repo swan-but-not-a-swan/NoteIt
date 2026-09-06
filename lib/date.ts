@@ -14,3 +14,12 @@ export function formatDayDate(iso: string): string {
   const date = d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
   return `${day} · ${date}`;
 }
+
+// Short form ("5 Sep") for the compact date pill over a viewer's photo —
+// ported from the web reference's formatShortDate (smkpremiere-app_1.jsx).
+export function formatShortDate(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}

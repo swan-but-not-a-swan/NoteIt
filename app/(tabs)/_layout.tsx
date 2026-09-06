@@ -14,6 +14,7 @@ export default function TabsLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="home" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="folder/[id]" />
     </Stack>
   );
 }

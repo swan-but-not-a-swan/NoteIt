@@ -1,6 +1,10 @@
+export type NoteMediaType = "image" | "video";
+
 export type NoteModel = {
     id: string;
     mediaUri: string;
+    mediaType: NoteMediaType;
+    thumbnailUri: string | null;
     note: string;
     date: string;
     tagIds: string[];

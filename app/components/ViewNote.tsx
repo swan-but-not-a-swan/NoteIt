@@ -1,0 +1,471 @@
+import { useEffect, useState } from "react";
+import { Image, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useVideoPlayer, VideoView } from "expo-video";
+import type { ThemeColors } from "@/theme/colors";
+import { fonts } from "@/theme/fonts";
+import { hexToRgba } from "@/lib/color";
+import { formatDayDate, formatShortDate } from "@/lib/date";
+import { NoteModel, TagModel } from "../models/NoteModel";
+import MarkdownText from "./MarkdownText";
+import TopBar from "./TopBar";
+import FilmStrip from "./FilmStrip";
+
+const CARD_H = 400;
+const DRAG_THRESHOLD = 55;
+
+type Props = {
+  visible: boolean;
+  colors: ThemeColors;
+  /** Folder name, or "Gallery" — whatever scope `notes` was drawn from. */
+  title: string;
+  /** The scoped list to swipe/navigate within (a folder's notes, or all of them). */
+  notes: NoteModel[];
+  /** Which note to open on. */
+  startId: string | null;
+  /** All stored tags, to resolve a note's tagIds into display titles. */
+  tags: TagModel[];
+  onClose: () => void;
+};
+
+// Full-screen swipeable viewer — ported from the web reference's Viewer +
+// PhotoCard: swipe up/down to flip between the photo and its note (styled
+// like a paper journal page), swipe left/right to move between notes, plus
+// a filmstrip and prev/next/toggle controls for the same actions without a
+// gesture. Read-only — editing/deleting a note is business logic Swan wires
+// up himself, same boundary as everywhere else in this app.
+export default function ViewNote({ visible, colors, title, notes, startId, tags, onClose }: Props) {
+  const insets = useSafeAreaInsets();
+  const [index, setIndex] = useState(0);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [enterDir, setEnterDir] = useState<"next" | "prev" | null>(null);
+
+  useEffect(() => {
+    if (!visible) return;
+    const i = notes.findIndex((n) => n.id === startId);
+    setIndex(i >= 0 ? i : 0);
+    setNoteOpen(false);
+    setEnterDir(null);
+  }, [visible, startId]);
+
+  useEffect(() => {
+    if (visible && notes.length === 0) {
+      onClose();
+    }
+  }, [visible, notes.length]);
+
+  const go = (dir: number) => {
+    setIndex((i) => {
+      const next = i + dir;
+      if (next < 0 || next >= notes.length) return i;
+      setNoteOpen(false);
+      setEnterDir(dir > 0 ? "next" : "prev");
+      return next;
+    });
+  };
+
+  const jumpTo = (i: number) => {
+    if (i === index) return;
+    setEnterDir(i > index ? "next" : "prev");
+    setNoteOpen(false);
+    setIndex(i);
+  };
+
+  const note = notes[index];
+
+  const handleShare = async () => {
+    if (note == null || Platform.OS === "web") return;
+    const noteTags = note.tagIds
+      .map((id) => tags.find((t) => t.id === id))
+      .filter((t): t is TagModel => t != null);
+    const shareText = [
+      note.note,
+      noteTags.length > 0 ? noteTags.map((t) => `#${t.title}`).join(" ") : null,
+      note.date.length > 0 ? formatDayDate(note.date) : null,
+    ]
+      .filter((s): s is string => s != null && s.length > 0)
+      .join("\n\n");
+
+    try {
+      await Share.share({ title, message: shareText });
+    } catch {
+      // user dismissed the share sheet — no-op
+    }
+  };
+
+  return (
+    <Modal visible={visible && note != null} animationType="slide" onRequestClose={onClose}>
+      {note != null && (
+        <View style={[styles.screen, { backgroundColor: colors.bg }]}>
+          <TopBar
+            title={title}
+            colors={colors}
+            onBack={onClose}
+            right={
+              <View style={styles.headerRight}>
+                <Text style={[styles.counter, { color: colors.stoneDim }]}>
+                  {index + 1} / {notes.length}
+                </Text>
+                <Pressable
+                  onPress={handleShare}
+                  hitSlop={8}
+                  accessibilityLabel="Share this picture-note"
+                  style={[styles.shareButton, { backgroundColor: colors.surface }]}
+                >
+                  <Feather name="share" size={16} color={colors.textPrimary} />
+                </Pressable>
+              </View>
+            }
+          />
+
+          <View style={[styles.body, { paddingBottom: insets.bottom }]}>
+            <NoteCard
+              key={note.id}
+              note={note}
+              tags={tags}
+              colors={colors}
+              noteOpen={noteOpen}
+              onToggleNote={setNoteOpen}
+              onSwipeLeft={() => go(1)}
+              onSwipeRight={() => go(-1)}
+              enterDir={enterDir}
+            />
+
+            <FilmStrip notes={notes} currentIndex={index} colors={colors} onSelect={jumpTo} />
+
+            <View style={styles.navRow}>
+              <Pressable
+                onPress={() => go(-1)}
+                disabled={index === 0}
+                style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === 0 ? 0.4 : 1 }]}
+              >
+                <Feather name="chevron-left" size={18} color={index === 0 ? colors.stoneDim : colors.textPrimary} />
+              </Pressable>
+
+              <Pressable
+                onPress={() => setNoteOpen((v) => !v)}
+                style={[styles.toggleBtn, { backgroundColor: noteOpen ? colors.accent : colors.surface }]}
+              >
+                <Feather name="file-text" size={16} color={colors.textPrimary} />
+                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
+                  {noteOpen ? "Show photo" : "Show note"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => go(1)}
+                disabled={index === notes.length - 1}
+                style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === notes.length - 1 ? 0.4 : 1 }]}
+              >
+                <Feather
+                  name="chevron-right"
+                  size={18}
+                  color={index === notes.length - 1 ? colors.stoneDim : colors.textPrimary}
+                />
+              </Pressable>
+            </View>
+
+            {/* TODO (business logic): a real ad renders here once RevenueCat
+                is wired up — this just reserves its footprint so the layout
+                doesn't shift when that lands. */}
+            <View style={[styles.adSlot, { backgroundColor: colors.surfaceHi, borderColor: colors.line }]} />
+          </View>
+        </View>
+      )}
+    </Modal>
+  );
+}
+
+type NoteCardProps = {
+  note: NoteModel;
+  tags: TagModel[];
+  colors: ThemeColors;
+  noteOpen: boolean;
+  onToggleNote: (open: boolean) => void;
+  onSwipeLeft: () => void;
+  onSwipeRight: () => void;
+  enterDir: "next" | "prev" | null;
+};
+
+function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onSwipeRight, enterDir }: NoteCardProps) {
+  const videoPlayer = useVideoPlayer(note.mediaType === "video" ? note.mediaUri : null);
+
+  // vertical: 0 = photo panel showing, -CARD_H = note panel showing
+  const stackY = useSharedValue(noteOpen ? -CARD_H : 0);
+  // horizontal: live drag-to-navigate offset, always springs back to 0
+  const cardX = useSharedValue(0);
+  const noteOpenSV = useSharedValue(noteOpen);
+  const axis = useSharedValue<"x" | "y" | null>(null);
+
+  // slide-in-from-the-side entrance when this card first mounts for a
+  // newly-navigated-to note (mirrors the reference's per-card `key`-driven
+  // remount + CSS entrance animation).
+  const enterX = useSharedValue(enterDir === "next" ? 70 : enterDir === "prev" ? -70 : 0);
+  const enterOpacity = useSharedValue(enterDir != null ? 0 : 1);
+  useEffect(() => {
+    enterX.value = withTiming(0, { duration: 340 });
+    enterOpacity.value = withTiming(1, { duration: 340 });
+  }, []);
+
+  useEffect(() => {
+    noteOpenSV.value = noteOpen;
+    stackY.value = withTiming(noteOpen ? -CARD_H : 0, { duration: 280 });
+  }, [noteOpen]);
+
+  const panGesture = Gesture.Pan()
+    .onStart(() => {
+      axis.value = null;
+    })
+    .onUpdate((e) => {
+      if (axis.value === null) {
+        if (Math.abs(e.translationX) > 8 || Math.abs(e.translationY) > 8) {
+          axis.value = Math.abs(e.translationX) > Math.abs(e.translationY) ? "x" : "y";
+        }
+      }
+      if (axis.value === "y") {
+        const base = noteOpenSV.value ? -CARD_H : 0;
+        stackY.value = Math.min(40, Math.max(-CARD_H, base + e.translationY));
+      } else if (axis.value === "x" && !noteOpenSV.value) {
+        cardX.value = e.translationX;
+      }
+    })
+    .onEnd((e) => {
+      if (axis.value === "y") {
+        let shouldOpen = noteOpenSV.value;
+        if (e.translationY < -DRAG_THRESHOLD) shouldOpen = true;
+        else if (e.translationY > DRAG_THRESHOLD) shouldOpen = false;
+        stackY.value = withTiming(shouldOpen ? -CARD_H : 0, { duration: 280 });
+        runOnJS(onToggleNote)(shouldOpen);
+      } else if (axis.value === "x") {
+        if (Math.abs(e.translationX) > DRAG_THRESHOLD) {
+          if (e.translationX < 0) runOnJS(onSwipeLeft)();
+          else runOnJS(onSwipeRight)();
+        }
+        cardX.value = withSpring(0);
+      }
+      axis.value = null;
+    });
+
+  const windowStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: cardX.value + enterX.value }, { rotate: `${cardX.value / 45}deg` }],
+    opacity: enterOpacity.value * (1 - Math.min(0.45, Math.abs(cardX.value) / 420)),
+  }));
+
+  const stackStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: stackY.value }],
+  }));
+
+  const noteTags = note.tagIds
+    .map((id) => tags.find((t) => t.id === id))
+    .filter((t): t is TagModel => t != null);
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <Animated.View style={[styles.window, windowStyle]}>
+        <Animated.View style={[styles.stack, stackStyle]}>
+          <View style={[styles.panel, { height: CARD_H }]}>
+            {note.mediaType === "video" ? (
+              <VideoView style={styles.media} player={videoPlayer} nativeControls contentFit="cover" />
+            ) : (
+              <Image source={{ uri: note.mediaUri }} style={styles.media} />
+            )}
+            {note.date.length > 0 && (
+              <View style={styles.datePill} pointerEvents="none">
+                <Text style={styles.datePillLabel}>{formatShortDate(note.date)}</Text>
+              </View>
+            )}
+            <View style={styles.hintOverlay} pointerEvents="none">
+              <Text style={styles.hintLabel}>Swipe up to read the note · swipe sideways for more</Text>
+            </View>
+          </View>
+
+          <View style={[styles.panel, styles.notePanel, { height: CARD_H, backgroundColor: colors.paper }]}>
+            <View style={styles.noteHeader}>
+              <Text style={styles.noteLabel}>Note</Text>
+              {note.date.length > 0 && (
+                <Text style={[styles.noteDate, { color: colors.stoneDim }]}>{formatDayDate(note.date)}</Text>
+              )}
+            </View>
+            {note.note.trim().length > 0 ? (
+              <MarkdownText text={note.note} style={[styles.noteText, { color: colors.ink }]} />
+            ) : (
+              <Text style={[styles.noteText, { color: colors.ink }]}>No note yet.</Text>
+            )}
+            {noteTags.length > 0 && (
+              <View style={styles.tagsRow}>
+                {noteTags.map((tag) => (
+                  <View
+                    key={tag.id}
+                    style={[styles.tagPill, { backgroundColor: hexToRgba(colors.teal, 0.14) }]}
+                  >
+                    <Text style={[styles.tagLabel, { color: colors.tealOnPaper }]}>#{tag.title}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        </Animated.View>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  counter: {
+    fontFamily: fonts.interRegular,
+    fontSize: 12,
+  },
+  shareButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  body: {
+    flex: 1,
+    justifyContent: "flex-start",
+    paddingHorizontal: 22,
+    paddingTop: 18,
+  },
+  window: {
+    width: "100%",
+    height: CARD_H,
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+  stack: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: CARD_H * 2,
+  },
+  panel: {
+    width: "100%",
+    overflow: "hidden",
+  },
+  media: {
+    width: "100%",
+    height: "100%",
+  },
+  datePill: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  datePillLabel: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 11,
+    color: "#fff",
+  },
+  hintOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingTop: 26,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  hintLabel: {
+    fontFamily: fonts.interRegular,
+    fontSize: 11.5,
+    color: "rgba(255,255,255,0.85)",
+  },
+  notePanel: {
+    padding: 22,
+  },
+  noteHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  noteLabel: {
+    fontFamily: fonts.interBold,
+    fontSize: 10.5,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    color: "#998E7B",
+  },
+  noteDate: {
+    fontFamily: fonts.interRegular,
+    fontSize: 12,
+  },
+  noteText: {
+    fontFamily: fonts.frauncesMedium,
+    fontSize: 19,
+    lineHeight: 29,
+  },
+  tagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 16,
+  },
+  tagPill: {
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+  },
+  tagLabel: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 11.5,
+  },
+  navRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 16,
+    marginTop: 22,
+  },
+  adSlot: {
+    height: 64,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: "auto",
+    marginBottom: 18,
+  },
+  navBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    height: 42,
+    borderRadius: 21,
+    paddingHorizontal: 18,
+  },
+  toggleLabel: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 12.5,
+  },
+});

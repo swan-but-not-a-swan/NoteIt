@@ -1,9 +1,9 @@
-import { Text, TextStyle } from "react-native";
+import { StyleProp, Text, TextStyle } from "react-native";
 import { fonts } from "@/theme/fonts";
 
 type Props = {
   text: string;
-  style?: TextStyle;
+  style?: StyleProp<TextStyle>;
 };
 
 type Segment = {
