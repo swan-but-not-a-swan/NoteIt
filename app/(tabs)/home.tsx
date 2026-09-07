@@ -1,7 +1,8 @@
 import { Alert, Platform, StyleSheet, View } from "react-native";
 import { DateTimePickerAndroid, DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { DARK_THEME, FOLDER_SWATCHES } from "@/theme/colors";
 import TopBar, { SettingsButton } from "../components/TopBar";
 import BottomTabBar, { MainTab } from "../components/BottomTabBar";
@@ -12,7 +13,7 @@ import AddNote from "../components/AddNote";
 import ViewNote from "../components/ViewNote";
 import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync, saveNoteToStorageAsync, saveTagsToStorageAsync } from "../persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
-import { useFocusEffect } from "@react-navigation/native"
+import { useFocusEffect } from "expo-router/react-navigation"
 import { useRouter } from "expo-router";
 import { FolderListItemModel } from "../models/FolderListItemModel";
 import { FolderModel } from "../models/FolderModel";
@@ -122,7 +123,7 @@ export default function Home() {
         })
         .onEnd((e) => {
             if (tabSwipeAxis.value === "x" && Math.abs(e.translationX) > 70) {
-                runOnJS(switchTab)(e.translationX < 0 ? "gallery" : "folders");
+                scheduleOnRN(switchTab, e.translationX < 0 ? "gallery" : "folders");
             }
             tabSwipeAxis.value = null;
         });

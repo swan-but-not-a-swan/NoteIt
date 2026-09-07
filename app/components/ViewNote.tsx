@@ -3,12 +3,12 @@ import { Image, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from
 import { Feather } from "@expo/vector-icons";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useVideoPlayer, VideoView } from "expo-video";
 import type { ThemeColors } from "@/theme/colors";
@@ -244,11 +244,11 @@ function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onS
         if (e.translationY < -DRAG_THRESHOLD) shouldOpen = true;
         else if (e.translationY > DRAG_THRESHOLD) shouldOpen = false;
         stackY.value = withTiming(shouldOpen ? -CARD_H : 0, { duration: 280 });
-        runOnJS(onToggleNote)(shouldOpen);
+        scheduleOnRN(onToggleNote, shouldOpen);
       } else if (axis.value === "x") {
         if (Math.abs(e.translationX) > DRAG_THRESHOLD) {
-          if (e.translationX < 0) runOnJS(onSwipeLeft)();
-          else runOnJS(onSwipeRight)();
+          if (e.translationX < 0) scheduleOnRN(onSwipeLeft);
+          else scheduleOnRN(onSwipeRight);
         }
         cardX.value = withSpring(0);
       }

@@ -31,7 +31,7 @@ export function getThumbnailFileUri(destDir: Directory, croppedUri: string): str
 {
     destDir.create({ intermediates: true, idempotent: true });
     const dest = new File(destDir, `${Crypto.randomUUID()}.jpg`);
-    new File(croppedUri).copy(dest); // file written before...
+    new File(croppedUri).copySync(dest); // file written before...
     return dest.uri;
 }
 
@@ -84,7 +84,7 @@ export function getNoteMediaFileUri(
     destDir.create({ intermediates: true, idempotent: true });
     const extension = extensionFrom(source, mediaType); //* get the extension of the media file
     const dest = new File(destDir, `${Crypto.randomUUID()}.${extension}`);
-    new File(source.uri).copy(dest); //* creates a copy of the media file in the app storage
+    new File(source.uri).copySync(dest); //* creates a copy of the media file in the app storage
     return dest.uri;
 }
 

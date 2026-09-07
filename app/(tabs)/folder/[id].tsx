@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DARK_THEME } from "@/theme/colors";
 import TopBar from "../../components/TopBar";

@@ -4,11 +4,11 @@ import { Feather } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
-  runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 
@@ -48,17 +48,17 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors }: 
       const p = Math.min(1, -dy / SWIPE_TRIGGER_DISTANCE);
       progress.value = p;
       scale.value = 1 + p * 0.12;
-      runOnJS(setReadyToRelease)(p >= 1);
+      scheduleOnRN(setReadyToRelease, p >= 1);
     })
     .onEnd((e) => {
       const draggedUp = -Math.min(0, e.translationY);
       if (draggedUp >= SWIPE_TRIGGER_DISTANCE) {
-        runOnJS(onAdd)();
+        scheduleOnRN(onAdd);
       }
       translateY.value = withSpring(0);
       scale.value = withSpring(1);
       progress.value = withSpring(0);
-      runOnJS(setReadyToRelease)(false);
+      scheduleOnRN(setReadyToRelease, false);
     });
 
   const addButtonStyle = useAnimatedStyle(() => ({

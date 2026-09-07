@@ -1,5 +1,16 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg";
 import { DARK_THEME } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
@@ -15,10 +26,12 @@ const colors = DARK_THEME;
 // by" reference, translated into this app's own ember-charcoal/amber
 // identity rather than a literal reskin.
 export default function InAppSplash({ onFinish }: Props) {
-  const glowScale = useRef(new Animated.Value(1)).current;
-  const glowOpacity = useRef(new Animated.Value(0.55)).current;
-  const lockupOpacity = useRef(new Animated.Value(0)).current;
-  const lockupY = useRef(new Animated.Value(14)).current;
+  const glowScale = useSharedValue(1);
+  const glowOpacity = useSharedValue(0.55);
+  const lockupOpacity = useSharedValue(0);
+  const lockupY = useSharedValue(14);
+  // A mutable flag, only ever touched inside the effect — never read during
+  // render, which is exactly what a ref is for.
   const finished = useRef(false);
 
   useEffect(() => {
@@ -31,74 +44,46 @@ export default function InAppSplash({ onFinish }: Props) {
       onFinish();
     };
 
-    const breathe = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(glowScale, {
-            toValue: 1.08,
-            duration: 2250,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowOpacity, {
-            toValue: 0.85,
-            duration: 2250,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(glowScale, {
-            toValue: 1,
-            duration: 2250,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowOpacity, {
-            toValue: 0.55,
-            duration: 2250,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-      ])
-    );
-    breathe.start();
+    // The breathing glow, looping forever. There's no "parallel" wrapper to
+    // build here the way Animated.parallel needed one — each shared value
+    // just runs its own animation, and they happen to share a duration.
+    const breathe = (to: number, back: number) =>
+      withRepeat(
+        withSequence(
+          withTiming(to, { duration: 2250, easing: Easing.inOut(Easing.ease) }),
+          withTiming(back, { duration: 2250, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+      );
+    glowScale.value = breathe(1.08, 1);
+    glowOpacity.value = breathe(0.85, 0.55);
 
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(lockupOpacity, {
-          toValue: 1,
-          duration: 700,
-          delay: 150,
-          useNativeDriver: true,
-        }),
-        // A timing animation with a back-out easing reads almost identically
-        // to the settle of a spring, but (unlike Animated.spring) always
-        // finishes in a fixed, predictable duration — react-native-web's
-        // JS-fallback animation driver (used since useNativeDriver isn't
-        // available on web) doesn't reliably detect when a spring comes to
-        // rest, which was silently stalling this whole sequence forever on
-        // web and never calling onFinish, leaving the app stuck on the
-        // splash screen.
-        Animated.timing(lockupY, {
-          toValue: 0,
-          duration: 700,
-          delay: 150,
-          easing: Easing.out(Easing.back(1.4)),
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.delay(1300),
-      Animated.timing(lockupOpacity, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      breathe.stop();
-      finish();
-    });
+    // A timing animation with a back-out easing reads almost identically to
+    // the settle of a spring, but (unlike withSpring) always finishes in a
+    // fixed, predictable duration. Keeping it as timing also keeps the
+    // sequence below on a known ~2.55s budget, which is what the safety
+    // timeout is sized against.
+    lockupY.value = withDelay(
+      150,
+      withTiming(0, { duration: 700, easing: Easing.out(Easing.back(1.4)) }),
+    );
+
+    // Fade in, hold, fade out — and the final animation's own completion
+    // callback ends the splash. It runs on the UI thread, so hopping back to
+    // JS is what scheduleOnRN is for. `completed` is false if the animation was
+    // cancelled (i.e. we unmounted), in which case there's nothing to finish.
+    lockupOpacity.value = withDelay(
+      150,
+      withSequence(
+        withTiming(1, { duration: 700 }),
+        withDelay(
+          1300,
+          withTiming(0, { duration: 400 }, (completed) => {
+            if (completed) scheduleOnRN(finish);
+          }),
+        ),
+      ),
+    );
 
     // Belt-and-suspenders: whatever the cause, the splash must never be able
     // to block navigation forever. The animation above totals ~2.55s: if
@@ -107,20 +92,27 @@ export default function InAppSplash({ onFinish }: Props) {
     const safetyTimeout = setTimeout(finish, 4000);
 
     return () => {
-      breathe.stop();
+      cancelAnimation(glowScale);
+      cancelAnimation(glowOpacity);
+      cancelAnimation(lockupOpacity);
+      cancelAnimation(lockupY);
       clearTimeout(safetyTimeout);
     };
   }, []);
 
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: glowOpacity.value,
+    transform: [{ scale: glowScale.value }],
+  }));
+
+  const lockupStyle = useAnimatedStyle(() => ({
+    opacity: lockupOpacity.value,
+    transform: [{ translateY: lockupY.value }],
+  }));
+
   return (
     <View style={styles.container}>
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.glow,
-          { opacity: glowOpacity, transform: [{ scale: glowScale }] },
-        ]}
-      >
+      <Animated.View pointerEvents="none" style={[styles.glow, glowStyle]}>
         {/* Plain Views can't do a soft blur/gradient fade — this needed an
             actual radial gradient (SVG) to read as a glow instead of a
             hard-edged circle. */}
@@ -136,12 +128,7 @@ export default function InAppSplash({ onFinish }: Props) {
         </Svg>
       </Animated.View>
 
-      <Animated.View
-        style={[
-          styles.lockup,
-          { opacity: lockupOpacity, transform: [{ translateY: lockupY }] },
-        ]}
-      >
+      <Animated.View style={[styles.lockup, lockupStyle]}>
         <View style={styles.mark}>
           <Svg width={34} height={34} viewBox="0 0 24 24" fill="none">
             <Path
@@ -153,9 +140,9 @@ export default function InAppSplash({ onFinish }: Props) {
           </Svg>
         </View>
 
-        <Animated.Text style={styles.label}>Powered by</Animated.Text>
+        <Text style={styles.label}>Powered by</Text>
         <View style={styles.rule} />
-        <Animated.Text style={styles.wordmark}>SMKTechnologies</Animated.Text>
+        <Text style={styles.wordmark}>SMKTechnologies</Text>
       </Animated.View>
     </View>
   );

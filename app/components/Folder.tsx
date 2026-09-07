@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   tint: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   thumb: {
     width: 58,
