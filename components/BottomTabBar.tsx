@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -11,6 +11,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
+import { hexToRgba } from "@/lib/color";
 
 export type MainTab = "folders" | "gallery";
 
@@ -91,7 +92,7 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors }: 
         />
 
         <View style={styles.addSlot}>
-          <Animated.View style={[styles.hint, hintStyle]} pointerEvents="none">
+          <Animated.View style={[styles.hint, hintStyle]}>
             <View style={[styles.hintPill, { backgroundColor: colors.bg, borderColor: colors.line }]}>
               <Text style={[styles.hintLabel, { color: colors.accent }]}>
                 {readyToRelease ? "Release to add" : "Swipe up to add note"}
@@ -104,7 +105,15 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors }: 
               style={[
                 styles.addButton,
                 addButtonStyle,
-                { backgroundColor: colors.accent, shadowColor: colors.accent },
+                {
+                  backgroundColor: colors.accent,
+                  // boxShadow folds shadowColor/Opacity/Radius/Offset and
+                  // Android's elevation into one cross-platform prop, so the
+                  // tint and its alpha combine into a single colour here.
+                  boxShadow: [
+                    { offsetX: 0, offsetY: 5, blurRadius: 10, color: hexToRgba(colors.accent, 0.35) },
+                  ],
+                },
               ]}
             >
               <Feather name="plus" size={27} color={colors.onAccent} />
@@ -125,7 +134,7 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors }: 
 }
 
 type TabButtonProps = {
-  icon: keyof typeof Feather.glyphMap;
+  icon: FeatherIconName;
   label: string;
   active: boolean;
   colors: ThemeColors;
@@ -171,12 +180,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginTop: -34,
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 5 },
-    elevation: 6,
+    // The shadow itself is applied inline above, since it needs the accent
+    // colour from the theme.
   },
   hint: {
+    pointerEvents: "none",
     position: "absolute",
     top: -60,
     left: -60,

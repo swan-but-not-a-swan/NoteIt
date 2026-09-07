@@ -14,6 +14,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg";
 import { DARK_THEME } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
+import { hexToRgba } from "@/lib/color";
 
 type Props = {
   onFinish: () => void;
@@ -112,7 +113,7 @@ export default function InAppSplash({ onFinish }: Props) {
 
   return (
     <View style={styles.container}>
-      <Animated.View pointerEvents="none" style={[styles.glow, glowStyle]}>
+      <Animated.View style={[styles.glow, glowStyle]}>
         {/* Plain Views can't do a soft blur/gradient fade — this needed an
             actual radial gradient (SVG) to read as a glow instead of a
             hard-edged circle. */}
@@ -157,6 +158,7 @@ const styles = StyleSheet.create({
   },
 
   glow: {
+    pointerEvents: "none",
     position: "absolute",
     width: 320,
     height: 320,
@@ -175,14 +177,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
-    // A soft colored glow via shadow props (iOS renders this natively;
-    // Android's shadow doesn't tint color, so the .glow blob above carries
-    // the effect there — this adds a tighter halo on top where it can).
-    shadowColor: colors.accent,
-    shadowOpacity: 0.6,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 8,
+    // A soft colored glow. boxShadow replaces the old shadowColor/Opacity/
+    // Radius/Offset set (and Android's elevation) with one cross-platform
+    // prop that does carry colour on Android, unlike elevation — the .glow
+    // blob behind this still does the heavy lifting for the wide halo.
+    boxShadow: [
+      { offsetX: 0, offsetY: 0, blurRadius: 24, color: hexToRgba(colors.accent, 0.6) },
+    ],
   },
 
   label: {

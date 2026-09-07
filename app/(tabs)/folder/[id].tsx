@@ -3,12 +3,12 @@ import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DARK_THEME } from "@/theme/colors";
-import TopBar from "../../components/TopBar";
-import GalleryGrid from "../../components/GalleryGrid";
-import ViewNote from "../../components/ViewNote";
-import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync } from "../../persistence/FileStorage";
-import { FolderModel } from "../../models/FolderModel";
-import { NoteModel, TagModel } from "../../models/NoteModel";
+import TopBar from "@/components/TopBar";
+import GalleryGrid from "@/components/GalleryGrid";
+import ViewNote from "@/components/ViewNote";
+import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
+import { FolderModel } from "@/models/FolderModel";
+import { NoteModel, TagModel } from "@/models/NoteModel";
 
 // A folder's own picture-notes — same grid/viewer as Gallery, just filtered
 // down to this folder's id instead of showing everything.

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Image, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@react-native-vector-icons/feather";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
@@ -49,13 +49,25 @@ export default function ViewNote({ visible, colors, title, notes, startId, tags,
   const [noteOpen, setNoteOpen] = useState(false);
   const [enterDir, setEnterDir] = useState<"next" | "prev" | null>(null);
 
-  useEffect(() => {
-    if (!visible) return;
-    const i = notes.findIndex((n) => n.id === startId);
-    setIndex(i >= 0 ? i : 0);
-    setNoteOpen(false);
-    setEnterDir(null);
-  }, [visible, startId]);
+  // Reset per viewing session, without an effect. Both parents keep this
+  // component mounted whether or not it's visible, so there's no mount
+  // boundary to hang a fresh useState initializer off the way AddNote's date
+  // picker has. Doing it in an effect meant React committed one frame still
+  // showing the previously-viewed note before correcting itself. Adjusting
+  // state during render is React's sanctioned escape hatch for exactly this:
+  // it re-runs the component immediately, before anything is painted, so the
+  // stale frame never reaches the screen.
+  const session = visible ? startId : null;
+  const [prevSession, setPrevSession] = useState(session);
+  if (session !== prevSession) {
+    setPrevSession(session);
+    if (visible) {
+      const i = notes.findIndex((n) => n.id === startId);
+      setIndex(i >= 0 ? i : 0);
+      setNoteOpen(false);
+      setEnterDir(null);
+    }
+  }
 
   useEffect(() => {
     if (visible && notes.length === 0) {
@@ -199,6 +211,16 @@ type NoteCardProps = {
 function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onSwipeRight, enterDir }: NoteCardProps) {
   const videoPlayer = useVideoPlayer(note.mediaType === "video" ? note.mediaUri : null);
 
+  // Every shared value below is read and written through .get()/.set()
+  // rather than .value. React Compiler treats a shared value as an external
+  // mutable store, so assigning to .value reads to it as mutating something
+  // it isn't allowed to — strictly it rejects only the ones an effect has
+  // already touched (here that was just stackY, written in the noteOpen sync
+  // and again in the pan handlers), but Reanimated added get/set as the
+  // sanctioned accessors for exactly this, and applying them everywhere
+  // keeps the file consistent instead of leaving one odd one out. Identical
+  // behaviour either way; these are still the same mutable boxes.
+
   // vertical: 0 = photo panel showing, -CARD_H = note panel showing
   const stackY = useSharedValue(noteOpen ? -CARD_H : 0);
   // horizontal: live drag-to-navigate offset, always springs back to 0
@@ -212,56 +234,56 @@ function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onS
   const enterX = useSharedValue(enterDir === "next" ? 70 : enterDir === "prev" ? -70 : 0);
   const enterOpacity = useSharedValue(enterDir != null ? 0 : 1);
   useEffect(() => {
-    enterX.value = withTiming(0, { duration: 340 });
-    enterOpacity.value = withTiming(1, { duration: 340 });
+    enterX.set(withTiming(0, { duration: 340 }));
+    enterOpacity.set(withTiming(1, { duration: 340 }));
   }, []);
 
   useEffect(() => {
-    noteOpenSV.value = noteOpen;
-    stackY.value = withTiming(noteOpen ? -CARD_H : 0, { duration: 280 });
+    noteOpenSV.set(noteOpen);
+    stackY.set(withTiming(noteOpen ? -CARD_H : 0, { duration: 280 }));
   }, [noteOpen]);
 
   const panGesture = Gesture.Pan()
     .onStart(() => {
-      axis.value = null;
+      axis.set(null);
     })
     .onUpdate((e) => {
-      if (axis.value === null) {
+      if (axis.get() === null) {
         if (Math.abs(e.translationX) > 8 || Math.abs(e.translationY) > 8) {
-          axis.value = Math.abs(e.translationX) > Math.abs(e.translationY) ? "x" : "y";
+          axis.set(Math.abs(e.translationX) > Math.abs(e.translationY) ? "x" : "y");
         }
       }
-      if (axis.value === "y") {
-        const base = noteOpenSV.value ? -CARD_H : 0;
-        stackY.value = Math.min(40, Math.max(-CARD_H, base + e.translationY));
-      } else if (axis.value === "x" && !noteOpenSV.value) {
-        cardX.value = e.translationX;
+      if (axis.get() === "y") {
+        const base = noteOpenSV.get() ? -CARD_H : 0;
+        stackY.set(Math.min(40, Math.max(-CARD_H, base + e.translationY)));
+      } else if (axis.get() === "x" && !noteOpenSV.get()) {
+        cardX.set(e.translationX);
       }
     })
     .onEnd((e) => {
-      if (axis.value === "y") {
-        let shouldOpen = noteOpenSV.value;
+      if (axis.get() === "y") {
+        let shouldOpen = noteOpenSV.get();
         if (e.translationY < -DRAG_THRESHOLD) shouldOpen = true;
         else if (e.translationY > DRAG_THRESHOLD) shouldOpen = false;
-        stackY.value = withTiming(shouldOpen ? -CARD_H : 0, { duration: 280 });
+        stackY.set(withTiming(shouldOpen ? -CARD_H : 0, { duration: 280 }));
         scheduleOnRN(onToggleNote, shouldOpen);
-      } else if (axis.value === "x") {
+      } else if (axis.get() === "x") {
         if (Math.abs(e.translationX) > DRAG_THRESHOLD) {
           if (e.translationX < 0) scheduleOnRN(onSwipeLeft);
           else scheduleOnRN(onSwipeRight);
         }
-        cardX.value = withSpring(0);
+        cardX.set(withSpring(0));
       }
-      axis.value = null;
+      axis.set(null);
     });
 
   const windowStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: cardX.value + enterX.value }, { rotate: `${cardX.value / 45}deg` }],
-    opacity: enterOpacity.value * (1 - Math.min(0.45, Math.abs(cardX.value) / 420)),
+    transform: [{ translateX: cardX.get() + enterX.get() }, { rotate: `${cardX.get() / 45}deg` }],
+    opacity: enterOpacity.get() * (1 - Math.min(0.45, Math.abs(cardX.get()) / 420)),
   }));
 
   const stackStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: stackY.value }],
+    transform: [{ translateY: stackY.get() }],
   }));
 
   const noteTags = note.tagIds
@@ -279,11 +301,11 @@ function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onS
               <Image source={{ uri: note.mediaUri }} style={styles.media} />
             )}
             {note.date.length > 0 && (
-              <View style={styles.datePill} pointerEvents="none">
+              <View style={styles.datePill}>
                 <Text style={styles.datePillLabel}>{formatShortDate(note.date)}</Text>
               </View>
             )}
-            <View style={styles.hintOverlay} pointerEvents="none">
+            <View style={styles.hintOverlay}>
               <Text style={styles.hintLabel}>Swipe up to read the note · swipe sideways for more</Text>
             </View>
           </View>
@@ -367,6 +389,7 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   datePill: {
+    pointerEvents: "none",
     position: "absolute",
     top: 12,
     left: 12,
@@ -381,6 +404,7 @@ const styles = StyleSheet.create({
     color: "#fff",
   },
   hintOverlay: {
+    pointerEvents: "none",
     position: "absolute",
     bottom: 0,
     left: 0,

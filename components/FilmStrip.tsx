@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions } from "react-native";
 import type { ThemeColors } from "@/theme/colors";
 import { NoteModel } from "../models/NoteModel";
 import MediaThumb from "./MediaThumb";

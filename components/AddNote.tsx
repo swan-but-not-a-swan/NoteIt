@@ -12,11 +12,11 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@react-native-vector-icons/feather";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useVideoPlayer, VideoView } from "expo-video";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import type { ThemeColors } from "@/theme/colors";
+import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatDayDate } from "@/lib/date";
@@ -45,14 +45,12 @@ type Props = {
 
   /** ISO "yyyy-mm-dd". */
   date: string;
-  /** Called when the date row is tapped. On Android this is expected to fire
-   *  the imperative DateTimePickerAndroid.open() (a true native dialog, not
-   *  a rendered component) — showDatePicker/onDateChange below are for iOS,
-   *  which has no imperative equivalent and needs an actual rendered picker,
-   *  shown inline right under the row rather than in a second <Modal> (iOS
-   *  silently refuses to present one on top of this modal). */
+  /** Called when the date row is tapped — Android and web only. Android is
+   *  expected to fire the imperative DateTimePickerAndroid.open() (a true
+   *  native dialog, not a rendered component); web has no picker at all.
+   *  iOS never calls this: UIDatePicker's compact mode owns both its
+   *  trigger and its popover, so there's nothing here to open. */
   onPressDate: () => void;
-  showDatePicker?: boolean;
   onDateChange: (date: string) => void;
 
   tags: string[];
@@ -93,7 +91,6 @@ export default function AddNote({
   onInsertSnippet,
   date,
   onPressDate,
-  showDatePicker,
   onDateChange,
   tags,
   tagInput,
@@ -130,21 +127,6 @@ export default function AddNote({
       hideSub.remove();
     };
   }, []);
-
-  // The native inline calendar manages its own selection/scroll state. Every
-  // time onChange fires we push the new date up through onDateChange, which
-  // re-renders this component with a new `date` prop — if that were fed
-  // straight back into `value` below, the picker would get a fresh `setDate`
-  // call on every tap, fighting whatever gesture/animation it's mid-way
-  // through and making it feel like it "sticks". Instead, `value` is only
-  // (re)computed from `date` once per picker session (when it opens), and
-  // from then on is driven solely by the picker's own reported selection.
-  const [pickerValue, setPickerValue] = useState(() => new Date(`${date}T00:00:00`));
-  useEffect(() => {
-    if (showDatePicker) {
-      setPickerValue(new Date(`${date}T00:00:00`));
-    }
-  }, [showDatePicker]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
@@ -243,46 +225,31 @@ export default function AddNote({
               )}
 
               <Text style={[styles.label, { color: colors.stoneDim }]}>Day and date</Text>
-              <Pressable
-                onPress={onPressDate}
-                style={[styles.dateRow, { backgroundColor: colors.surface, borderColor: colors.line }]}
-              >
-                <Feather name="calendar" size={15} color={colors.stone} />
-                <Text style={[styles.dateLabel, { color: colors.textPrimary }]}>
-                  {formatDayDate(date) || "Pick a date"}
-                </Text>
-              </Pressable>
-
-              {showDatePicker && (
-                <View
-                  style={[
-                    styles.inlineDatePicker,
-                    { backgroundColor: colors.surface, borderColor: colors.line },
-                  ]}
-                >
-                  <View style={styles.inlineDatePickerHeader}>
-                    <Pressable
-                      onPress={onPressDate}
-                      hitSlop={8}
-                      style={[styles.inlineDatePickerClose, { backgroundColor: colors.bg }]}
-                    >
-                      <Feather name="x" size={13} color={colors.textPrimary} />
-                    </Pressable>
+              {Platform.OS === "ios" ? (
+                // `visible &&` is the mount boundary: the sheet closing and
+                // reopening for a different note has to re-read `date`, and
+                // CompactDatePicker only does that on mount.
+                visible && (
+                  <View
+                    style={[styles.dateRow, { backgroundColor: colors.surface, borderColor: colors.line }]}
+                  >
+                    <Feather name="calendar" size={15} color={colors.stone} />
+                    <CompactDatePicker date={date} colors={colors} onChange={onDateChange} />
                   </View>
-                  <DateTimePicker
-                    value={pickerValue}
-                    mode="date"
-                    display="inline"
-                    themeVariant="dark"
-                    accentColor={colors.accent}
-                    onChange={(event, selectedDate) => {
-                      if (event.type === "set" && selectedDate != null) {
-                        setPickerValue(selectedDate);
-                        onDateChange(selectedDate.toISOString().slice(0, 10));
-                      }
-                    }}
-                  />
-                </View>
+                )
+              ) : (
+                // Android fires a real native dialog imperatively from
+                // onPressDate, and web has no picker at all, so both keep a
+                // plain trigger row showing the current selection.
+                <Pressable
+                  onPress={onPressDate}
+                  style={[styles.dateRow, { backgroundColor: colors.surface, borderColor: colors.line }]}
+                >
+                  <Feather name="calendar" size={15} color={colors.stone} />
+                  <Text style={[styles.dateLabel, { color: colors.textPrimary }]}>
+                    {formatDayDate(date) || "Pick a date"}
+                  </Text>
+                </Pressable>
               )}
 
               <Text style={[styles.label, { color: colors.stoneDim }]}>Tags</Text>
@@ -385,6 +352,50 @@ export default function AddNote({
   );
 }
 
+type CompactDatePickerProps = {
+  /** ISO "yyyy-mm-dd". Read once, at mount — see below. */
+  date: string;
+  colors: ThemeColors;
+  onChange: (date: string) => void;
+};
+
+// iOS only. UIDatePicker's "compact" mode is a self-contained control: it
+// draws the current date as a tappable field and presents the system
+// calendar popover itself. That's what removed the open/close state, the
+// trigger Pressable, the wrapper and its close button — all of it was
+// reimplementing behaviour the native control already has.
+function CompactDatePicker({ date, colors, onChange }: CompactDatePickerProps) {
+  // `value` is local rather than driven straight off the `date` prop. Every
+  // selection pushes up through onChange, which re-renders the parent with a
+  // new `date` — feeding that back in would hand the control a fresh setDate
+  // while its popover is mid-animation, which is what used to make the
+  // selection feel like it "sticks". The parent only mounts this while the
+  // sheet is open, so a new session re-reads `date` via the initializer
+  // below instead of needing an effect to re-sync it.
+  const [value, setValue] = useState(() => new Date(`${date}T00:00:00`));
+
+  return (
+    <DateTimePicker
+      value={value}
+      mode="date"
+      display="compact"
+      // Derived rather than hardcoded "dark": the app pins DARK_THEME
+      // everywhere today, but the moment themeFor() gets wired to real theme
+      // state this picker would otherwise stay dark on a light screen.
+      // themeFor() returns these module-level singletons, so an identity
+      // check is enough.
+      themeVariant={colors === LIGHT_THEME ? "light" : "dark"}
+      accentColor={colors.accent}
+      onChange={(event, selectedDate) => {
+        if (event.type === "set" && selectedDate != null) {
+          setValue(selectedDate);
+          onChange(selectedDate.toISOString().slice(0, 10));
+        }
+      }}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
@@ -393,24 +404,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
-  },
-  inlineDatePicker: {
-    marginTop: -10,
-    marginBottom: 18,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 8,
-  },
-  inlineDatePickerHeader: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-  },
-  inlineDatePickerClose: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
   },
   sheet: {
     maxHeight: "88%",

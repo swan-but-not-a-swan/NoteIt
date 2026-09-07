@@ -4,25 +4,25 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { DARK_THEME, FOLDER_SWATCHES } from "@/theme/colors";
-import TopBar, { SettingsButton } from "../components/TopBar";
-import BottomTabBar, { MainTab } from "../components/BottomTabBar";
-import FoldersList from "../components/FoldersList";
-import GalleryGrid from "../components/GalleryGrid";
-import NewFolder from "../components/NewFolder";
-import AddNote from "../components/AddNote";
-import ViewNote from "../components/ViewNote";
-import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync, saveNoteToStorageAsync, saveTagsToStorageAsync } from "../persistence/FileStorage";
+import TopBar, { SettingsButton } from "@/components/TopBar";
+import BottomTabBar, { MainTab } from "@/components/BottomTabBar";
+import FoldersList from "@/components/FoldersList";
+import GalleryGrid from "@/components/GalleryGrid";
+import NewFolder from "@/components/NewFolder";
+import AddNote from "@/components/AddNote";
+import ViewNote from "@/components/ViewNote";
+import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync, saveNoteToStorageAsync, saveTagsToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
 import { useRouter } from "expo-router";
-import { FolderListItemModel } from "../models/FolderListItemModel";
-import { FolderModel } from "../models/FolderModel";
+import { FolderListItemModel } from "@/models/FolderListItemModel";
+import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { deleteThumbnailFile, getNoteMediaFileUri, getThumbnailFileUri, getThumbnailFromImageAsync, getThumbnailFromVideo, SourceMedia, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
 import { todayISO } from "@/lib/date";
-import { NoteMediaType, NoteModel, TagModel } from "../models/NoteModel";
+import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 const getNoteMediaDir = () => new Directory(Paths.document, "note-media");
@@ -70,10 +70,8 @@ export default function Home() {
     const [noteDate, setNoteDate] = useState(todayISO());
     const [noteTags, setNoteTags] = useState<string[]>([]);
     const [noteTagInput, setNoteTagInput] = useState("");
-    const [noteTagIds, setNoteTagIds] = useState<string[]>([]);
     const [noteFolderId, setNoteFolderId] = useState<string | null>(null);
     const [noteError, setNoteError] = useState<string | undefined>(undefined);
-    const [showDatePicker, setShowDatePicker] = useState(false);
     const [storedTags, setStoredTags] = useState<TagModel[]>([]);
 
     const [notes, setNotes] = useState<NoteModel[]>([]);
@@ -229,25 +227,20 @@ export default function Home() {
         }
     };
 
+    //* only android and web reach this — ios renders UIDatePicker's compact
+    //* control, which owns its own trigger and popover, so AddNote never calls it
     const pressNoteDate = () => {
         if (Platform.OS === "web") {
             setNoteError("Date picker isn't supported in the web preview — test this on a device or simulator.");
             return;
         }
 
-        const currentDate = new Date(`${noteDate}T00:00:00`);
-
         //*android has a native dialog, so we open it imperatively and don't render the component at all
-        if (Platform.OS === "android") {
-            DateTimePickerAndroid.open({
-                value: currentDate,
-                mode: "date",
-                onChange: onChangeNoteDate,
-            });
-            return;
-        }
-
-        setShowDatePicker((current) => !current);
+        DateTimePickerAndroid.open({
+            value: new Date(`${noteDate}T00:00:00`),
+            mode: "date",
+            onChange: onChangeNoteDate,
+        });
     };
 
     const saveTagsAsync = async (): Promise<string[]> => {
@@ -524,7 +517,6 @@ export default function Home() {
                 onInsertSnippet={insertNoteSnippet}
                 date={noteDate}
                 onPressDate={pressNoteDate}
-                showDatePicker={showDatePicker}
                 onDateChange={setNoteDate}
                 tags={noteTags}
                 tagInput={noteTagInput}

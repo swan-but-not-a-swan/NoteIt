@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@react-native-vector-icons/feather";
 import { useRouter } from "expo-router";
 import { DARK_THEME } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
-import TopBar from "../components/TopBar";
+import TopBar from "@/components/TopBar";
 
 export default function Settings() {
     // TODO (business logic): swap DARK_THEME for real theme-mode state once

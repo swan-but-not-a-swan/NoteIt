@@ -1,5 +1,5 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@react-native-vector-icons/feather";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
@@ -28,7 +28,6 @@ export default function Folder({ folder, count, colors, onOpen, onEdit }: Props)
       {/* accent tint, layered under the content so the row reads as
           "tinted surface" rather than a flat accent block */}
       <View
-        pointerEvents="none"
         style={[styles.tint, { backgroundColor: hexToRgba(folder.accent, 0.22) }]}
       />
 
@@ -78,6 +77,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   tint: {
+    pointerEvents: "none",
     ...StyleSheet.absoluteFill,
   },
   thumb: {

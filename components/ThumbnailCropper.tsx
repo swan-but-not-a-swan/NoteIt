@@ -6,7 +6,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { useImageManipulator, SaveFormat } from "expo-image-manipulator";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@react-native-vector-icons/feather";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 
@@ -210,10 +210,10 @@ export function CropperContent({
         <GestureDetector gesture={composedGesture}>
           <View style={StyleSheet.absoluteFill}>
             {/* dimmed full image */}
-            <View style={styles.centeredLayer} pointerEvents="none">
+            <View style={styles.centeredLayer}>
               <Animated.Image source={{ uri: sourceUri }} style={imageAnimatedStyle} />
             </View>
-            <View style={styles.dim} pointerEvents="none" />
+            <View style={styles.dim} />
 
             {/* peephole: identical transform, clipped to the crop window */}
             <View
@@ -221,7 +221,6 @@ export function CropperContent({
                 styles.peephole,
                 { width: CROP_SIZE, height: CROP_SIZE, borderRadius: CROP_RADIUS },
               ]}
-              pointerEvents="none"
             >
               <Animated.Image source={{ uri: sourceUri }} style={peepholeImageStyle} />
             </View>
@@ -230,7 +229,6 @@ export function CropperContent({
                 styles.peepholeBorder,
                 { width: CROP_SIZE, height: CROP_SIZE, borderRadius: CROP_RADIUS },
               ]}
-              pointerEvents="none"
             />
           </View>
         </GestureDetector>
@@ -274,15 +272,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   centeredLayer: {
+    pointerEvents: "none",
     ...StyleSheet.absoluteFill,
     alignItems: "center",
     justifyContent: "center",
   },
   dim: {
+    pointerEvents: "none",
     ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.6)",
   },
   peephole: {
+    pointerEvents: "none",
     position: "absolute",
     top: "50%",
     left: "50%",
@@ -292,6 +293,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   peepholeBorder: {
+    pointerEvents: "none",
     position: "absolute",
     top: "50%",
     left: "50%",

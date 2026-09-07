@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import InAppSplash from "./components/in-app-splash";
+import InAppSplash from "@/components/in-app-splash";
 
 export default function Index() {
   const router = useRouter();

@@ -1,5 +1,5 @@
 import { Image, StyleSheet, View } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import { Feather } from "@react-native-vector-icons/feather";
 import { NoteModel } from "../models/NoteModel";
 
 type Props = {
@@ -35,7 +35,7 @@ export default function MediaThumb({ note, borderRadius = 0, showPlayBadge = tru
         <View style={styles.videoTile} />
       )}
       {isVideo && showPlayBadge && (
-        <View style={styles.badge} pointerEvents="none">
+        <View style={styles.badge}>
           <View style={styles.playCircle}>
             <Feather name="play" size={11} color="#fff" style={styles.playIcon} />
           </View>
@@ -61,6 +61,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#1A1714",
   },
   badge: {
+    pointerEvents: "none",
     position: "absolute",
     top: 0,
     left: 0,
