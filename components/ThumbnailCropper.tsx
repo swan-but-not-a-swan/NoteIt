@@ -5,10 +5,17 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from "react-native-reanimated";
+import { Image } from "expo-image";
 import { useImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Feather } from "@react-native-vector-icons/feather";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
+
+// expo-image's Image is a native view like any other, so Reanimated can
+// drive it once wrapped. Declared at module scope — creating it inside the
+// component would produce a new component type every render and remount the
+// image (and re-decode it) on each frame of a pan.
+const AnimatedImage = Animated.createAnimatedComponent(Image);
 
 const CROP_SIZE = 280;
 const CROP_RADIUS = 32;
@@ -211,7 +218,7 @@ export function CropperContent({
           <View style={StyleSheet.absoluteFill}>
             {/* dimmed full image */}
             <View style={styles.centeredLayer}>
-              <Animated.Image source={{ uri: sourceUri }} style={imageAnimatedStyle} />
+              <AnimatedImage source={{ uri: sourceUri }} style={imageAnimatedStyle} />
             </View>
             <View style={styles.dim} />
 
@@ -222,7 +229,7 @@ export function CropperContent({
                 { width: CROP_SIZE, height: CROP_SIZE, borderRadius: CROP_RADIUS },
               ]}
             >
-              <Animated.Image source={{ uri: sourceUri }} style={peepholeImageStyle} />
+              <AnimatedImage source={{ uri: sourceUri }} style={peepholeImageStyle} />
             </View>
             <View
               style={[

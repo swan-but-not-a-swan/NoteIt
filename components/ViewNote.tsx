@@ -1,12 +1,24 @@
 import { useEffect, useState } from "react";
-import { Image, Modal, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import {
+  Modal,
+  Platform,
+  Pressable,
+  Share,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { Feather } from "@react-native-vector-icons/feather";
+import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -22,6 +34,10 @@ import FilmStrip from "./FilmStrip";
 
 const CARD_H = 400;
 const DRAG_THRESHOLD = 55;
+// Horizontal padding on the body — the card fills what's left, so this is
+// also what a full-width swipe measures. Kept as a constant because the pan
+// handler needs the same number the stylesheet uses.
+const BODY_PADDING_H = 22;
 
 type Props = {
   visible: boolean;
@@ -35,6 +51,10 @@ type Props = {
   /** All stored tags, to resolve a note's tagIds into display titles. */
   tags: TagModel[];
   onClose: () => void;
+  /** Long-pressing "Show note" starts a brand new picture-note. Optional:
+   *  the folder screen has no AddNote modal of its own, so it omits this
+   *  and the long-press is simply inert there. */
+  onAddNote?: () => void;
 };
 
 // Full-screen swipeable viewer — ported from the web reference's Viewer +
@@ -43,11 +63,25 @@ type Props = {
 // a filmstrip and prev/next/toggle controls for the same actions without a
 // gesture. Read-only — editing/deleting a note is business logic Swan wires
 // up himself, same boundary as everywhere else in this app.
-export default function ViewNote({ visible, colors, title, notes, startId, tags, onClose }: Props) {
+export default function ViewNote({
+  visible,
+  colors,
+  title,
+  notes,
+  startId,
+  tags,
+  onClose,
+  onAddNote,
+}: Props) {
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(0);
   const [noteOpen, setNoteOpen] = useState(false);
   const [enterDir, setEnterDir] = useState<"next" | "prev" | null>(null);
+
+  // Where the filmstrip sits, in tile units. It lives up here rather than
+  // inside FilmStrip because the pan gesture that drives it mid-swipe is
+  // down in NoteCard, and this is their nearest common parent.
+  const stripPos = useSharedValue(0);
 
   // Reset per viewing session, without an effect. Both parents keep this
   // component mounted whether or not it's visible, so there's no mount
@@ -74,6 +108,26 @@ export default function ViewNote({ visible, colors, title, notes, startId, tags,
       onClose();
     }
   }, [visible, notes.length]);
+
+  // Realigns the strip when the index changes from something that isn't a
+  // swipe — a filmstrip tap or the prev/next buttons. A swipe already drove
+  // stripPos to this same target from inside the gesture, so re-running it
+  // here just retargets an animation that's already heading there.
+  useEffect(() => {
+    stripPos.set(withTiming(index, { duration: 280 }));
+  }, [index]);
+
+  const startNewNote = () => {
+    if (onAddNote == null) return;
+    // Web has no haptics engine — expo-haptics warns rather than no-ops
+    // there, so don't call it at all.
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
+        // a device with no taptic engine — the modal still opens
+      });
+    }
+    onAddNote();
+  };
 
   const go = (dir: number) => {
     setIndex((i) => {
@@ -150,9 +204,18 @@ export default function ViewNote({ visible, colors, title, notes, startId, tags,
               onSwipeLeft={() => go(1)}
               onSwipeRight={() => go(-1)}
               enterDir={enterDir}
+              index={index}
+              count={notes.length}
+              stripPos={stripPos}
             />
 
-            <FilmStrip notes={notes} currentIndex={index} colors={colors} onSelect={jumpTo} />
+            <FilmStrip
+              notes={notes}
+              currentIndex={index}
+              colors={colors}
+              onSelect={jumpTo}
+              position={stripPos}
+            />
 
             <View style={styles.navRow}>
               <Pressable
@@ -165,6 +228,10 @@ export default function ViewNote({ visible, colors, title, notes, startId, tags,
 
               <Pressable
                 onPress={() => setNoteOpen((v) => !v)}
+                onLongPress={startNewNote}
+                accessibilityHint={
+                  onAddNote != null ? "Press and hold to start a new picture-note" : undefined
+                }
                 style={[styles.toggleBtn, { backgroundColor: noteOpen ? colors.accent : colors.surface }]}
               >
                 <Feather name="file-text" size={16} color={colors.textPrimary} />
@@ -206,10 +273,34 @@ type NoteCardProps = {
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
   enterDir: "next" | "prev" | null;
+  /** This card's position in the list, and how many there are. The pan
+   *  handler needs both to work out which tile the strip should land on
+   *  without running off either end. */
+  index: number;
+  count: number;
+  /** Filmstrip position in tile units, driven live from the pan gesture. */
+  stripPos: SharedValue<number>;
 };
 
-function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onSwipeRight, enterDir }: NoteCardProps) {
+function NoteCard({
+  note,
+  tags,
+  colors,
+  noteOpen,
+  onToggleNote,
+  onSwipeLeft,
+  onSwipeRight,
+  enterDir,
+  index,
+  count,
+  stripPos,
+}: NoteCardProps) {
   const videoPlayer = useVideoPlayer(note.mediaType === "video" ? note.mediaUri : null);
+  // The card fills the body minus its padding. Dragging one card-width moves
+  // the filmstrip exactly one tile, which is what makes the two feel locked
+  // together rather than merely correlated.
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = windowWidth - BODY_PADDING_H * 2;
 
   // Every shared value below is read and written through .get()/.set()
   // rather than .value. React Compiler treats a shared value as an external
@@ -258,6 +349,7 @@ function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onS
         stackY.set(Math.min(40, Math.max(-CARD_H, base + e.translationY)));
       } else if (axis.get() === "x" && !noteOpenSV.get()) {
         cardX.set(e.translationX);
+        stripPos.set(index - e.translationX / cardWidth);
       }
     })
     .onEnd((e) => {
@@ -268,10 +360,18 @@ function NoteCard({ note, tags, colors, noteOpen, onToggleNote, onSwipeLeft, onS
         stackY.set(withTiming(shouldOpen ? -CARD_H : 0, { duration: 280 }));
         scheduleOnRN(onToggleNote, shouldOpen);
       } else if (axis.get() === "x") {
+        // Resolve where the strip lands here rather than letting go() clamp
+        // it afterwards: at the first or last note the strip would otherwise
+        // animate to a tile that doesn't exist and snap back.
+        let target = index;
         if (Math.abs(e.translationX) > DRAG_THRESHOLD) {
-          if (e.translationX < 0) scheduleOnRN(onSwipeLeft);
-          else scheduleOnRN(onSwipeRight);
+          if (e.translationX < 0 && index < count - 1) target = index + 1;
+          else if (e.translationX > 0 && index > 0) target = index - 1;
         }
+        if (target !== index) {
+          scheduleOnRN(target > index ? onSwipeLeft : onSwipeRight);
+        }
+        stripPos.set(withTiming(target, { duration: 280 }));
         cardX.set(withSpring(0));
       }
       axis.set(null);

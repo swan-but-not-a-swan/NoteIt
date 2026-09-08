@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -13,6 +12,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useVideoPlayer, VideoView } from "expo-video";
 import DateTimePicker from "@react-native-community/datetimepicker";

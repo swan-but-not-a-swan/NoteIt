@@ -1,4 +1,5 @@
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather";
 import { NoteModel } from "../models/NoteModel";
 

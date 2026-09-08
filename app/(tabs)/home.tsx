@@ -27,6 +27,11 @@ import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 const getNoteMediaDir = () => new Directory(Paths.document, "note-media");
 
+//* ios refuses to present a modal while another is still dismissing, so the
+//* viewer has to finish sliding out before AddNote can slide in. Matches the
+//* slide animation's duration with a little headroom.
+const VIEWER_DISMISS_MS = 350;
+
 // Slides its content in from the side matching `dir` (or renders in place
 // when null, e.g. on first mount). Give it a `key` that changes whenever the
 // active tab changes so it remounts and the animation replays each switch —
@@ -132,6 +137,17 @@ export default function Home() {
 
     const closeNote = () => {
         setViewingNote(null);
+    };
+
+    //* long-pressing "show note" in the viewer starts a fresh picture-note.
+    //* the viewer has to close first — see VIEWER_DISMISS_MS above
+    const addNoteFromViewer = () => {
+        closeNote();
+        if (Platform.OS === "ios") {
+            setTimeout(openAddNote, VIEWER_DISMISS_MS);
+            return;
+        }
+        openAddNote();
     };
 
     const openNewFolder = () => {
@@ -268,8 +284,7 @@ export default function Home() {
         //* Save media to app storage
         const notemediaType: NoteMediaType = noteMediaType ?? "image";
         const source:SourceMedia = { uri: noteMediaUri, mimeType: noteMediaMimeType};
-        const destUri = getNoteMediaFileUri(getNoteMediaDir(),source,notemediaType);
-        setNoteMediaUri(destUri);
+        const destUri = await getNoteMediaFileUri(getNoteMediaDir(),source,notemediaType);
         //* get thumbnail of the media and save it to app storage — a video's
         //* first frame, or a tile-sized copy of a photo so the gallery isn't
         //* decoding full camera resolution per cell. Both are generated into
@@ -282,7 +297,7 @@ export default function Home() {
             const generatedUri = notemediaType === "video"
                 ? await getThumbnailFromVideo(destUri)
                 : await getThumbnailFromImageAsync(destUri);
-            coverUri = getThumbnailFileUri(getNoteMediaDir(), generatedUri);
+            coverUri = await getThumbnailFileUri(getNoteMediaDir(), generatedUri);
         } catch {
             coverUri = null;
         }
@@ -383,13 +398,13 @@ export default function Home() {
         setCropSourceUri(result.assets[0].uri);
     }
 
-    const confirmCroppedThumbnail = (croppedUri: string) => {
+    const confirmCroppedThumbnail = async (croppedUri: string) => {
         //*delete any orphaned thumbail from previous(failed to save) crop session
         if (newFolderThumbnailUri != null && newFolderThumbnailUri !== originalFolderThumbnailUri) {
             deleteThumbnailFile(newFolderThumbnailUri);
         }
 
-        const destUri = getThumbnailFileUri(getThumbnailDir(), croppedUri);
+        const destUri = await getThumbnailFileUri(getThumbnailDir(), croppedUri);
         setNewFolderThumbnailUri(destUri); // ...the reference is kept
         setCropSourceUri(null); // back to the form, still the same modal
     };
@@ -499,6 +514,7 @@ export default function Home() {
                 startId={viewingNote?.id ?? null}
                 tags={storedTags}
                 onClose={closeNote}
+                onAddNote={addNoteFromViewer}
             />
 
             <AddNote

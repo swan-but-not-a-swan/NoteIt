@@ -2,7 +2,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import { Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
-import * as VideoThumbnails from 'expo-video-thumbnails';
+import {useVideoPlayer} from "expo-video";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
 export function deleteThumbnailFile(uri: string) {
@@ -27,11 +27,11 @@ export async function thumbnailFileValidatorAsync():Promise<string|undefined>
     return undefined;
 }
 
-export function getThumbnailFileUri(destDir: Directory, croppedUri: string): string
+export async function getThumbnailFileUri(destDir: Directory, croppedUri: string): Promise<string>
 {
     destDir.create({ intermediates: true, idempotent: true });
     const dest = new File(destDir, `${Crypto.randomUUID()}.jpg`);
-    new File(croppedUri).copySync(dest); // file written before...
+    await new File(croppedUri).copy(dest); // file written before...
     return dest.uri;
 }
 
@@ -78,13 +78,13 @@ export function extensionFrom(source: SourceMedia, mediaType: "image" | "video")
     return fallback;
 }
 
-export function getNoteMediaFileUri(
-    destDir: Directory, source: SourceMedia, mediaType: "image" | "video"): string
+export async function getNoteMediaFileUri(
+    destDir: Directory, source: SourceMedia, mediaType: "image" | "video"): Promise<string>
 {
     destDir.create({ intermediates: true, idempotent: true });
     const extension = extensionFrom(source, mediaType); //* get the extension of the media file
     const dest = new File(destDir, `${Crypto.randomUUID()}.${extension}`);
-    new File(source.uri).copySync(dest); //* creates a copy of the media file in the app storage
+    await new File(source.uri).copy(dest); //* creates a copy of the media file in the app storage
     return dest.uri;
 }
 
@@ -114,6 +114,6 @@ export async function getThumbnailFromVideo(source : string) : Promise<string>
     //* `time` is in milliseconds, so 0 is the first frame. Nudge it a few
     //* hundred ms if a recording turns out to start on a black frame.
     //* `quality` keeps the file small — this is only ever shown as a tile.
-    const {uri} =  await VideoThumbnails.getThumbnailAsync(source, { time: 0, quality: 0.7 });
+    const {uri} =  await useVideoPlayer.ge
     return uri;
 }
