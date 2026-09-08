@@ -11,6 +11,7 @@ import GalleryGrid from "@/components/GalleryGrid";
 import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
 import ViewNote from "@/components/ViewNote";
+import HoldToAddOverlay from "@/components/HoldToAddOverlay";
 import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync, saveNoteToStorageAsync, saveTagsToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
@@ -18,6 +19,7 @@ import { useRouter } from "expo-router";
 import { FolderListItemModel } from "@/models/FolderListItemModel";
 import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
+import * as Haptics from "expo-haptics";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { deleteThumbnailFile, getNoteMediaFileUri, getThumbnailFileUri, getThumbnailFromImageAsync, getThumbnailFromVideo, SourceMedia, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
@@ -138,6 +140,35 @@ export default function Home() {
     const closeNote = () => {
         setViewingNote(null);
     };
+
+    //* hold anywhere on the folders list to start a picture-note. onStart only
+    //* fires once the press is recognised, so the haptic and the scrim land
+    //* together and a plain tap never triggers either
+    const [holdingToAdd, setHoldingToAdd] = useState(false);
+
+    const beginHoldToAdd = () => {
+        if (Platform.OS !== "web") {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
+        }
+        setHoldingToAdd(true);
+    };
+
+    const holdToAddGesture = Gesture.LongPress()
+        .minDuration(400)
+        //* sliding off is the escape hatch — past this the press fails and
+        //* onEnd reports success: false, so nothing opens
+        .maxDistance(20)
+        .onStart(() => {
+            scheduleOnRN(beginHoldToAdd);
+        })
+        .onEnd((_e, success) => {
+            if (success) scheduleOnRN(openAddNote);
+        })
+        //* onFinalize runs whether the press succeeded, failed or was taken
+        //* over by another gesture, so the scrim can never be left stuck on
+        .onFinalize(() => {
+            scheduleOnRN(setHoldingToAdd, false);
+        });
 
     //* long-pressing "show note" in the viewer starts a fresh picture-note.
     //* the viewer has to close first — see VIEWER_DISMISS_MS above
@@ -483,13 +514,20 @@ export default function Home() {
                 <View style={styles.pager}>
                     {activeTab === "folders" ? (
                         <SlideInPage key="folders" dir={tabDir}>
-                            <FoldersList
-                                items={folders}
-                                colors={colors}
-                                onOpenFolder={(id) => router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })}
-                                onEditFolder={onEditFolder}
-                                onNewFolder={openNewFolder}
-                            />
+                            {/* nested inside the pager's pan detector rather than
+                                composed with it, so the hold is scoped to this tab
+                                and the gallery keeps its plain swipe */}
+                            <GestureDetector gesture={holdToAddGesture}>
+                                <View style={styles.page}>
+                                    <FoldersList
+                                        items={folders}
+                                        colors={colors}
+                                        onOpenFolder={(id) => router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })}
+                                        onEditFolder={onEditFolder}
+                                        onNewFolder={openNewFolder}
+                                    />
+                                </View>
+                            </GestureDetector>
                         </SlideInPage>
                     ) : (
                         <SlideInPage key="gallery" dir={tabDir}>
@@ -505,6 +543,10 @@ export default function Home() {
                 onAdd={openAddNote}
                 colors={colors}
             />
+
+            {/* after the tab bar so it dims that too — the hold covers the
+                whole screen, so leaving one strip lit would look like a gap */}
+            <HoldToAddOverlay visible={holdingToAdd} colors={colors} />
 
             <ViewNote
                 visible={viewingNote != null}

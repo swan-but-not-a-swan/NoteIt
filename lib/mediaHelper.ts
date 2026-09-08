@@ -2,7 +2,7 @@ import { Directory, File, Paths } from "expo-file-system";
 import { Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
-import {useVideoPlayer} from "expo-video";
+import * as VideoThumbnails from 'expo-video-thumbnails';
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
 export function deleteThumbnailFile(uri: string) {
@@ -114,6 +114,14 @@ export async function getThumbnailFromVideo(source : string) : Promise<string>
     //* `time` is in milliseconds, so 0 is the first frame. Nudge it a few
     //* hundred ms if a recording turns out to start on a black frame.
     //* `quality` keeps the file small — this is only ever shown as a tile.
-    const {uri} =  await useVideoPlayer.ge
+    //
+    //* Deliberately not expo-video's player.generateThumbnailsAsync(): that
+    //* returns a VideoThumbnail, an in-memory native image handle with no
+    //* uri, and there's no supported way to write one to disk — expo-image's
+    //* writeToCacheAsync() only accepts an ImageRef, which a VideoThumbnail
+    //* is not. NoteModel.thumbnailUri is a persisted string, so it needs a
+    //* real file. generateThumbnailsAsync is the right call only for frames
+    //* that live and die within a session, e.g. a scrub strip.
+    const {uri} =  await VideoThumbnails.getThumbnailAsync(source, { time: 0, quality: 0.7 });
     return uri;
 }
