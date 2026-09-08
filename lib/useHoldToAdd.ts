@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Platform } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
-import { useSharedValue, withTiming } from "react-native-reanimated";
+import { useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import * as Haptics from "expo-haptics";
 
@@ -28,6 +28,11 @@ export function useHoldToAdd(onTrigger: () => void) {
   const [holding, setHolding] = useState(false);
   const [readyToRelease, setReadyToRelease] = useState(false);
   const progress = useSharedValue(0);
+  // 0 -> 1 the moment the hold registers. Separate from `holding` because a
+  // consumer that wants to animate the thing being held (a button growing
+  // under the finger) needs it on the UI thread — routing that through JS
+  // state costs a round trip the gesture can outrun.
+  const active = useSharedValue(0);
 
   const beginHold = () => {
     // The haptic fires on activation, not on touch-down, so it confirms the
@@ -49,6 +54,7 @@ export function useHoldToAdd(onTrigger: () => void) {
     .activateAfterLongPress(HOLD_MS)
     .onStart(() => {
       progress.set(0);
+      active.set(withSpring(1, { damping: 14 }));
       scheduleOnRN(beginHold);
     })
     .onUpdate((e) => {
@@ -68,8 +74,9 @@ export function useHoldToAdd(onTrigger: () => void) {
     // another one, so the overlay can never be left stranded on screen.
     .onFinalize(() => {
       progress.set(withTiming(0, { duration: 160 }));
+      active.set(withSpring(0));
       scheduleOnRN(endHold);
     });
 
-  return { gesture, holding, readyToRelease, progress };
+  return { gesture, holding, readyToRelease, progress, active };
 }

@@ -5,10 +5,22 @@ import * as Crypto from "expo-crypto";
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
+// Best-effort delete: a file that's already gone, a uri from an older build,
+// or web (where expo-file-system doesn't work at all) should not be able to
+// abort a batch delete halfway through and strand the rest.
+//
+// The guard covers the whole body, not just delete(). `new File(uri)` and
+// `.exists` both touch the filesystem, so a malformed uri throws from one of
+// those before delete() is ever reached — which is precisely the case a
+// caller passing the wrong string would hit.
 export function deleteFileIfExists(uri: string) {
-    const file = new File(uri);
-    if (file.exists) {
-        file.delete();
+    try {
+        const file = new File(uri);
+        if (file.exists) {
+            file.delete();
+        }
+    } catch (error) {
+        console.error("Error deleting file:", uri, error);
     }
 }
 

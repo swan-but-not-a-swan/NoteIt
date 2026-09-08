@@ -2,11 +2,9 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import * as Haptics from "expo-haptics";
 import Animated, {
     useAnimatedStyle,
     useSharedValue,
-    withSpring,
     withTiming,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -21,6 +19,8 @@ import ViewNote from "@/components/ViewNote";
 import FilmStrip from "@/components/FilmStrip";
 import AddNote from "@/components/AddNote";
 import { useAddNote } from "@/lib/useAddNote";
+import { useHoldToAdd } from "@/lib/useHoldToAdd";
+import HoldToAddOverlay from "@/components/HoldToAddOverlay";
 import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
@@ -129,46 +129,31 @@ export default function ViewNotes() {
         }
     };
 
-    //* fires the instant the hold registers — confirmation that the gesture
-    //* took, paired with the button growing. Opening is a separate step, on
-    //* release.
-    const cueNewNote = () => {
-        if (Platform.OS !== "web") {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-                // no taptic engine — the button still grows
-            });
-        }
-    };
+    //* same hold-then-swipe-up as the grids, so the button behaves like every
+    //* other "add a note" entry point instead of inventing a third rule
+    const holdToAdd = useHoldToAdd(() => addNote.open(folderId ?? null));
 
-    const toggleScale = useSharedValue(1);
+    //* pulled out before the worklet, and this is load-bearing: writing
+    //* holdToAdd.active.get() inside one captures `holdToAdd` itself, and the
+    //* object carries the PanGesture. Reanimated serialises everything a
+    //* worklet closes over, and a gesture isn't serialisable — "cannot copy
+    //* value of type 'PanGesture'". Capturing the two shared values directly
+    //* keeps the gesture out of the closure.
+    const { active: holdActive, progress: holdProgress } = holdToAdd;
+
+    //* the button grows under the finger: `active` springs to 1 when the hold
+    //* registers, then `progress` keeps growing it as the swipe travels
     const toggleStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: toggleScale.get() }],
+        transform: [{ scale: 1 + holdActive.get() * 0.1 + holdProgress.get() * 0.14 }],
     }));
 
-    //* RNGH rather than Pressable's onLongPress, which fires on recognition and
-    //* gives no hook for "still holding" — nothing to animate against, and it
-    //* opened before the finger lifted
     const toggleTap = Gesture.Tap().onEnd((_e, success) => {
         if (success) scheduleOnRN(setNoteOpen, !noteOpen);
     });
 
-    const toggleHold = Gesture.LongPress()
-        .minDuration(350)
-        .onStart(() => {
-            toggleScale.set(withSpring(1.18, { damping: 12 }));
-            scheduleOnRN(cueNewNote);
-        })
-        .onEnd((_e, success) => {
-            //* new notes default into whichever folder is being browsed
-            if (success) scheduleOnRN(addNote.open, folderId ?? null);
-        })
-        .onFinalize(() => {
-            toggleScale.set(withSpring(1));
-        });
-
-    //* Exclusive gives the hold priority: a quick tap fails minDuration and
-    //* falls through to the tap, a long one wins outright
-    const toggleGesture = Gesture.Exclusive(toggleHold, toggleTap);
+    //* Exclusive gives the hold priority: released before HOLD_MS the pan never
+    //* activates and the tap takes over, so a plain tap still toggles
+    const toggleGesture = Gesture.Exclusive(holdToAdd.gesture, toggleTap);
 
     const insets = useSafeAreaInsets();
 
@@ -179,6 +164,8 @@ export default function ViewNotes() {
             <TopBar
                 title={title}
                 colors={colors}
+                //* presented modally — the card already clears the status bar
+                insetTop={false}
                 onBack={() => router.back()}
                 right={
                     <View style={styles.headerRight}>
@@ -265,6 +252,13 @@ export default function ViewNotes() {
                     doesn't shift when that lands. */}
                 <View style={[styles.adSlot, { backgroundColor: colors.surfaceHi, borderColor: colors.line }]} />
             </View>
+
+            <HoldToAddOverlay
+                visible={holdToAdd.holding}
+                progress={holdToAdd.progress}
+                readyToRelease={holdToAdd.readyToRelease}
+                colors={colors}
+            />
 
             <AddNote colors={colors} folders={folders} {...addNote.props} />
         </View>

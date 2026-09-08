@@ -9,6 +9,7 @@ import GalleryGrid from "@/components/GalleryGrid";
 import HoldToAddOverlay from "@/components/HoldToAddOverlay";
 import AddNote from "@/components/AddNote";
 import { useHoldToAdd } from "@/lib/useHoldToAdd";
+import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useAddNote } from "@/lib/useAddNote";
 import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
 import { FolderModel } from "@/models/FolderModel";
@@ -40,6 +41,8 @@ export default function FolderNotes() {
     const folder = folders.find((f) => f.id === id) ?? null;
     const folderNotes = notes.filter((note) => note.folderId === id);
 
+    const navigateOnce = useNavigateOnce();
+
     //* the same modal home uses, presented here over this folder's own grid.
     //* the composition state lives in the hook precisely so this screen can do
     //* that without owning (or duplicating) the save pipeline
@@ -60,10 +63,12 @@ export default function FolderNotes() {
                         notes={folderNotes}
                         colors={colors}
                         onOpenNote={(note) =>
-                            router.push({
-                                pathname: "/(tabs)/note/[id]",
-                                params: { id: note.id, folderId: id },
-                            })
+                            navigateOnce(() =>
+                                router.push({
+                                    pathname: "/(tabs)/note/[id]",
+                                    params: { id: note.id, folderId: id },
+                                })
+                            )
                         }
                     />
                 </View>

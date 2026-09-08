@@ -6,7 +6,7 @@ import Animated, {
   useSharedValue,
 } from "react-native-reanimated";
 import { Image } from "expo-image";
-import { useImageManipulator, SaveFormat } from "expo-image-manipulator";
+import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Feather } from "@react-native-vector-icons/feather";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
@@ -82,7 +82,6 @@ export function CropperContent({
 }: CropperContentProps) {
   const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
   const [saving, setSaving] = useState(false);
-  const context = useImageManipulator(sourceUri);
 
   useEffect(() => {
     let cancelled = false;
@@ -189,7 +188,12 @@ export function CropperContent({
       const originX = clamp(windowLeftRelativeToImage * (k / scale.value), 0, natural.width - cropSize);
       const originY = clamp(windowTopRelativeToImage * (k / scale.value), 0, natural.height - cropSize);
 
-      const rendered = await context
+      // ImageManipulator.manipulate() here rather than the useImageManipulator
+      // hook: the hook decodes the full-resolution source the moment this
+      // screen mounts, which is what made opening the cropper lag. Nothing
+      // needs the decoded image until confirm, and cancelling never needs it
+      // at all.
+      const rendered = await ImageManipulator.manipulate(sourceUri)
         .crop({ originX: Math.round(originX), originY: Math.round(originY), width: Math.round(cropSize), height: Math.round(cropSize) })
         .renderAsync();
       const result = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 });

@@ -87,6 +87,12 @@ export default function FilmStrip({ notes, currentIndex, colors, onSelect, posit
       ref={scrollRef}
       horizontal
       showsHorizontalScrollIndicator={false}
+      // Never the thing that gives when the column runs out of room. A
+      // ScrollView will happily be squeezed to a sliver — which is how the
+      // strip ended up showing only the top half of its tiles — and a
+      // half-height thumbnail row reads as a rendering bug rather than a
+      // layout one.
+      style={styles.strip}
       onLayout={(e) => {
         const width = e.nativeEvent.layout.width;
         setViewportWidth(width);
@@ -123,6 +129,10 @@ export default function FilmStrip({ notes, currentIndex, colors, onSelect, posit
 }
 
 const styles = StyleSheet.create({
+  strip: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   content: {
     gap: GAP,
     paddingTop: 14,

@@ -10,7 +10,7 @@ import GalleryGrid from "@/components/GalleryGrid";
 import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
 import HoldToAddOverlay from "@/components/HoldToAddOverlay";
-import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
+import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
 import { useRouter } from "expo-router";
@@ -18,6 +18,7 @@ import { FolderListItemModel } from "@/models/FolderListItemModel";
 import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
 import { useHoldToAdd } from "@/lib/useHoldToAdd";
+import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useAddNote } from "@/lib/useAddNote";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
@@ -114,6 +115,10 @@ export default function Home() {
             tabSwipeAxis.value = null;
         });
 
+    //* a push leaves this screen mounted underneath, so without this a
+    //* double-tap opens the same folder (or note) twice
+    const navigateOnce = useNavigateOnce();
+
     const openNewFolder = () => {
         setEditingFolderId(null);
         setNewFolderName("");
@@ -180,9 +185,19 @@ export default function Home() {
         if (editingFolderId == null) return;
         const folderId = editingFolderId;
 
+        const entry = folders.find((f) => f.folder.id === folderId);
+        const count = entry?.count ?? 0;
+
+        //* states what actually happens. This used to promise the notes would
+        //* be "moved out of the folder" — what the abandoned reassign approach
+        //* would have done — so anyone consenting to it lost every photo in
+        //* the folder instead. The count is here because "4 picture-notes" is
+        //* a decision you can make and "its notes" isn't.
         Alert.alert(
-            "Delete folder?",
-            "Its notes will be moved out of the folder. This can't be undone.",
+            `Delete "${entry?.folder.name ?? "this folder"}"?`,
+            count === 0
+                ? "This can't be undone."
+                : `Its ${count} picture-notes${count === 1 ? "" : "s"} will be deleted too, along with their photos and videos. This can't be undone.`,
             [
                 { text: "Cancel", style: "cancel" },
                 { text: "Delete", style: "destructive", onPress: () => performDeleteFolderAsync(folderId) },
@@ -191,18 +206,17 @@ export default function Home() {
     };
 
     const performDeleteFolderAsync = async (folderId: string) => {
-        // TODO (business logic): remove this folder from storage and reassign
-        // its notes so they aren't orphaned — see groupNotesByFolder's
-        // `note.folderId ?? "gallery"` fallback in FileStorage.ts, which already
-        // expects notes with no folder. Roughly:
-        //   1. getFoldersFromStorageAsync() + getNotesFromStorageAsync()
-        //   2. delete the folder's thumbnail file if coverUri != null (deleteThumbnailFile)
-        //   3. for any note whose folderId matches this folder, set folderId: null
-        //      and persist it with saveNoteToStorageAsync (one call per affected
-        //      note — each note is its own storage entry now, no bulk overwrite)
-        //   4. saveFoldersToStorageAsync with this folder removed
-        // Finish with the same close-and-refresh calls as saveNewFolderAsync below:
-        //   setEditingFolderId(null); setShowNewFolder(false); await getFoldersWithCountsAsync();
+        //* cascades: the folder, its notes, and every media and thumbnail file
+        //* those notes own
+        await deleteFolderFromStorageAsync(folderId);
+
+        setEditingFolderId(null);
+        setShowNewFolder(false);
+        //* notes as well as folders — the gallery tab is currently rendering
+        //* the ones that were just deleted, so refreshing only the folder list
+        //* leaves them on screen pointing at files that no longer exist
+        await getFoldersWithCountsAsync();
+        setNotes(await getNotesFromStorageAsync());
     };
 
     const pickThumbnailAsync = async () => {
@@ -310,7 +324,11 @@ export default function Home() {
                             <FoldersList
                                 items={folders}
                                 colors={colors}
-                                onOpenFolder={(id) => router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })}
+                                onOpenFolder={(id) =>
+                                    navigateOnce(() =>
+                                        router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })
+                                    )
+                                }
                                 onEditFolder={onEditFolder}
                                 onNewFolder={openNewFolder}
                             />
@@ -321,7 +339,9 @@ export default function Home() {
                                 notes={notes}
                                 colors={colors}
                                 onOpenNote={(note) =>
-                                    router.push({ pathname: "/(tabs)/note/[id]", params: { id: note.id } })
+                                    navigateOnce(() =>
+                                        router.push({ pathname: "/(tabs)/note/[id]", params: { id: note.id } })
+                                    )
                                 }
                             />
                         </SlideInPage>
