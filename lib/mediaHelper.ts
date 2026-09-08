@@ -5,21 +5,19 @@ import * as Crypto from "expo-crypto";
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
-export function deleteThumbnailFile(uri: string) {
+export function deleteFileIfExists(uri: string) {
     const file = new File(uri);
     if (file.exists) {
-        file.delete(); //* throws if missing, hence the exists check — this makes it idempotent
+        file.delete();
     }
 }
 
-export async function thumbnailFileValidatorAsync():Promise<string|undefined>
-{
-    if (Platform.OS === "web") 
-    {
+export async function thumbnailFileValidatorAsync(): Promise<string | undefined> {
+    if (Platform.OS === "web") {
         //*expo file system doesn't work on web, so error is shown if thumbnail is picked on web.
         return "Photo thumbnails aren't supported in the web preview — test this on a device or simulator.";
     }
-    
+
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
         return "Allow photo library access to set a thumbnail.";
@@ -27,8 +25,7 @@ export async function thumbnailFileValidatorAsync():Promise<string|undefined>
     return undefined;
 }
 
-export async function getThumbnailFileUri(destDir: Directory, croppedUri: string): Promise<string>
-{
+export async function getThumbnailFileUri(destDir: Directory, croppedUri: string): Promise<string> {
     destDir.create({ intermediates: true, idempotent: true });
     const dest = new File(destDir, `${Crypto.randomUUID()}.jpg`);
     await new File(croppedUri).copy(dest); // file written before...
@@ -60,8 +57,7 @@ export type SourceMedia = {
     mimeType?: string | null;
 };
 
-export function extensionFrom(source: SourceMedia, mediaType: "image" | "video"): string
-{
+export function extensionFrom(source: SourceMedia, mediaType: "image" | "video"): string {
     const { allowed, fallback } = MEDIA_EXTENSIONS[mediaType];
 
     //* what the picker reported
@@ -79,8 +75,7 @@ export function extensionFrom(source: SourceMedia, mediaType: "image" | "video")
 }
 
 export async function getNoteMediaFileUri(
-    destDir: Directory, source: SourceMedia, mediaType: "image" | "video"): Promise<string>
-{
+    destDir: Directory, source: SourceMedia, mediaType: "image" | "video"): Promise<string> {
     destDir.create({ intermediates: true, idempotent: true });
     const extension = extensionFrom(source, mediaType); //* get the extension of the media file
     const dest = new File(destDir, `${Crypto.randomUUID()}.${extension}`);
@@ -98,8 +93,7 @@ const THUMBNAIL_WIDTH = 400;
 // preserved. Like getThumbnailFromVideo, the result is written to the *cache*
 // directory (saveAsync's own documentation), so the caller has to copy it
 // into app storage with getThumbnailFileUri.
-export async function getThumbnailFromImageAsync(source : string) : Promise<string>
-{
+export async function getThumbnailFromImageAsync(source: string): Promise<string> {
     const rendered = await ImageManipulator.manipulate(source).resize({ width: THUMBNAIL_WIDTH }).renderAsync();
     const { uri } = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
     return uri;
@@ -109,8 +103,7 @@ export async function getThumbnailFromImageAsync(source : string) : Promise<stri
 // directory on both platforms (see the module's native source), so a caller
 // that needs it to outlive an OS cache sweep has to copy it into app storage
 // with getThumbnailFileUri.
-export async function getThumbnailFromVideo(source : string) : Promise<string>
-{
+export async function getThumbnailFromVideo(source: string): Promise<string> {
     //* `time` is in milliseconds, so 0 is the first frame. Nudge it a few
     //* hundred ms if a recording turns out to start on a black frame.
     //* `quality` keeps the file small — this is only ever shown as a tile.
@@ -122,6 +115,6 @@ export async function getThumbnailFromVideo(source : string) : Promise<string>
     //* is not. NoteModel.thumbnailUri is a persisted string, so it needs a
     //* real file. generateThumbnailsAsync is the right call only for frames
     //* that live and die within a session, e.g. a scrub strip.
-    const {uri} =  await VideoThumbnails.getThumbnailAsync(source, { time: 0, quality: 0.7 });
+    const { uri } = await VideoThumbnails.getThumbnailAsync(source, { time: 0, quality: 0.7 });
     return uri;
 }

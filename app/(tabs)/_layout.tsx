@@ -15,6 +15,10 @@ export default function TabsLayout() {
       <Stack.Screen name="home" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="folder/[id]" />
+      {/* Modal presentation keeps the slide-up the viewer had as a <Modal>,
+          while still being a real route — so the back gesture works and
+          AddNote can present over it. */}
+      <Stack.Screen name="note/[id]" options={{ presentation: "modal" }} />
     </Stack>
   );
 }

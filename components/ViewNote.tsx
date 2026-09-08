@@ -1,18 +1,7 @@
-import { useEffect, useState } from "react";
-import {
-  Modal,
-  Platform,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { useEffect } from "react";
+import { StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import * as Haptics from "expo-haptics";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -21,7 +10,6 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useVideoPlayer, VideoView } from "expo-video";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
@@ -29,242 +17,13 @@ import { hexToRgba } from "@/lib/color";
 import { formatDayDate, formatShortDate } from "@/lib/date";
 import { NoteModel, TagModel } from "../models/NoteModel";
 import MarkdownText from "./MarkdownText";
-import TopBar from "./TopBar";
-import FilmStrip from "./FilmStrip";
 
-const CARD_H = 400;
+/** Height of the card. Exported because the screen's layout has to reserve
+ *  exactly this much, and the flip animation is expressed in multiples of it. */
+export const CARD_H = 400;
 const DRAG_THRESHOLD = 55;
-// Horizontal padding on the body — the card fills what's left, so this is
-// also what a full-width swipe measures. Kept as a constant because the pan
-// handler needs the same number the stylesheet uses.
-const BODY_PADDING_H = 22;
 
 type Props = {
-  visible: boolean;
-  colors: ThemeColors;
-  /** Folder name, or "Gallery" — whatever scope `notes` was drawn from. */
-  title: string;
-  /** The scoped list to swipe/navigate within (a folder's notes, or all of them). */
-  notes: NoteModel[];
-  /** Which note to open on. */
-  startId: string | null;
-  /** All stored tags, to resolve a note's tagIds into display titles. */
-  tags: TagModel[];
-  onClose: () => void;
-  /** Long-pressing "Show note" starts a brand new picture-note. Optional:
-   *  the folder screen has no AddNote modal of its own, so it omits this
-   *  and the long-press is simply inert there. */
-  onAddNote?: () => void;
-};
-
-// Full-screen swipeable viewer — ported from the web reference's Viewer +
-// PhotoCard: swipe up/down to flip between the photo and its note (styled
-// like a paper journal page), swipe left/right to move between notes, plus
-// a filmstrip and prev/next/toggle controls for the same actions without a
-// gesture. Read-only — editing/deleting a note is business logic Swan wires
-// up himself, same boundary as everywhere else in this app.
-export default function ViewNote({
-  visible,
-  colors,
-  title,
-  notes,
-  startId,
-  tags,
-  onClose,
-  onAddNote,
-}: Props) {
-  const insets = useSafeAreaInsets();
-  const [index, setIndex] = useState(0);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [enterDir, setEnterDir] = useState<"next" | "prev" | null>(null);
-
-  // Where the filmstrip sits, in tile units. It lives up here rather than
-  // inside FilmStrip because the pan gesture that drives it mid-swipe is
-  // down in NoteCard, and this is their nearest common parent.
-  const stripPos = useSharedValue(0);
-
-  // Reset per viewing session, without an effect. Both parents keep this
-  // component mounted whether or not it's visible, so there's no mount
-  // boundary to hang a fresh useState initializer off the way AddNote's date
-  // picker has. Doing it in an effect meant React committed one frame still
-  // showing the previously-viewed note before correcting itself. Adjusting
-  // state during render is React's sanctioned escape hatch for exactly this:
-  // it re-runs the component immediately, before anything is painted, so the
-  // stale frame never reaches the screen.
-  const session = visible ? startId : null;
-  const [prevSession, setPrevSession] = useState(session);
-  if (session !== prevSession) {
-    setPrevSession(session);
-    if (visible) {
-      const i = notes.findIndex((n) => n.id === startId);
-      setIndex(i >= 0 ? i : 0);
-      setNoteOpen(false);
-      setEnterDir(null);
-    }
-  }
-
-  useEffect(() => {
-    if (visible && notes.length === 0) {
-      onClose();
-    }
-  }, [visible, notes.length]);
-
-  // Realigns the strip when the index changes from something that isn't a
-  // swipe — a filmstrip tap or the prev/next buttons. A swipe already drove
-  // stripPos to this same target from inside the gesture, so re-running it
-  // here just retargets an animation that's already heading there.
-  useEffect(() => {
-    stripPos.set(withTiming(index, { duration: 280 }));
-  }, [index]);
-
-  const startNewNote = () => {
-    if (onAddNote == null) return;
-    // Web has no haptics engine — expo-haptics warns rather than no-ops
-    // there, so don't call it at all.
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-        // a device with no taptic engine — the modal still opens
-      });
-    }
-    onAddNote();
-  };
-
-  const go = (dir: number) => {
-    setIndex((i) => {
-      const next = i + dir;
-      if (next < 0 || next >= notes.length) return i;
-      setNoteOpen(false);
-      setEnterDir(dir > 0 ? "next" : "prev");
-      return next;
-    });
-  };
-
-  const jumpTo = (i: number) => {
-    if (i === index) return;
-    setEnterDir(i > index ? "next" : "prev");
-    setNoteOpen(false);
-    setIndex(i);
-  };
-
-  const note = notes[index];
-
-  const handleShare = async () => {
-    if (note == null || Platform.OS === "web") return;
-    const noteTags = note.tagIds
-      .map((id) => tags.find((t) => t.id === id))
-      .filter((t): t is TagModel => t != null);
-    const shareText = [
-      note.note,
-      noteTags.length > 0 ? noteTags.map((t) => `#${t.title}`).join(" ") : null,
-      note.date.length > 0 ? formatDayDate(note.date) : null,
-    ]
-      .filter((s): s is string => s != null && s.length > 0)
-      .join("\n\n");
-
-    try {
-      await Share.share({ title, message: shareText });
-    } catch {
-      // user dismissed the share sheet — no-op
-    }
-  };
-
-  return (
-    <Modal visible={visible && note != null} animationType="slide" onRequestClose={onClose}>
-      {note != null && (
-        <View style={[styles.screen, { backgroundColor: colors.bg }]}>
-          <TopBar
-            title={title}
-            colors={colors}
-            onBack={onClose}
-            right={
-              <View style={styles.headerRight}>
-                <Text style={[styles.counter, { color: colors.stoneDim }]}>
-                  {index + 1} / {notes.length}
-                </Text>
-                <Pressable
-                  onPress={handleShare}
-                  hitSlop={8}
-                  accessibilityLabel="Share this picture-note"
-                  style={[styles.shareButton, { backgroundColor: colors.surface }]}
-                >
-                  <Feather name="share" size={16} color={colors.textPrimary} />
-                </Pressable>
-              </View>
-            }
-          />
-
-          <View style={[styles.body, { paddingBottom: insets.bottom }]}>
-            <NoteCard
-              key={note.id}
-              note={note}
-              tags={tags}
-              colors={colors}
-              noteOpen={noteOpen}
-              onToggleNote={setNoteOpen}
-              onSwipeLeft={() => go(1)}
-              onSwipeRight={() => go(-1)}
-              enterDir={enterDir}
-              index={index}
-              count={notes.length}
-              stripPos={stripPos}
-            />
-
-            <FilmStrip
-              notes={notes}
-              currentIndex={index}
-              colors={colors}
-              onSelect={jumpTo}
-              position={stripPos}
-            />
-
-            <View style={styles.navRow}>
-              <Pressable
-                onPress={() => go(-1)}
-                disabled={index === 0}
-                style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === 0 ? 0.4 : 1 }]}
-              >
-                <Feather name="chevron-left" size={18} color={index === 0 ? colors.stoneDim : colors.textPrimary} />
-              </Pressable>
-
-              <Pressable
-                onPress={() => setNoteOpen((v) => !v)}
-                onLongPress={startNewNote}
-                accessibilityHint={
-                  onAddNote != null ? "Press and hold to start a new picture-note" : undefined
-                }
-                style={[styles.toggleBtn, { backgroundColor: noteOpen ? colors.accent : colors.surface }]}
-              >
-                <Feather name="file-text" size={16} color={colors.textPrimary} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
-                  {noteOpen ? "Show photo" : "Show note"}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => go(1)}
-                disabled={index === notes.length - 1}
-                style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === notes.length - 1 ? 0.4 : 1 }]}
-              >
-                <Feather
-                  name="chevron-right"
-                  size={18}
-                  color={index === notes.length - 1 ? colors.stoneDim : colors.textPrimary}
-                />
-              </Pressable>
-            </View>
-
-            {/* TODO (business logic): a real ad renders here once RevenueCat
-                is wired up — this just reserves its footprint so the layout
-                doesn't shift when that lands. */}
-            <View style={[styles.adSlot, { backgroundColor: colors.surfaceHi, borderColor: colors.line }]} />
-          </View>
-        </View>
-      )}
-    </Modal>
-  );
-}
-
-type NoteCardProps = {
   note: NoteModel;
   tags: TagModel[];
   colors: ThemeColors;
@@ -273,16 +32,23 @@ type NoteCardProps = {
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
   enterDir: "next" | "prev" | null;
-  /** This card's position in the list, and how many there are. The pan
-   *  handler needs both to work out which tile the strip should land on
-   *  without running off either end. */
+  /** This card's position in the list, and how many there are. The pan handler
+   *  needs both to work out which tile the strip should land on without
+   *  running off either end. */
   index: number;
   count: number;
   /** Filmstrip position in tile units, driven live from the pan gesture. */
   stripPos: SharedValue<number>;
 };
 
-function NoteCard({
+// One picture-note: the photo (or video) with its note on a paper panel
+// directly beneath, both inside a window that only shows one at a time.
+// Swipe up/down to flip between them, sideways to move through the list.
+//
+// Purely the card — the screen around it (header, filmstrip, controls, ad)
+// belongs to the route that renders this. Read-only: editing and deleting a
+// note is business logic Swan wires up himself.
+export default function ViewNote({
   note,
   tags,
   colors,
@@ -294,23 +60,21 @@ function NoteCard({
   index,
   count,
   stripPos,
-}: NoteCardProps) {
+}: Props) {
   const videoPlayer = useVideoPlayer(note.mediaType === "video" ? note.mediaUri : null);
-  // The card fills the body minus its padding. Dragging one card-width moves
-  // the filmstrip exactly one tile, which is what makes the two feel locked
-  // together rather than merely correlated.
-  const { width: windowWidth } = useWindowDimensions();
-  const cardWidth = windowWidth - BODY_PADDING_H * 2;
 
-  // Every shared value below is read and written through .get()/.set()
-  // rather than .value. React Compiler treats a shared value as an external
-  // mutable store, so assigning to .value reads to it as mutating something
-  // it isn't allowed to — strictly it rejects only the ones an effect has
-  // already touched (here that was just stackY, written in the noteOpen sync
-  // and again in the pan handlers), but Reanimated added get/set as the
-  // sanctioned accessors for exactly this, and applying them everywhere
-  // keeps the file consistent instead of leaving one odd one out. Identical
-  // behaviour either way; these are still the same mutable boxes.
+  // Measured rather than derived from the window minus the screen's padding.
+  // Dragging one card-width advances the filmstrip exactly one tile, so this
+  // number has to be the card's real width — computing it from a padding
+  // constant means the two silently disagree the moment that padding changes,
+  // which is the same way the filmstrip's centring drifted off.
+  const cardWidth = useSharedValue(1);
+
+  // Every shared value below is read and written through .get()/.set() rather
+  // than .value. React Compiler treats a shared value as an external mutable
+  // store, so assigning to .value reads to it as mutating something it isn't
+  // allowed to; Reanimated added get/set as the sanctioned accessors for
+  // exactly this. Identical behaviour — still the same mutable boxes.
 
   // vertical: 0 = photo panel showing, -CARD_H = note panel showing
   const stackY = useSharedValue(noteOpen ? -CARD_H : 0);
@@ -349,7 +113,7 @@ function NoteCard({
         stackY.set(Math.min(40, Math.max(-CARD_H, base + e.translationY)));
       } else if (axis.get() === "x" && !noteOpenSV.get()) {
         cardX.set(e.translationX);
-        stripPos.set(index - e.translationX / cardWidth);
+        stripPos.set(index - e.translationX / cardWidth.get());
       }
     })
     .onEnd((e) => {
@@ -360,9 +124,9 @@ function NoteCard({
         stackY.set(withTiming(shouldOpen ? -CARD_H : 0, { duration: 280 }));
         scheduleOnRN(onToggleNote, shouldOpen);
       } else if (axis.get() === "x") {
-        // Resolve where the strip lands here rather than letting go() clamp
-        // it afterwards: at the first or last note the strip would otherwise
-        // animate to a tile that doesn't exist and snap back.
+        // Resolve where the strip lands here rather than letting the screen
+        // clamp it afterwards: at the first or last note the strip would
+        // otherwise animate to a tile that doesn't exist and snap back.
         let target = index;
         if (Math.abs(e.translationX) > DRAG_THRESHOLD) {
           if (e.translationX < 0 && index < count - 1) target = index + 1;
@@ -392,7 +156,10 @@ function NoteCard({
 
   return (
     <GestureDetector gesture={panGesture}>
-      <Animated.View style={[styles.window, windowStyle]}>
+      <Animated.View
+        style={[styles.window, windowStyle]}
+        onLayout={(e) => cardWidth.set(Math.max(1, e.nativeEvent.layout.width))}
+      >
         <Animated.View style={[styles.stack, stackStyle]}>
           <View style={[styles.panel, { height: CARD_H }]}>
             {note.mediaType === "video" ? (
@@ -442,31 +209,6 @@ function NoteCard({
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  counter: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12,
-  },
-  shareButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  body: {
-    flex: 1,
-    justifyContent: "flex-start",
-    paddingHorizontal: 22,
-    paddingTop: 18,
-  },
   window: {
     width: "100%",
     height: CARD_H,
@@ -558,38 +300,5 @@ const styles = StyleSheet.create({
   tagLabel: {
     fontFamily: fonts.interSemiBold,
     fontSize: 11.5,
-  },
-  navRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 16,
-    marginTop: 22,
-  },
-  adSlot: {
-    height: 64,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginTop: "auto",
-    marginBottom: 18,
-  },
-  navBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    height: 42,
-    borderRadius: 21,
-    paddingHorizontal: 18,
-  },
-  toggleLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 12.5,
   },
 });

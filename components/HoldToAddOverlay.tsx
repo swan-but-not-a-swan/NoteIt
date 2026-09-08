@@ -5,43 +5,59 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 
 type Props = {
-  /** True from the moment the long-press is recognised until the finger lifts. */
+  /** True from the moment the hold registers until the finger lifts. */
   visible: boolean;
+  /** 0 -> 1 as the swipe approaches the trigger distance. */
+  progress: SharedValue<number>;
+  /** Past the trigger distance — releasing now will actually add. */
+  readyToRelease: boolean;
   colors: ThemeColors;
-  label?: string;
 };
 
-// Confirmation scrim for the hold-to-add gesture: once the press registers,
-// the screen dims and says what releasing will do, so the hold reads as a
-// deliberate action with a way out (slide off / keep holding and it just
-// fades) rather than something that fired by accident.
+// Confirmation surface for the hold-and-swipe-up gesture. The card appears
+// when the hold registers and keeps growing as the finger travels up, so the
+// swipe has continuous feedback rather than a single state that flips at a
+// threshold you can't see.
 //
-// Stays mounted at opacity 0 rather than unmounting, so the fade-out plays
-// on release instead of vanishing. It never takes touches — the gesture that
-// drives it lives on the content underneath, and a scrim that swallowed the
-// release would break the very gesture it's describing.
-export default function HoldToAddOverlay({ visible, colors, label = "Release to add note" }: Props) {
-  const progress = useSharedValue(0);
+// Two separate drivers on purpose: `appear` is JS-driven (it follows the
+// `visible` prop) and handles the fade in/out, while `progress` is written
+// straight from the gesture on the UI thread. Multiplying them means the
+// growth tracks the finger at frame rate even though the mount is React's
+// call.
+//
+// It never takes touches — the gesture lives on the content underneath, and a
+// scrim that accepted them would swallow the very release it's describing.
+export default function HoldToAddOverlay({ visible, progress, readyToRelease, colors }: Props) {
+  const appear = useSharedValue(0);
 
   useEffect(() => {
-    progress.set(withTiming(visible ? 1 : 0, { duration: 160 }));
+    appear.set(withTiming(visible ? 1 : 0, { duration: 160 }));
   }, [visible]);
 
   const scrimStyle = useAnimatedStyle(() => ({
-    opacity: progress.get(),
+    // Deepens as the swipe goes up, so the screen dims further the closer the
+    // gesture gets to firing.
+    opacity: appear.get() * (0.55 + progress.get() * 0.35),
   }));
 
   const cardStyle = useAnimatedStyle(() => ({
-    opacity: progress.get(),
-    // A slight settle rather than a pop — this appears under the user's
-    // finger mid-gesture, so it should feel like it was already there.
-    transform: [{ scale: 0.96 + progress.get() * 0.04 }],
+    opacity: appear.get(),
+    transform: [
+      { scale: appear.get() * (0.92 + progress.get() * 0.26) },
+      { translateY: -progress.get() * 28 },
+    ],
+  }));
+
+  const arrowStyle = useAnimatedStyle(() => ({
+    opacity: 0.45 + progress.get() * 0.55,
+    transform: [{ translateY: -progress.get() * 6 }],
   }));
 
   return (
@@ -50,13 +66,20 @@ export default function HoldToAddOverlay({ visible, colors, label = "Release to 
         style={[
           styles.card,
           cardStyle,
-          { backgroundColor: colors.surface, borderColor: colors.line },
+          {
+            backgroundColor: colors.surface,
+            borderColor: readyToRelease ? colors.accent : colors.line,
+          },
         ]}
       >
-        <View style={[styles.iconRing, { backgroundColor: hexToRgba(colors.accent, 0.16) }]}>
-          <Feather name="plus" size={20} color={colors.accent} />
-        </View>
-        <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
+        <Animated.View style={arrowStyle}>
+          <View style={[styles.iconRing, { backgroundColor: hexToRgba(colors.accent, 0.16) }]}>
+            <Feather name={readyToRelease ? "plus" : "arrow-up"} size={20} color={colors.accent} />
+          </View>
+        </Animated.View>
+        <Text style={[styles.label, { color: colors.textPrimary }]}>
+          {readyToRelease ? "Release to add note" : "Swipe up to add note"}
+        </Text>
       </Animated.View>
     </Animated.View>
   );
@@ -66,7 +89,7 @@ const styles = StyleSheet.create({
   scrim: {
     pointerEvents: "none",
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
   },

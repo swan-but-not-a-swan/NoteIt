@@ -1,5 +1,4 @@
 import { Alert, Platform, StyleSheet, View } from "react-native";
-import { DateTimePickerAndroid, DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -10,29 +9,22 @@ import FoldersList from "@/components/FoldersList";
 import GalleryGrid from "@/components/GalleryGrid";
 import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
-import ViewNote from "@/components/ViewNote";
 import HoldToAddOverlay from "@/components/HoldToAddOverlay";
-import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync, saveNoteToStorageAsync, saveTagsToStorageAsync } from "@/persistence/FileStorage";
+import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
 import { useRouter } from "expo-router";
 import { FolderListItemModel } from "@/models/FolderListItemModel";
 import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
-import * as Haptics from "expo-haptics";
+import { useHoldToAdd } from "@/lib/useHoldToAdd";
+import { useAddNote } from "@/lib/useAddNote";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import { deleteThumbnailFile, getNoteMediaFileUri, getThumbnailFileUri, getThumbnailFromImageAsync, getThumbnailFromVideo, SourceMedia, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
-import { todayISO } from "@/lib/date";
-import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
+import { deleteFileIfExists, getThumbnailFileUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
+import { NoteModel, TagModel } from "@/models/NoteModel";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
-const getNoteMediaDir = () => new Directory(Paths.document, "note-media");
-
-//* ios refuses to present a modal while another is still dismissing, so the
-//* viewer has to finish sliding out before AddNote can slide in. Matches the
-//* slide animation's duration with a little headroom.
-const VIEWER_DISMISS_MS = 350;
 
 // Slides its content in from the side matching `dir` (or renders in place
 // when null, e.g. on first mount). Give it a `key` that changes whenever the
@@ -69,16 +61,6 @@ export default function Home() {
     const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
     const [folders, setFolders] = useState<FolderListItemModel[]>([]);
 
-    const [showAddNote, setShowAddNote] = useState(false);
-    const [noteText, setNoteText] = useState("");
-    const [noteMediaUri, setNoteMediaUri] = useState<string | null>(null);
-    const [noteMediaType, setNoteMediaType] = useState<NoteMediaType | null>(null);
-    const [noteMediaMimeType, setNoteMediaMimeType] = useState<string | null>(null);
-    const [noteDate, setNoteDate] = useState(todayISO());
-    const [noteTags, setNoteTags] = useState<string[]>([]);
-    const [noteTagInput, setNoteTagInput] = useState("");
-    const [noteFolderId, setNoteFolderId] = useState<string | null>(null);
-    const [noteError, setNoteError] = useState<string | undefined>(undefined);
     const [storedTags, setStoredTags] = useState<TagModel[]>([]);
 
     const [notes, setNotes] = useState<NoteModel[]>([]);
@@ -91,7 +73,6 @@ export default function Home() {
     // position — that's what made the previous drag-following pager feel
     // laggy and left the header out of sync.
     const [tabDir, setTabDir] = useState<"forward" | "backward" | null>(null);
-    const [viewingNote, setViewingNote] = useState<NoteModel | null>(null);
 
     const getFoldersWithCountsAsync = async () => {
         const data = await loadFoldersWithCountsAsync();
@@ -133,54 +114,6 @@ export default function Home() {
             tabSwipeAxis.value = null;
         });
 
-    const openNote = (note: NoteModel) => {
-        setViewingNote(note);
-    };
-
-    const closeNote = () => {
-        setViewingNote(null);
-    };
-
-    //* hold anywhere on the folders list to start a picture-note. onStart only
-    //* fires once the press is recognised, so the haptic and the scrim land
-    //* together and a plain tap never triggers either
-    const [holdingToAdd, setHoldingToAdd] = useState(false);
-
-    const beginHoldToAdd = () => {
-        if (Platform.OS !== "web") {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => { });
-        }
-        setHoldingToAdd(true);
-    };
-
-    const holdToAddGesture = Gesture.LongPress()
-        .minDuration(400)
-        //* sliding off is the escape hatch — past this the press fails and
-        //* onEnd reports success: false, so nothing opens
-        .maxDistance(20)
-        .onStart(() => {
-            scheduleOnRN(beginHoldToAdd);
-        })
-        .onEnd((_e, success) => {
-            if (success) scheduleOnRN(openAddNote);
-        })
-        //* onFinalize runs whether the press succeeded, failed or was taken
-        //* over by another gesture, so the scrim can never be left stuck on
-        .onFinalize(() => {
-            scheduleOnRN(setHoldingToAdd, false);
-        });
-
-    //* long-pressing "show note" in the viewer starts a fresh picture-note.
-    //* the viewer has to close first — see VIEWER_DISMISS_MS above
-    const addNoteFromViewer = () => {
-        closeNote();
-        if (Platform.OS === "ios") {
-            setTimeout(openAddNote, VIEWER_DISMISS_MS);
-            return;
-        }
-        openAddNote();
-    };
-
     const openNewFolder = () => {
         setEditingFolderId(null);
         setNewFolderName("");
@@ -192,168 +125,28 @@ export default function Home() {
         setShowNewFolder(true);
     };
 
-    const openAddNote = () => {
-        setNoteText("");
-        setNoteMediaUri(null);
-        setNoteMediaType(null);
-        setNoteMediaMimeType(null);
-        setNoteDate(todayISO());
-        setNoteTags([]);
-        setNoteTagInput("");
-        setNoteFolderId(null);
-        setNoteError(undefined);
-        setShowAddNote(true);
-    };
+    //* AddNote's composition state lives in a hook so the folder screen can
+    //* present the same modal over its own grid, rather than navigating here
+    //* to reach it. onSaved reloads what this screen shows.
+    const addNote = useAddNote({
+        storedTags,
+        onSaved: async () => {
+            await getFoldersWithCountsAsync();
+            setStoredTags(await getTagsFromStorageAsync());
+            setNotes(await getNotesFromStorageAsync());
+        },
+    });
 
-    const cancelAddNote = () => {
-        setShowAddNote(false);
-    };
+    const openAddNote = () => addNote.open();
 
-    const commitNoteTag = () => {
-        const clean = noteTagInput.trim().replace(/^#/, "").toLowerCase();
-        if (clean.length > 0 && !noteTags.includes(clean)) {
-            setNoteTags((tags) => [...tags, clean]);
-        }
-        setNoteTagInput("");
-    };
+    //* hold anywhere on either tab, then swipe up, to start a picture-note
+    const holdToAdd = useHoldToAdd(openAddNote);
 
-    const removeNoteTag = (tag: string) => {
-        setNoteTags((tags) => tags.filter((t) => t !== tag));
-    };
-
-    const toggleStoredTag = (tag: TagModel) => {
-        setNoteTags((tags) =>
-            tags.includes(tag.title) ? tags.filter((t) => t !== tag.title) : [...tags, tag.title]
-        );
-    };
-
-    const insertNoteSnippet = (text: string) => {
-        setNoteText((current) => (current.trim().length > 0 ? `${current.trim()} ${text}` : text));
-    };
-
-    const pickNoteMediaAsync = async () => {
-        if (Platform.OS === "web") {
-            setNoteError("Photo/video preview isn't supported in the web preview — test this on a device or simulator.");
-            return;
-        }
-
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-            setNoteError("Allow photo library access to add a photo or video.");
-            return;
-        }
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ["images", "videos"],
-        });
-        if (result.canceled) return;
-
-        const asset = result.assets[0];
-        setNoteMediaUri(asset.uri);
-        //*checks whether the media is image or video
-        setNoteMediaType(
-            asset.type === "video" || asset.mimeType?.startsWith("video/") === true ? "video" : "image",
-        );
-        setNoteMediaMimeType(asset.mimeType ?? null);
-        setNoteError(undefined);
-    };
-
-    const removeNoteMedia = () => {
-        // Just the raw picker URI at this point, not a copy in app storage —
-        // that only happens once saveNoteAsync actually persists the note — so
-        // there's no file to delete here, unlike folder thumbnails.
-        //TODO business logic
-        setNoteMediaUri(null);
-        setNoteMediaType(null);
-        setNoteMediaMimeType(null);
-    };
-
-    const onChangeNoteDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
-        if (event.type === "set" && selectedDate != null) {
-            setNoteDate(selectedDate.toISOString().slice(0, 10));
-        }
-    };
-
-    //* only android and web reach this — ios renders UIDatePicker's compact
-    //* control, which owns its own trigger and popover, so AddNote never calls it
-    const pressNoteDate = () => {
-        if (Platform.OS === "web") {
-            setNoteError("Date picker isn't supported in the web preview — test this on a device or simulator.");
-            return;
-        }
-
-        //*android has a native dialog, so we open it imperatively and don't render the component at all
-        DateTimePickerAndroid.open({
-            value: new Date(`${noteDate}T00:00:00`),
-            mode: "date",
-            onChange: onChangeNoteDate,
-        });
-    };
-
-    const saveTagsAsync = async (): Promise<string[]> => {
-        //* check for new tags that don't exist in storage yet
-        const newTagNames = noteTags.filter(
-            (name) => !storedTags.some((tag) => tag.title.toLowerCase() === name.toLowerCase())
-        );
-        const newTags: TagModel[] = newTagNames.map((title) => ({ id: Crypto.randomUUID(), title }));
-        const allTags = [...storedTags, ...newTags];
-        if (newTags.length > 0) {
-            await saveTagsToStorageAsync(allTags);
-        }
-        //* return tagIds for the note, matching the order of noteTags (which is what the user sees)
-        const tagIds = noteTags.map(
-            (name) => allTags.find((tag) => tag.title.toLowerCase() === name.toLowerCase())!.id
-        );
-        return tagIds;
-    }
-
-    const saveNoteAsync = async () => {
-        if (noteMediaUri == null) {
-            setNoteError("Add a photo or video first.");
-            return;
-        }
-        //* Save media to app storage
-        const notemediaType: NoteMediaType = noteMediaType ?? "image";
-        const source:SourceMedia = { uri: noteMediaUri, mimeType: noteMediaMimeType};
-        const destUri = await getNoteMediaFileUri(getNoteMediaDir(),source,notemediaType);
-        //* get thumbnail of the media and save it to app storage — a video's
-        //* first frame, or a tile-sized copy of a photo so the gallery isn't
-        //* decoding full camera resolution per cell. Both are generated into
-        //* the cache directory, so both get copied into app storage to survive
-        //* an OS cache sweep. Generation can throw on an unsupported codec —
-        //* the note is still worth saving, the tiles just fall back to a
-        //* placeholder (photos fall back to their full-size media).
-        let coverUri: string | null = null;
-        try {
-            const generatedUri = notemediaType === "video"
-                ? await getThumbnailFromVideo(destUri)
-                : await getThumbnailFromImageAsync(destUri);
-            coverUri = await getThumbnailFileUri(getNoteMediaDir(), generatedUri);
-        } catch {
-            coverUri = null;
-        }
-        //* Save tags to storage
-        const noteTagIds = await saveTagsAsync();
-        //* Connect note to folder if one is selected, else null (gallery)
-        const newNote: NoteModel = {
-            id: Crypto.randomUUID(),
-            mediaUri: destUri,
-            mediaType: notemediaType,
-            thumbnailUri: coverUri,
-            note: noteText,
-            date: noteDate,
-            tagIds: noteTagIds,
-            folderId: noteFolderId,
-            createdAt: new Date().toISOString(),
-        };
-        //* Save picture-note to storage
-        await saveNoteToStorageAsync(newNote);
-        console.log("Saved note:", newNote);
-        setShowAddNote(false);
-        await getFoldersWithCountsAsync();
-        await getTagsFromStorageAsync().then(setStoredTags); //* reload folders and tags to reflect changes
-        await getNotesFromStorageAsync().then(setNotes); //* reload notes so Gallery reflects the new one
-    };
+    //* Race, not nesting: the tab swipe and the hold-swipe are both Pans, so
+    //* only one can own the finger. Whichever activates first wins — a
+    //* sideways drag activates the tab swipe straight away, while holding
+    //* still for HOLD_MS arms this one instead
+    const pagerGesture = Gesture.Race(tabSwipeGesture, holdToAdd.gesture);
 
     const onEditFolder = (folder: FolderModel) => {
         setEditingFolderId(folder.id);
@@ -372,7 +165,7 @@ export default function Home() {
         {
             if(newFolderThumbnailUri != null) 
             {
-                deleteThumbnailFile(newFolderThumbnailUri);
+                deleteFileIfExists(newFolderThumbnailUri);
             }
             else
             {
@@ -432,7 +225,7 @@ export default function Home() {
     const confirmCroppedThumbnail = async (croppedUri: string) => {
         //*delete any orphaned thumbail from previous(failed to save) crop session
         if (newFolderThumbnailUri != null && newFolderThumbnailUri !== originalFolderThumbnailUri) {
-            deleteThumbnailFile(newFolderThumbnailUri);
+            deleteFileIfExists(newFolderThumbnailUri);
         }
 
         const destUri = await getThumbnailFileUri(getThumbnailDir(), croppedUri);
@@ -442,7 +235,7 @@ export default function Home() {
     
     const removeNewFolderThumbnail = () => {
         if (newFolderThumbnailUri != null && editingFolderId == null) {
-            deleteThumbnailFile(newFolderThumbnailUri);
+            deleteFileIfExists(newFolderThumbnailUri);
         }
         setNewFolderThumbnailUri(null);
     };
@@ -491,7 +284,7 @@ export default function Home() {
         
         await saveFoldersToStorageAsync(updatedExisting);
         if (editingFolderId != null && originalFolderThumbnailUri != null && originalFolderThumbnailUri !== newFolderThumbnailUri) {
-            deleteThumbnailFile(originalFolderThumbnailUri);
+            deleteFileIfExists(originalFolderThumbnailUri);
         }
         await getFoldersWithCountsAsync();
         setShowNewFolder(false);
@@ -510,28 +303,27 @@ export default function Home() {
                 }
             />
 
-            <GestureDetector gesture={tabSwipeGesture}>
+            <GestureDetector gesture={pagerGesture}>
                 <View style={styles.pager}>
                     {activeTab === "folders" ? (
                         <SlideInPage key="folders" dir={tabDir}>
-                            {/* nested inside the pager's pan detector rather than
-                                composed with it, so the hold is scoped to this tab
-                                and the gallery keeps its plain swipe */}
-                            <GestureDetector gesture={holdToAddGesture}>
-                                <View style={styles.page}>
-                                    <FoldersList
-                                        items={folders}
-                                        colors={colors}
-                                        onOpenFolder={(id) => router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })}
-                                        onEditFolder={onEditFolder}
-                                        onNewFolder={openNewFolder}
-                                    />
-                                </View>
-                            </GestureDetector>
+                            <FoldersList
+                                items={folders}
+                                colors={colors}
+                                onOpenFolder={(id) => router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })}
+                                onEditFolder={onEditFolder}
+                                onNewFolder={openNewFolder}
+                            />
                         </SlideInPage>
                     ) : (
                         <SlideInPage key="gallery" dir={tabDir}>
-                            <GalleryGrid notes={notes} colors={colors} onOpenNote={openNote} />
+                            <GalleryGrid
+                                notes={notes}
+                                colors={colors}
+                                onOpenNote={(note) =>
+                                    router.push({ pathname: "/(tabs)/note/[id]", params: { id: note.id } })
+                                }
+                            />
                         </SlideInPage>
                     )}
                 </View>
@@ -546,49 +338,20 @@ export default function Home() {
 
             {/* after the tab bar so it dims that too — the hold covers the
                 whole screen, so leaving one strip lit would look like a gap */}
-            <HoldToAddOverlay visible={holdingToAdd} colors={colors} />
-
-            <ViewNote
-                visible={viewingNote != null}
+            <HoldToAddOverlay
+                visible={holdToAdd.holding}
+                progress={holdToAdd.progress}
+                readyToRelease={holdToAdd.readyToRelease}
                 colors={colors}
-                title="Gallery"
-                notes={notes}
-                startId={viewingNote?.id ?? null}
-                tags={storedTags}
-                onClose={closeNote}
-                onAddNote={addNoteFromViewer}
             />
 
+            {/* TODO (business logic): pass a real `snippets` list once
+                getSnippetsFromStorage exists (see settings.tsx's TODO). The
+                row stays hidden while it's absent. */}
             <AddNote
-                visible={showAddNote}
                 colors={colors}
-                mediaUri={noteMediaUri}
-                mediaType={noteMediaType}
-                onPickMedia={pickNoteMediaAsync}
-                onRemoveMedia={removeNoteMedia}
-                note={noteText}
-                onNoteChange={setNoteText}
-                // TODO (business logic): pass the real snippets list once
-                // getSnippetsFromStorage exists (see settings.tsx's TODO) —
-                // e.g. load it in openAddNote the same way getFoldersWithCountsAsync
-                // refreshes folders. Omitted for now, so the row stays hidden.
-                onInsertSnippet={insertNoteSnippet}
-                date={noteDate}
-                onPressDate={pressNoteDate}
-                onDateChange={setNoteDate}
-                tags={noteTags}
-                tagInput={noteTagInput}
-                onTagInputChange={setNoteTagInput}
-                onCommitTag={commitNoteTag}
-                onRemoveTag={removeNoteTag}
-                storedTags={storedTags}
-                onToggleStoredTag={toggleStoredTag}
                 folders={folders.map((f) => f.folder)}
-                folderId={noteFolderId}
-                onFolderChange={setNoteFolderId}
-                error={noteError}
-                onCancel={cancelAddNote}
-                onSave={saveNoteAsync}
+                {...addNote.props}
             />
 
             <NewFolder
