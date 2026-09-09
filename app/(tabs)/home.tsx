@@ -1,15 +1,18 @@
-import { Alert, Platform, StyleSheet, View } from "react-native";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Feather } from "@react-native-vector-icons/feather";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { DARK_THEME, FOLDER_SWATCHES } from "@/theme/colors";
+import { fonts } from "@/theme/fonts";
 import TopBar, { SettingsButton } from "@/components/TopBar";
 import BottomTabBar, { MainTab } from "@/components/BottomTabBar";
 import FoldersList from "@/components/FoldersList";
 import GalleryGrid from "@/components/GalleryGrid";
 import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
-import HoldToAddOverlay from "@/components/HoldToAddOverlay";
+import GalleryToolbar from "@/components/GalleryToolbar";
+import SearchNotesModal from "@/components/SearchNotesModal";
 import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
@@ -17,8 +20,8 @@ import { useRouter } from "expo-router";
 import { FolderListItemModel } from "@/models/FolderListItemModel";
 import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
-import { useHoldToAdd } from "@/lib/useHoldToAdd";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
+import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteFilter";
 import { useAddNote } from "@/lib/useAddNote";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
@@ -92,6 +95,10 @@ export default function Home() {
         setActiveTab((current) => {
             if (tab === current) return current;
             setTabDir(tab === "gallery" ? "forward" : "backward");
+            //* a half-made selection shouldn't survive leaving the grid it was
+            //* made in — returning to lit-up tiles you no longer remember
+            //* choosing is worse than starting again
+            leaveCompareMode();
             return tab;
         });
     };
@@ -119,6 +126,41 @@ export default function Home() {
     //* double-tap opens the same folder (or note) twice
     const navigateOnce = useNavigateOnce();
 
+    //* gallery search. Derived, not stored: filtering a loaded array is cheap
+    //* enough to redo per keystroke, and keeping only the query in state means
+    //* there's no filtered copy to fall out of sync when notes reload.
+    const [noteQuery, setNoteQuery] = useState<NoteQuery>(EMPTY_QUERY);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const visibleNotes = filterNotes(notes, noteQuery, storedTags);
+
+    //* picking notes to compare, rather than opening them. Capped at
+    //* MAX_COMPARE because past four the cards are too narrow to compare
+    //* anything, which is the whole point of the screen.
+    const [compareMode, setCompareMode] = useState(false);
+    const [compareIds, setCompareIds] = useState<string[]>([]);
+
+    const leaveCompareMode = () => {
+        setCompareMode(false);
+        setCompareIds([]);
+    };
+
+    const toggleCompareNote = (note: NoteModel) => {
+        setCompareIds((ids) => {
+            if (ids.includes(note.id)) return ids.filter((id) => id !== note.id);
+            //* silently ignored rather than shown as disabled: the cap is a
+            //* property of the compare screen, not something every tile in the
+            //* grid should be explaining
+            if (ids.length >= MAX_COMPARE) return ids;
+            return [...ids, note.id];
+        });
+    };
+
+    const startCompare = () => {
+        const ids = compareIds.join(",");
+        leaveCompareMode();
+        navigateOnce(() => router.push({ pathname: "/(tabs)/compare", params: { ids } }));
+    };
+
     const openNewFolder = () => {
         setEditingFolderId(null);
         setNewFolderName("");
@@ -143,15 +185,6 @@ export default function Home() {
     });
 
     const openAddNote = () => addNote.open();
-
-    //* hold anywhere on either tab, then swipe up, to start a picture-note
-    const holdToAdd = useHoldToAdd(openAddNote);
-
-    //* Race, not nesting: the tab swipe and the hold-swipe are both Pans, so
-    //* only one can own the finger. Whichever activates first wins — a
-    //* sideways drag activates the tab swipe straight away, while holding
-    //* still for HOLD_MS arms this one instead
-    const pagerGesture = Gesture.Race(tabSwipeGesture, holdToAdd.gesture);
 
     const onEditFolder = (folder: FolderModel) => {
         setEditingFolderId(folder.id);
@@ -317,7 +350,7 @@ export default function Home() {
                 }
             />
 
-            <GestureDetector gesture={pagerGesture}>
+            <GestureDetector gesture={tabSwipeGesture}>
                 <View style={styles.pager}>
                     {activeTab === "folders" ? (
                         <SlideInPage key="folders" dir={tabDir}>
@@ -335,9 +368,25 @@ export default function Home() {
                         </SlideInPage>
                     ) : (
                         <SlideInPage key="gallery" dir={tabDir}>
-                            <GalleryGrid
-                                notes={notes}
+                            <GalleryToolbar
                                 colors={colors}
+                                query={noteQuery}
+                                onQueryChange={setNoteQuery}
+                                tags={storedTags}
+                                resultCount={visibleNotes.length}
+                                onOpenSearch={() => setSearchOpen(true)}
+                                compareMode={compareMode}
+                                onToggleCompare={() =>
+                                    compareMode ? leaveCompareMode() : setCompareMode(true)
+                                }
+                            />
+                            <GalleryGrid
+                                notes={visibleNotes}
+                                colors={colors}
+                                filtered={!isEmptyQuery(noteQuery)}
+                                selectionMode={compareMode}
+                                selectedIds={compareIds}
+                                onToggleSelect={toggleCompareNote}
                                 onOpenNote={(note) =>
                                     navigateOnce(() =>
                                         router.push({ pathname: "/(tabs)/note/[id]", params: { id: note.id } })
@@ -349,19 +398,57 @@ export default function Home() {
                 </View>
             </GestureDetector>
 
+            {compareMode && activeTab === "gallery" && (
+                <View
+                    style={[
+                        styles.compareBar,
+                        { backgroundColor: colors.bg, borderTopColor: colors.line },
+                    ]}
+                >
+                    <Pressable
+                        onPress={leaveCompareMode}
+                        style={[styles.compareCancel, { backgroundColor: colors.surface }]}
+                    >
+                        <Text style={[styles.compareCancelLabel, { color: colors.textPrimary }]}>
+                            Cancel
+                        </Text>
+                    </Pressable>
+                    <Pressable
+                        onPress={startCompare}
+                        //* two is the minimum that is a comparison at all
+                        disabled={compareIds.length < 2}
+                        style={[
+                            styles.compareGo,
+                            {
+                                backgroundColor:
+                                    compareIds.length < 2 ? colors.surfaceHi : colors.accent,
+                            },
+                        ]}
+                    >
+                        <Feather
+                            name="columns"
+                            size={15}
+                            color={compareIds.length < 2 ? colors.stoneDim : colors.onAccent}
+                        />
+                        <Text
+                            style={[
+                                styles.compareGoLabel,
+                                {
+                                    color:
+                                        compareIds.length < 2 ? colors.stoneDim : colors.onAccent,
+                                },
+                            ]}
+                        >
+                            Compare{compareIds.length > 0 ? " (" + compareIds.length + ")" : ""}
+                        </Text>
+                    </Pressable>
+                </View>
+            )}
+
             <BottomTabBar
                 activeTab={activeTab}
                 onSelectTab={switchTab}
                 onAdd={openAddNote}
-                colors={colors}
-            />
-
-            {/* after the tab bar so it dims that too — the hold covers the
-                whole screen, so leaving one strip lit would look like a gap */}
-            <HoldToAddOverlay
-                visible={holdToAdd.holding}
-                progress={holdToAdd.progress}
-                readyToRelease={holdToAdd.readyToRelease}
                 colors={colors}
             />
 
@@ -372,6 +459,16 @@ export default function Home() {
                 colors={colors}
                 folders={folders.map((f) => f.folder)}
                 {...addNote.props}
+            />
+
+            <SearchNotesModal
+                visible={searchOpen}
+                colors={colors}
+                query={noteQuery}
+                onQueryChange={setNoteQuery}
+                tags={storedTags}
+                resultCount={visibleNotes.length}
+                onClose={() => setSearchOpen(false)}
             />
 
             <NewFolder
@@ -398,10 +495,38 @@ export default function Home() {
     );
 }
 
+/** Cards narrower than this stop being worth putting side by side. */
+const MAX_COMPARE = 4;
+
 const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
+    compareBar: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 10,
+        paddingHorizontal: 18,
+        paddingVertical: 12,
+        borderTopWidth: 1,
+    },
+    compareCancel: {
+        borderRadius: 10,
+        paddingVertical: 11,
+        paddingHorizontal: 16,
+    },
+    compareCancelLabel: { fontFamily: fonts.interSemiBold, fontSize: 13 },
+    compareGo: {
+        flex: 1,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        borderRadius: 10,
+        paddingVertical: 11,
+        paddingHorizontal: 16,
+    },
+    compareGoLabel: { fontFamily: fonts.interBold, fontSize: 13.5 },
     pager: {
         flex: 1,
     },

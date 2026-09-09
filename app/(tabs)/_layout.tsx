@@ -15,6 +15,7 @@ export default function TabsLayout() {
       <Stack.Screen name="home" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="folder/[id]" />
+      <Stack.Screen name="compare" />
       {/* Modal presentation keeps the slide-up the viewer had as a <Modal>,
           while still being a real route — so the back gesture works and
           AddNote can present over it. */}

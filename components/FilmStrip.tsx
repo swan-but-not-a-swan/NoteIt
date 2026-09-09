@@ -20,15 +20,39 @@ type Props = {
    *  rest and goes fractional mid-swipe, so the strip tracks the drag rather
    *  than jumping once the swipe resolves. */
   position: SharedValue<number>;
+  /** Size of an inactive tile. The strip serves two jobs at two scales — a
+   *  contact sheet under the photo, and the stand-in for the photo itself
+   *  while the note is open — and they differ only by this. */
+  tileSize?: number;
 };
 
-const INACTIVE_SIZE = 44;
-const ACTIVE_SIZE = 52;
+const DEFAULT_TILE = 44;
+/** How much bigger the active tile is than its neighbours. */
+const ACTIVE_BUMP = 8;
 const GAP = 6;
-// Left edge of one tile to the left edge of the next. Only inactive tiles
-// ever sit to the left of the active one, so this stride is constant and the
-// strip's scroll offset can be computed rather than measured.
-const STRIDE = INACTIVE_SIZE + GAP;
+const PAD_TOP = 14;
+const PAD_BOTTOM = 2;
+/** Corner radius as a fraction of a tile's size, so a 96pt tile reads as
+ *  softly rounded and a 44pt one doesn't turn into a blob. */
+const RADIUS_RATIO = 0.2;
+
+function radiusFor(size: number) {
+  return Math.max(8, Math.round(size * RADIUS_RATIO));
+}
+
+/** Everything a caller needs to place something exactly where the active tile
+ *  will be — reserve its space, or land an animation on it. ViewNote uses this
+ *  to condense the full-bleed photo onto its own tile without either of them
+ *  hard-coding the other's numbers. */
+export function filmStripMetrics(tileSize: number = DEFAULT_TILE) {
+  const activeSize = tileSize + ACTIVE_BUMP;
+  return {
+    activeSize,
+    height: activeSize + PAD_TOP + PAD_BOTTOM,
+    radius: radiusFor(activeSize),
+    padTop: PAD_TOP,
+  };
+}
 
 // Half a viewport minus half an active tile, so even the first and last tiles
 // can reach the middle.
@@ -38,9 +62,9 @@ const STRIDE = INACTIVE_SIZE + GAP;
 // equation split between the padding and the scroll offset, and the moment
 // those two disagree the active tile sits off-centre by exactly the amount
 // they differ by.
-function sidePaddingFor(viewport: number) {
+function sidePaddingFor(viewport: number, activeSize: number) {
   "worklet";
-  return Math.max(0, (viewport - ACTIVE_SIZE) / 2);
+  return Math.max(0, (viewport - activeSize) / 2);
 }
 
 // Horizontal "contact sheet" below the main photo, iPhone-Photos style.
@@ -56,7 +80,21 @@ function sidePaddingFor(viewport: number) {
 // rather than a useEffect calling ref.scrollTo. That's what lets it follow a
 // live drag at frame rate: a JS-side effect can only react once the swipe has
 // already resolved, which is why it used to snap.
-export default function FilmStrip({ notes, currentIndex, colors, onSelect, position }: Props) {
+export default function FilmStrip({
+  notes,
+  currentIndex,
+  colors,
+  onSelect,
+  position,
+  tileSize = DEFAULT_TILE,
+}: Props) {
+  const inactiveSize = tileSize;
+  const activeSize = tileSize + ACTIVE_BUMP;
+  //* left edge of one tile to the left edge of the next. Only inactive tiles
+  //* ever sit to the left of the active one, so this stride is constant and
+  //* the scroll offset can be computed rather than measured.
+  const stride = inactiveSize + GAP;
+
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const { width: windowWidth } = useWindowDimensions();
 
@@ -75,7 +113,7 @@ export default function FilmStrip({ notes, currentIndex, colors, onSelect, posit
       // Tile `pos` begins at sidePadding + pos * STRIDE, and its centre is
       // half an active tile beyond that. Putting that centre in the middle of
       // the viewport means scrolling by the difference between the two.
-      const tileCentre = sidePaddingFor(width) + pos * STRIDE + ACTIVE_SIZE / 2;
+      const tileCentre = sidePaddingFor(width, activeSize) + pos * stride + activeSize / 2;
       scrollTo(scrollRef, Math.max(0, tileCentre - width / 2), 0, false);
     },
   );
@@ -100,12 +138,12 @@ export default function FilmStrip({ notes, currentIndex, colors, onSelect, posit
       }}
       contentContainerStyle={[
         styles.content,
-        { paddingHorizontal: sidePaddingFor(viewportWidth) },
+        { paddingHorizontal: sidePaddingFor(viewportWidth, activeSize) },
       ]}
     >
       {notes.map((note, i) => {
         const active = i === currentIndex;
-        const size = active ? ACTIVE_SIZE : INACTIVE_SIZE;
+        const size = active ? activeSize : inactiveSize;
         return (
           <Pressable
             key={note.id}
@@ -115,6 +153,7 @@ export default function FilmStrip({ notes, currentIndex, colors, onSelect, posit
               {
                 width: size,
                 height: size,
+                borderRadius: radiusFor(size),
                 borderColor: active ? colors.accent : "transparent",
                 opacity: active ? 1 : 0.55,
               },
@@ -135,12 +174,12 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: GAP,
-    paddingTop: 14,
-    paddingBottom: 2,
+    paddingTop: PAD_TOP,
+    paddingBottom: PAD_BOTTOM,
   },
   tile: {
     flexShrink: 0,
-    borderRadius: 8,
+    //* borderRadius is set per tile from its size
     borderWidth: 2,
     overflow: "hidden",
   },

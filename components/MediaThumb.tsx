@@ -8,6 +8,11 @@ type Props = {
   borderRadius?: number;
   /** Small centered play icon over a video tile. Default true. */
   showPlayBadge?: boolean;
+  /** Show the original photo rather than its thumbnail. For anything larger
+   *  than a grid tile — the 400px-wide thumbnail is visibly soft once it has
+   *  to fill a comparison card. Videos are unaffected: their thumbnail is the
+   *  only still that exists. */
+  preferFullMedia?: boolean;
 };
 
 // Renders note.thumbnailUri — a still image written once when the note is
@@ -24,9 +29,17 @@ type Props = {
 //
 // Fallbacks cover notes saved before thumbnailUri existed: a photo can still
 // show its full-size media, a video gets the placeholder tile.
-export default function MediaThumb({ note, borderRadius = 0, showPlayBadge = true }: Props) {
+export default function MediaThumb({
+  note,
+  borderRadius = 0,
+  showPlayBadge = true,
+  preferFullMedia = false,
+}: Props) {
   const isVideo = note.mediaType === "video";
-  const previewUri = note.thumbnailUri ?? (isVideo ? null : note.mediaUri);
+  const previewUri =
+    preferFullMedia && !isVideo
+      ? note.mediaUri
+      : note.thumbnailUri ?? (isVideo ? null : note.mediaUri);
 
   return (
     <View style={[styles.wrap, { borderRadius }]}>

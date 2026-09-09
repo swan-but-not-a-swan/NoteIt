@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withTiming,
-} from "react-native-reanimated";
-import { scheduleOnRN } from "react-native-worklets";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -16,17 +9,20 @@ import { fonts } from "@/theme/fonts";
 import { formatDayDate } from "@/lib/date";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
-import FilmStrip from "@/components/FilmStrip";
 import AddNote from "@/components/AddNote";
+import OverflowMenu from "@/components/OverflowMenu";
 import { useAddNote } from "@/lib/useAddNote";
-import { useHoldToAdd } from "@/lib/useHoldToAdd";
-import HoldToAddOverlay from "@/components/HoldToAddOverlay";
 import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 
-// The picture-note viewer screen: header, the card itself, the filmstrip, the
-// prev/show-note/next controls and the ad slot.
+// The picture-note viewer screen: header, the card itself, the filmstrip and
+// the ad slot.
+//
+// Every control lives in the header now. The prev/next buttons went because
+// they were a third way to do what the swipe and the filmstrip already do, and
+// "Show note" went with them — condensed into an icon that lights up while the
+// note is showing.
 //
 // A route rather than a <Modal> rendered by whichever screen owned the list.
 // That version had to be duplicated in home and the folder screen, carried a
@@ -34,6 +30,11 @@ import { NoteModel, TagModel } from "@/models/NoteModel";
 // AddNote over itself without closing first and waiting out the dismissal. As
 // a route the back gesture works natively and AddNote is just another modal
 // from an ordinary screen.
+/** Anchored-banner height. AdMob's adaptive anchored banners top out at 90,
+ *  so this reserves the full footprint the real ad can claim rather than
+ *  something it would later grow past and shift the layout. */
+const AD_H = 60;
+
 export default function ViewNotes() {
     const colors = DARK_THEME;
     const router = useRouter();
@@ -72,20 +73,6 @@ export default function ViewNotes() {
     const note = index >= 0 ? scopedNotes[index] : null;
 
     const [noteOpen, setNoteOpen] = useState(false);
-    const [enterDir, setEnterDir] = useState<"next" | "prev" | null>(null);
-
-    // Where the filmstrip sits, in tile units. It lives here rather than inside
-    // FilmStrip because the pan gesture that drives it mid-swipe is down in the
-    // card, and this is their nearest common parent.
-    const stripPos = useSharedValue(0);
-
-    // Realigns the strip when the index changes from something that isn't a
-    // swipe — a filmstrip tap or the prev/next buttons. A swipe already drove
-    // stripPos to this target from inside the gesture, so this just retargets
-    // an animation already heading there.
-    useEffect(() => {
-        if (index >= 0) stripPos.set(withTiming(index, { duration: 280 }));
-    }, [index]);
 
     //* the note was deleted, or the folder emptied, while this screen was open
     useEffect(() => {
@@ -94,18 +81,16 @@ export default function ViewNotes() {
 
     const addNote = useAddNote({ storedTags: tags, onSaved: loadAsync });
 
-    const go = (dir: number) => {
-        const next = index + dir;
-        if (next < 0 || next >= scopedNotes.length) return;
-        setEnterDir(dir > 0 ? "next" : "prev");
-        setNoteOpen(false);
-        setCurrentId(scopedNotes[next].id);
-    };
-
-    const jumpTo = (i: number) => {
+    // Both routes to a different note land here — the pager's own swipe and a
+    // filmstrip tap — so "showing a different note" means the same thing
+    // however it was asked for.
+    //
+    // Deliberately does not close the note. The strip is reachable *while* the
+    // note is open now, and tapping a tile there means "read that one", not
+    // "take me back to the photos" — closing on every index change made the
+    // open strip unusable for the one thing it is there for.
+    const showIndex = (i: number) => {
         if (i === index || i < 0 || i >= scopedNotes.length) return;
-        setEnterDir(i > index ? "next" : "prev");
-        setNoteOpen(false);
         setCurrentId(scopedNotes[i].id);
     };
 
@@ -129,32 +114,6 @@ export default function ViewNotes() {
         }
     };
 
-    //* same hold-then-swipe-up as the grids, so the button behaves like every
-    //* other "add a note" entry point instead of inventing a third rule
-    const holdToAdd = useHoldToAdd(() => addNote.open(folderId ?? null));
-
-    //* pulled out before the worklet, and this is load-bearing: writing
-    //* holdToAdd.active.get() inside one captures `holdToAdd` itself, and the
-    //* object carries the PanGesture. Reanimated serialises everything a
-    //* worklet closes over, and a gesture isn't serialisable — "cannot copy
-    //* value of type 'PanGesture'". Capturing the two shared values directly
-    //* keeps the gesture out of the closure.
-    const { active: holdActive, progress: holdProgress } = holdToAdd;
-
-    //* the button grows under the finger: `active` springs to 1 when the hold
-    //* registers, then `progress` keeps growing it as the swipe travels
-    const toggleStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: 1 + holdActive.get() * 0.1 + holdProgress.get() * 0.14 }],
-    }));
-
-    const toggleTap = Gesture.Tap().onEnd((_e, success) => {
-        if (success) scheduleOnRN(setNoteOpen, !noteOpen);
-    });
-
-    //* Exclusive gives the hold priority: released before HOLD_MS the pan never
-    //* activates and the tap takes over, so a plain tap still toggles
-    const toggleGesture = Gesture.Exclusive(holdToAdd.gesture, toggleTap);
-
     const insets = useSafeAreaInsets();
 
     if (note == null) return <View style={[styles.screen, { backgroundColor: colors.bg }]} />;
@@ -172,92 +131,83 @@ export default function ViewNotes() {
                         <Text style={[styles.counter, { color: colors.stoneDim }]}>
                             {index + 1} / {scopedNotes.length}
                         </Text>
+
+                        {/* Lit while the note is showing, so the header says
+                            which of the two you are looking at without a label
+                            that has to flip its wording to do it. */}
+                        <Pressable
+                            onPress={() => setNoteOpen(!noteOpen)}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: noteOpen }}
+                            accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
+                            style={[
+                                styles.headerButton,
+                                { backgroundColor: noteOpen ? colors.accent : colors.surface },
+                            ]}
+                        >
+                            <Feather
+                                name="file-text"
+                                size={16}
+                                color={noteOpen ? colors.onAccent : colors.textPrimary}
+                            />
+                        </Pressable>
+
                         <Pressable
                             onPress={handleShareAsync}
                             hitSlop={8}
                             accessibilityLabel="Share this picture-note"
-                            style={[styles.shareButton, { backgroundColor: colors.surface }]}
+                            style={[styles.headerButton, { backgroundColor: colors.surface }]}
                         >
                             <Feather name="share" size={16} color={colors.textPrimary} />
                         </Pressable>
+
+                        <OverflowMenu
+                            colors={colors}
+                            items={[
+                                {
+                                    key: "add",
+                                    label: "Add picture-note",
+                                    icon: "plus",
+                                    //* defaults into the folder being viewed, so
+                                    //* adding from inside a folder stays in it
+                                    onPress: () => addNote.open(folderId ?? null),
+                                },
+                            ]}
+                        />
                     </View>
                 }
             />
 
-            <View style={[styles.body, { paddingBottom: insets.bottom }]}>
+            <View style={styles.body}>
                 <ViewNote
-                    key={note.id}
-                    note={note}
+                    notes={scopedNotes}
+                    index={index}
+                    onIndexChange={showIndex}
                     tags={tags}
                     colors={colors}
                     noteOpen={noteOpen}
                     onToggleNote={setNoteOpen}
-                    onSwipeLeft={() => go(1)}
-                    onSwipeRight={() => go(-1)}
-                    enterDir={enterDir}
-                    index={index}
-                    count={scopedNotes.length}
-                    stripPos={stripPos}
                 />
-
-                <FilmStrip
-                    notes={scopedNotes}
-                    currentIndex={index}
-                    colors={colors}
-                    onSelect={jumpTo}
-                    position={stripPos}
-                />
-
-                <View style={styles.navRow}>
-                    <Pressable
-                        onPress={() => go(-1)}
-                        disabled={index === 0}
-                        style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === 0 ? 0.4 : 1 }]}
-                    >
-                        <Feather name="chevron-left" size={18} color={index === 0 ? colors.stoneDim : colors.textPrimary} />
-                    </Pressable>
-
-                    <GestureDetector gesture={toggleGesture}>
-                        <Animated.View
-                            accessibilityRole="button"
-                            accessibilityHint="Press and hold, then release, to start a new picture-note"
-                            style={[
-                                styles.toggleBtn,
-                                toggleStyle,
-                                { backgroundColor: noteOpen ? colors.accent : colors.surface },
-                            ]}
-                        >
-                            <Feather name="file-text" size={16} color={colors.textPrimary} />
-                            <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
-                                {noteOpen ? "Show photo" : "Show note"}
-                            </Text>
-                        </Animated.View>
-                    </GestureDetector>
-
-                    <Pressable
-                        onPress={() => go(1)}
-                        disabled={index === scopedNotes.length - 1}
-                        style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === scopedNotes.length - 1 ? 0.4 : 1 }]}
-                    >
-                        <Feather
-                            name="chevron-right"
-                            size={18}
-                            color={index === scopedNotes.length - 1 ? colors.stoneDim : colors.textPrimary}
-                        />
-                    </Pressable>
-                </View>
-
-                {/* TODO (business logic): a real ad renders here once RevenueCat
-                    is wired up — this just reserves its footprint so the layout
-                    doesn't shift when that lands. */}
-                <View style={[styles.adSlot, { backgroundColor: colors.surfaceHi, borderColor: colors.line }]} />
             </View>
 
-            <HoldToAddOverlay
-                visible={holdToAdd.holding}
-                progress={holdToAdd.progress}
-                readyToRelease={holdToAdd.readyToRelease}
-                colors={colors}
+            {/* Outside the body, so it is the screen's own bottom edge it sits
+                on — full width, no radius, nothing under it. The safe-area
+                inset is padding *inside* it rather than a gap beneath, so the
+                banner clears the home indicator while the bar still reaches
+                the bottom of the glass.
+                TODO (business logic): a real ad renders here once RevenueCat is
+                wired up — this just reserves its footprint. */}
+            <View
+                style={[
+                    styles.adSlot,
+                    {
+                        backgroundColor: colors.surfaceHi,
+                        borderTopColor: colors.line,
+                        height: AD_H + insets.bottom,
+                        paddingBottom: insets.bottom,
+                    },
+                ]}
             />
 
             <AddNote colors={colors} folders={folders} {...addNote.props} />
@@ -272,13 +222,15 @@ const styles = StyleSheet.create({
     headerRight: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 10,
+        //* three buttons and a counter now share this row, so the gap is
+        //* tighter than the 10 a lone share button could afford
+        gap: 8,
     },
     counter: {
         fontFamily: fonts.interRegular,
         fontSize: 12,
     },
-    shareButton: {
+    headerButton: {
         width: 38,
         height: 38,
         borderRadius: 10,
@@ -287,50 +239,11 @@ const styles = StyleSheet.create({
     },
     body: {
         flex: 1,
-        justifyContent: "flex-start",
-        paddingHorizontal: 22,
-        paddingTop: 18,
-    },
-    navRow: {
-        flexDirection: "row",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: 16,
-        marginTop: 22,
-        // Guarantees clearance from the ad below. The ad's own `marginTop: "auto"`
-        // is what pins it to the bottom, but "auto" is whatever space happens to
-        // be left — on a screen where the column already fills, that collapses to
-        // nothing and the two controls end up touching. Yoga doesn't collapse
-        // adjacent margins, so this one always applies on top of it.
-        marginBottom: 20,
-    },
-    navBtn: {
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    toggleBtn: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 8,
-        height: 42,
-        borderRadius: 21,
-        paddingHorizontal: 18,
-    },
-    toggleLabel: {
-        fontFamily: fonts.interSemiBold,
-        fontSize: 12.5,
+        //* no horizontal padding: the photo is full-bleed, and anything that
+        //* does want an inset (the note text, the filmstrip) applies its own
+        paddingHorizontal: 0,
     },
     adSlot: {
-        // Anchored-banner height. AdMob's adaptive anchored banners top out at
-        // 90, so this reserves the full footprint the real ad can claim rather
-        // than something it would later grow past and shift the layout.
-        height: 90,
-        borderRadius: 14,
-        borderWidth: 1,
-        marginTop: "auto",
-        marginBottom: 18,
+        borderTopWidth: 1,
     },
 });

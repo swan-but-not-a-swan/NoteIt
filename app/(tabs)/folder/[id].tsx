@@ -1,14 +1,12 @@
 import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { GestureDetector } from "react-native-gesture-handler";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { DARK_THEME } from "@/theme/colors";
 import TopBar from "@/components/TopBar";
 import GalleryGrid from "@/components/GalleryGrid";
-import HoldToAddOverlay from "@/components/HoldToAddOverlay";
 import AddNote from "@/components/AddNote";
-import { useHoldToAdd } from "@/lib/useHoldToAdd";
+import OverflowMenu from "@/components/OverflowMenu";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useAddNote } from "@/lib/useAddNote";
 import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
@@ -51,34 +49,42 @@ export default function FolderNotes() {
     //* new notes default into the folder being viewed
     const openAddNoteHere = () => addNote.open(id);
 
-    //* hold-and-swipe on the grid
-    const holdToAdd = useHoldToAdd(openAddNoteHere);
-
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
-            <TopBar title={folder?.name ?? "Folder"} colors={colors} onBack={() => router.back()} />
-            <GestureDetector gesture={holdToAdd.gesture}>
-                <View style={styles.container}>
-                    <GalleryGrid
-                        notes={folderNotes}
-                        colors={colors}
-                        onOpenNote={(note) =>
-                            navigateOnce(() =>
-                                router.push({
-                                    pathname: "/(tabs)/note/[id]",
-                                    params: { id: note.id, folderId: id },
-                                })
-                            )
-                        }
-                    />
-                </View>
-            </GestureDetector>
-            <HoldToAddOverlay
-                visible={holdToAdd.holding}
-                progress={holdToAdd.progress}
-                readyToRelease={holdToAdd.readyToRelease}
+            <TopBar
+                title={folder?.name ?? "Folder"}
                 colors={colors}
+                onBack={() => router.back()}
+                //* this screen has no tab bar and so no add button of its own —
+                //* the menu is the only way in, now that hold-and-swipe is gone
+                right={
+                    <OverflowMenu
+                        colors={colors}
+                        items={[
+                            {
+                                key: "add",
+                                label: "Add picture-note",
+                                icon: "plus",
+                                onPress: openAddNoteHere,
+                            },
+                        ]}
+                    />
+                }
             />
+            <View style={styles.container}>
+                <GalleryGrid
+                    notes={folderNotes}
+                    colors={colors}
+                    onOpenNote={(note) =>
+                        navigateOnce(() =>
+                            router.push({
+                                pathname: "/(tabs)/note/[id]",
+                                params: { id: note.id, folderId: id },
+                            })
+                        )
+                    }
+                />
+            </View>
             <AddNote colors={colors} folders={folders} {...addNote.props} />
         </View>
     );
