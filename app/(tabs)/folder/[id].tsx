@@ -2,32 +2,37 @@ import { useCallback, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { DARK_THEME } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import TopBar from "@/components/TopBar";
 import GalleryGrid from "@/components/GalleryGrid";
 import AddNote from "@/components/AddNote";
 import OverflowMenu from "@/components/OverflowMenu";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useAddNote } from "@/lib/useAddNote";
-import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
+import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
+import { SnippetModel } from "@/models/SnippetModel";
 
 // A folder's own picture-notes — same grid/viewer as Gallery, just filtered
 // down to this folder's id instead of showing everything.
 export default function FolderNotes() {
-    const colors = DARK_THEME;
+    const { colors } = useTheme();
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
 
     const [folders, setFolders] = useState<FolderModel[]>([]);
     const [notes, setNotes] = useState<NoteModel[]>([]);
     const [tags, setTags] = useState<TagModel[]>([]);
+    const [snippets, setSnippets] = useState<SnippetModel[]>([]);
 
     const loadAsync = useCallback(async () => {
         setFolders(await getFoldersFromStorageAsync());
         setNotes(await getNotesFromStorageAsync());
         setTags(await getTagsFromStorageAsync());
+        //* re-read on focus, so a snippet added in Settings is offered here
+        //* the moment you come back
+        setSnippets(await getSnippetsFromStorageAsync());
     }, []);
 
     useFocusEffect(
@@ -44,7 +49,7 @@ export default function FolderNotes() {
     //* the same modal home uses, presented here over this folder's own grid.
     //* the composition state lives in the hook precisely so this screen can do
     //* that without owning (or duplicating) the save pipeline
-    const addNote = useAddNote({ storedTags: tags, onSaved: loadAsync });
+    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: loadAsync });
 
     //* new notes default into the folder being viewed
     const openAddNoteHere = () => addNote.open(id);

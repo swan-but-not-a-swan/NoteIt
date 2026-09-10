@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Feather } from "@react-native-vector-icons/feather";
 import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -19,7 +20,9 @@ import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatDayDate, formatShortDate } from "@/lib/date";
 import { rubberBand, snapTarget } from "@/lib/notePager";
+import { appendSnippet } from "@/lib/snippetText";
 import { NoteModel, TagModel } from "../models/NoteModel";
+import { SnippetModel } from "../models/SnippetModel";
 import FilmStrip, { filmStripMetrics } from "./FilmStrip";
 import MarkdownText from "./MarkdownText";
 import MediaThumb from "./MediaThumb";
@@ -72,6 +75,15 @@ type Props = {
   colors: ThemeColors;
   noteOpen: boolean;
   onToggleNote: (open: boolean) => void;
+  /** True while the current note's text is being edited in place. */
+  editing: boolean;
+  /** The in-progress text. Owned by the screen, because the header's save
+   *  button lives up there and has to be able to write it. */
+  draft: string;
+  onDraftChange: (text: string) => void;
+  /** Saved snippets, offered as chips under the field while editing. Pass an
+   *  empty array (or omit) to hide the row. */
+  snippets?: SnippetModel[];
 };
 
 // The picture-note viewer: a full-bleed photo with the first line of its note
@@ -83,7 +95,11 @@ type Props = {
 // is why there is no exported card height any more — the screen decides how
 // much room there is, and this measures it.
 //
-// Read-only: editing and deleting a note is business logic Swan wires up.
+// The note's text can be edited in place — the read-only text swaps for a
+// TextInput and nothing else moves. The screen owns the draft and the two
+// commit buttons, because those live in the header; this only renders the
+// field. Deleting is entirely the screen's job: it has the storage call and
+// somewhere to navigate afterwards.
 export default function ViewNote({
   notes,
   index,
@@ -92,6 +108,10 @@ export default function ViewNote({
   colors,
   noteOpen,
   onToggleNote,
+  editing,
+  draft,
+  onDraftChange,
+  snippets,
 }: Props) {
   // Width seeds from the window because the pager is full-bleed — there is no
   // padding between it and the screen edge for the two to disagree about. The
@@ -208,6 +228,11 @@ export default function ViewNote({
   );
 
   const panGesture = Gesture.Pan()
+    // Both axes go away while editing, and both for the same reason: a
+    // sideways swipe would page to a different note with a half-written draft
+    // still in hand, and a downward one would close the note you are typing
+    // into. Committing or cancelling is the only way out.
+    .enabled(!editing)
     .onStart(() => {
       axis.set(null);
       dragFrom.set(offset.get());
@@ -324,6 +349,13 @@ export default function ViewNote({
                     cardW={box.w}
                     photoFull={photoFull}
                     measured={box.h > 0}
+                    //* only the page you are on becomes editable — the
+                    //* neighbours stay read-only renders of their own text,
+                    //* so the draft can never leak onto the wrong note
+                    editing={editing && isCurrent}
+                    draft={draft}
+                    onDraftChange={onDraftChange}
+                    snippets={snippets}
                   />
                 </View>
               );
@@ -339,7 +371,9 @@ export default function ViewNote({
           height at the top of its note, so the text starts below this. */}
       <Animated.View
         style={[styles.stripLayer, stripLayerStyle]}
-        pointerEvents={noteOpen ? "auto" : "none"}
+        //* inert while editing for the same reason the swipe is: a tile tap
+        //* is just another way to page away from an unsaved draft
+        pointerEvents={noteOpen && !editing ? "auto" : "none"}
       >
         {noteOpen && <FilmStrip {...stripProps} tileSize={NOTE_TILE} />}
       </Animated.View>
@@ -366,6 +400,12 @@ type CardProps = {
   photoFull: number;
   /** False until onLayout lands, when the animated sizes would all be zero. */
   measured: boolean;
+  /** Already narrowed to this card by the parent — true only on the page
+   *  actually being edited. */
+  editing: boolean;
+  draft: string;
+  onDraftChange: (text: string) => void;
+  snippets?: SnippetModel[];
 };
 
 // One picture-note: the photo, and the note underneath it. At rest the note is
@@ -381,6 +421,10 @@ function NoteCard({
   cardW,
   photoFull,
   measured,
+  editing,
+  draft,
+  onDraftChange,
+  snippets,
 }: CardProps) {
   //* a null source keeps the hook call unconditional while spending nothing:
   //* three mounted pages must not mean three native players, and a neighbour
@@ -434,6 +478,14 @@ function NoteCard({
         //* surface and an upward drag anywhere opens the note.
         scrollEnabled={noteOpen}
         showsVerticalScrollIndicator={false}
+        //* the field is near the bottom of the screen and the keyboard covers
+        //* it. iOS can inset the scroll view for the keyboard by itself;
+        //* Android needs android:windowSoftInputMode=adjustResize, which is
+        //* Expo's default.
+        automaticallyAdjustKeyboardInsets
+        //* without this the first tap while the keyboard is up is swallowed
+        //* dismissing it, so committing takes two taps
+        keyboardShouldPersistTaps="handled"
       >
         <Animated.View style={spacerStyle} />
 
@@ -443,7 +495,65 @@ function NoteCard({
           </Text>
         )}
 
-        {body.length > 0 ? (
+        {editing ? (
+          <>
+            {/* Raw text, not MarkdownText: you edit the source, and the
+                formatting renders again the moment you commit. Same font and
+                size as the rendered note, so committing doesn't reflow the
+                text you just typed. */}
+            <TextInput
+              value={draft}
+              onChangeText={onDraftChange}
+              multiline
+              autoFocus
+              scrollEnabled={false}
+              placeholder="Write a note..."
+              placeholderTextColor={colors.stoneDim}
+              //* the surrounding ScrollView handles growth; a field that
+              //* scrolls internally would trap the gesture and hide its own
+              //* overflow inside a box the note area is already big enough for
+              style={[
+                styles.noteText,
+                styles.noteInput,
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.accent,
+                },
+              ]}
+            />
+
+            {/* The same chip row AddNote offers, so a snippet is reachable
+                whether you are writing a note or coming back to fix one.
+                Taps land because the note ScrollView sets
+                keyboardShouldPersistTaps — otherwise the first tap would be
+                swallowed dismissing the keyboard. */}
+            {snippets != null && snippets.length > 0 && (
+              <View style={styles.snippets}>
+                {snippets.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => onDraftChange(appendSnippet(draft, s.text))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Insert snippet ${s.name}`}
+                    style={[
+                      styles.snippetChip,
+                      { backgroundColor: colors.surface, borderColor: colors.line },
+                    ]}
+                  >
+                    <Feather name="star" size={11} color={colors.accent} />
+                    <Text
+                      style={[styles.snippetLabel, { color: colors.stone }]}
+                      numberOfLines={1}
+                    >
+                      {s.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+          </>
+        ) : body.length > 0 ? (
           <MarkdownText
             text={body}
             //* one line while it is a hint, so a long note ellipsises instead
@@ -580,6 +690,38 @@ const styles = StyleSheet.create({
     fontFamily: fonts.frauncesMedium,
     fontSize: 22,
     lineHeight: 27,
+  },
+  //* same pill as AddNote's row — one snippet chip should look like a snippet
+  //* chip wherever you meet it
+  snippets: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  snippetChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 11,
+    maxWidth: 220,
+  },
+  snippetLabel: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  noteInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minHeight: 120,
+    //* Android centres multiline text vertically by default, which puts a
+    //* one-line note in the middle of a 120pt box
+    textAlignVertical: "top",
   },
   noteDate: {
     fontFamily: fonts.interSemiBold,

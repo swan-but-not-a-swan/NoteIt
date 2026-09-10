@@ -3,7 +3,8 @@ import { Feather } from "@react-native-vector-icons/feather";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { DARK_THEME, FOLDER_SWATCHES } from "@/theme/colors";
+import { FOLDER_SWATCHES } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { fonts } from "@/theme/fonts";
 import TopBar, { SettingsButton } from "@/components/TopBar";
 import BottomTabBar, { MainTab } from "@/components/BottomTabBar";
@@ -13,7 +14,7 @@ import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
 import GalleryToolbar from "@/components/GalleryToolbar";
 import SearchNotesModal from "@/components/SearchNotesModal";
-import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
+import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
 import { useRouter } from "expo-router";
@@ -27,6 +28,7 @@ import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { deleteFileIfExists, getThumbnailFileUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
 import { NoteModel, TagModel } from "@/models/NoteModel";
+import { SnippetModel } from "@/models/SnippetModel";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 
@@ -52,8 +54,7 @@ function SlideInPage({ dir, children }: { dir: "forward" | "backward" | null; ch
 }
 
 export default function Home() {
-    // TODO (business logic): swap DARK_THEME for real theme-mode state once
-    const colors = DARK_THEME;
+    const { colors } = useTheme();
     const router = useRouter();
     const [showNewFolder, setShowNewFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState("");
@@ -66,6 +67,7 @@ export default function Home() {
     const [folders, setFolders] = useState<FolderListItemModel[]>([]);
 
     const [storedTags, setStoredTags] = useState<TagModel[]>([]);
+    const [snippets, setSnippets] = useState<SnippetModel[]>([]);
 
     const [notes, setNotes] = useState<NoteModel[]>([]);
     const [activeTab, setActiveTab] = useState<MainTab>("folders");
@@ -87,6 +89,9 @@ export default function Home() {
         useCallback(() => {
             getFoldersWithCountsAsync();
             getTagsFromStorageAsync().then(setStoredTags);
+            //* re-read on focus, so a snippet added in Settings shows up here
+            //* the moment you come back
+            getSnippetsFromStorageAsync().then(setSnippets);
             getNotesFromStorageAsync().then(setNotes);
         }, []),
     );
@@ -177,6 +182,7 @@ export default function Home() {
     //* to reach it. onSaved reloads what this screen shows.
     const addNote = useAddNote({
         storedTags,
+        snippets,
         onSaved: async () => {
             await getFoldersWithCountsAsync();
             setStoredTags(await getTagsFromStorageAsync());
@@ -294,7 +300,7 @@ export default function Home() {
             return;
         }
 
-        const existing = await getFoldersFromStorageAsync();
+        const existing = await getFoldersFromStorageAsync(); //TODO check whether this is duplicating the getFoldersWithCountsAsync call above, and if so, refactor to avoid the double read
         //*checks duplicate, rejects if the name is same as any other folder except the one being edited
         const isDuplicate = existing.some(
             (folder) => folder.id !== editingFolderId &&
@@ -452,9 +458,6 @@ export default function Home() {
                 colors={colors}
             />
 
-            {/* TODO (business logic): pass a real `snippets` list once
-                getSnippetsFromStorage exists (see settings.tsx's TODO). The
-                row stays hidden while it's absent. */}
             <AddNote
                 colors={colors}
                 folders={folders.map((f) => f.folder)}

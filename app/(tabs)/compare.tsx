@@ -10,7 +10,8 @@ import {
 import { Feather } from "@react-native-vector-icons/feather";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { DARK_THEME, type ThemeColors } from "@/theme/colors";
+import { type ThemeColors } from "@/theme/colors";
+import { useTheme } from "@/theme/ThemeContext";
 import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatShortDate } from "@/lib/date";
@@ -34,7 +35,7 @@ const MANY_CARD_W = 180;
 // from a second, smaller picker on this screen. This route just receives the
 // ids and lays them out.
 export default function Compare() {
-    const colors = DARK_THEME;
+    const { colors } = useTheme();
     const router = useRouter();
     const { width } = useWindowDimensions();
     const { ids } = useLocalSearchParams<{ ids?: string }>();

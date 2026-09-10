@@ -22,6 +22,7 @@ import { hexToRgba } from "@/lib/color";
 import { formatDayDate } from "@/lib/date";
 import { FolderModel } from "../models/FolderModel";
 import { NoteMediaType, TagModel } from "../models/NoteModel";
+import { SnippetModel } from "../models/SnippetModel";
 
 type Props = {
   visible: boolean;
@@ -38,9 +39,11 @@ type Props = {
   note: string;
   onNoteChange: (text: string) => void;
 
-  /** Quick-insert phrases (e.g. recent tags-as-sentences). Omit or pass an
-   *  empty array to hide the row entirely. */
-  snippets?: string[];
+  /** Saved reusable phrases from Settings. Omit or pass an empty array to
+   *  hide the row entirely. */
+  snippets?: SnippetModel[];
+  /** Receives the snippet's `text`, not its name — the name is only a label
+   *  for the chip, what goes into the note is the body. */
   onInsertSnippet?: (text: string) => void;
 
   /** ISO "yyyy-mm-dd". */
@@ -134,9 +137,21 @@ export default function AddNote({
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Pressable style={styles.backdrop} onPress={onCancel}>
+        {/* The backdrop is a *sibling* of the sheet, not its parent. Wrapping
+            a ScrollView in a Pressable makes the two fight over the touch:
+            Pressable claims the responder on touch-start, and the ScrollView
+            has to steal it back once the finger moves, which eats the first
+            few pixels of every drag and reads as scrolling that catches
+            before it goes. A plain View has no such claim. SearchNotesModal
+            already lays out this way. */}
+        <View style={styles.root}>
           <Pressable
-            onPress={() => {}}
+            style={styles.backdrop}
+            onPress={onCancel}
+            accessibilityLabel="Close without saving"
+          />
+
+          <View
             style={[
               styles.sheet,
               {
@@ -146,7 +161,13 @@ export default function AddNote({
               },
             ]}
           >
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              //* dragging the sheet is the natural way to put the keyboard
+              //* away once the note field has been typed into
+              keyboardDismissMode="on-drag"
+            >
               <View style={styles.header}>
                 <Text style={[styles.title, { color: colors.textPrimary }]}>New picture-note</Text>
                 <Pressable
@@ -211,13 +232,17 @@ export default function AddNote({
                 <View style={styles.snippets}>
                   {snippets.map((s) => (
                     <Pressable
-                      key={s}
-                      onPress={() => onInsertSnippet?.(s)}
+                      key={s.id}
+                      onPress={() => onInsertSnippet?.(s.text)}
+                      //* the body can run to a paragraph, so the chip shows
+                      //* the name — that is what naming them is for
+                      accessibilityRole="button"
+                      accessibilityLabel={`Insert snippet ${s.name}`}
                       style={[styles.snippetChip, { backgroundColor: colors.surface, borderColor: colors.line }]}
                     >
                       <Feather name="star" size={11} color={colors.accent} />
                       <Text style={[styles.snippetLabel, { color: colors.stone }]} numberOfLines={1}>
-                        {s}
+                        {s.name}
                       </Text>
                     </Pressable>
                   ))}
@@ -345,8 +370,8 @@ export default function AddNote({
                 <Text style={[styles.saveButtonLabel, { color: colors.onAccent }]}>Save picture-note</Text>
               </Pressable>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -400,10 +425,19 @@ const styles = StyleSheet.create({
   flex: {
     flex: 1,
   },
-  backdrop: {
+  root: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
+  },
+  //* absolute rather than flex:1 so it sits *behind* the sheet instead of
+  //* containing it — that is what keeps it off the ScrollView's ancestor chain
+  backdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.55)",
   },
   sheet: {
     maxHeight: "88%",

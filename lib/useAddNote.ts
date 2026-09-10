@@ -12,8 +12,10 @@ import {
     SourceMedia,
 } from "@/lib/mediaHelper";
 import { todayISO } from "@/lib/date";
+import { appendSnippet } from "@/lib/snippetText";
 import { saveNoteToStorageAsync, saveTagsToStorageAsync } from "@/persistence/FileStorage";
 import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
+import { SnippetModel } from "@/models/SnippetModel";
 
 const getNoteMediaDir = () => new Directory(Paths.document, "note-media");
 
@@ -21,6 +23,10 @@ type Options = {
     /** Previously used tags — drives the quick-pick row, and resolves names to
      *  ids on save. */
     storedTags: TagModel[];
+    /** Saved snippets from Settings — drives the quick-insert chip row.
+     *  Injected like storedTags rather than read here, so this hook stays a
+     *  state container plus the save pipeline, with no reads of its own. */
+    snippets: SnippetModel[];
     /** Runs once a note has been written, so the screen can reload whichever
      *  lists it shows. The modal has already closed by this point. */
     onSaved: () => void | Promise<void>;
@@ -40,7 +46,7 @@ type Options = {
  * screen has to supply itself (`colors` and `folders`), so a caller spreads it
  * rather than restating twenty lines of plumbing.
  */
-export function useAddNote({ storedTags, onSaved }: Options) {
+export function useAddNote({ storedTags, snippets, onSaved }: Options) {
     const [visible, setVisible] = useState(false);
     const [noteText, setNoteText] = useState("");
     const [noteMediaUri, setNoteMediaUri] = useState<string | null>(null);
@@ -92,7 +98,7 @@ export function useAddNote({ storedTags, onSaved }: Options) {
     };
 
     const insertNoteSnippet = (text: string) => {
-        setNoteText((current) => (current.trim().length > 0 ? `${current.trim()} ${text}` : text));
+        setNoteText((current) => appendSnippet(current, text));
     };
 
     const pickNoteMediaAsync = async () => {
@@ -237,6 +243,7 @@ export function useAddNote({ storedTags, onSaved }: Options) {
             onRemoveMedia: removeNoteMedia,
             note: noteText,
             onNoteChange: setNoteText,
+            snippets,
             onInsertSnippet: insertNoteSnippet,
             date: noteDate,
             onPressDate: pressNoteDate,

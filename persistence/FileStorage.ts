@@ -3,6 +3,23 @@ import { FolderModel } from '../models/FolderModel';
 import { FolderListItemModel } from '../models/FolderListItemModel';
 import { NoteModel, TagModel } from '../models/NoteModel';
 import { deleteFileIfExists } from '@/lib/mediaHelper';
+import type { ThemeMode } from '@/theme/colors';
+import { SnippetModel } from '@/models/SnippetModel';
+
+const THEME_MODE_KEY = 'themeMode';
+
+/** Null means "never chosen" — distinct from "chose dark". The caller owns
+ *  the default so this layer doesn't quietly invent a preference, and a
+ *  value written by an older or broken build is treated as never-chosen rather
+ *  than trusted into a ThemeMode it doesn't match. */
+export async function getThemeModeFromStorageAsync(): Promise<ThemeMode | null> {
+    const data = await AsyncStorage.getItem(THEME_MODE_KEY);
+    return data === 'light' || data === 'dark' ? data : null;
+}
+
+export async function saveThemeModeToStorageAsync(mode: ThemeMode): Promise<void> {
+    await AsyncStorage.setItem(THEME_MODE_KEY, mode);
+}
 
 export async function getFoldersFromStorageAsync(): Promise<FolderModel[]> {
     const data = await AsyncStorage.getItem('folders');
@@ -111,4 +128,19 @@ export async function deleteFolderFromStorageAsync(folderId: string): Promise<vo
     const folder = folders.find((f) => f.id === folderId);
     if (folder?.coverUri != null) deleteFileIfExists(folder.coverUri);
     await saveFoldersToStorageAsync(folders.filter((f) => f.id !== folderId));
+}
+
+export async function getSnippetsFromStorageAsync(): Promise<SnippetModel[]> 
+{
+    const data = await AsyncStorage.getItem('snippets');
+    return data ? JSON.parse(data) : [];
+}
+
+/** The whole array in one key, like folders and tags — not a per-id split
+ *  like notes. Snippets are a handful of short strings with no media, so
+ *  there is nothing to gain from reading them one at a time, and saving the
+ *  array is what makes delete just "save the rest". */
+export async function saveSnippetsToStorageAsync(snippets: SnippetModel[]): Promise<void>
+{
+    await AsyncStorage.setItem('snippets', JSON.stringify(snippets));
 }
