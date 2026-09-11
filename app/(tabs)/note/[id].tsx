@@ -16,6 +16,12 @@ import { deleteNotesFromStorageAsync, getFoldersFromStorageAsync, getNotesFromSt
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
+import {
+    buildExportPayload,
+    shareExportFileAsync,
+    TransferError,
+    writeExportFileAsync,
+} from "@/lib/noteTransfer";
 
 // The picture-note viewer screen: header, the card itself, the filmstrip and
 // the ad slot.
@@ -164,6 +170,31 @@ export default function ViewNotes() {
         }
     };
 
+    // --- exporting ---------------------------------------------------------
+
+    //* guards a second tap while the container is still being written — the
+    //* same reason saveEditAsync has one
+    const [exporting, setExporting] = useState(false);
+
+    const exportNoteAsync = async () => {
+        if (note == null || exporting) return;
+        setExporting(true);
+        try {
+            //* a single note travels without its folder: on the way back in it
+            //* has nowhere to belong, so it lands in the gallery
+            const { payload, mediaUris } = buildExportPayload([note], tags, null);
+            const fileUri = await writeExportFileAsync(payload, mediaUris);
+            await shareExportFileAsync(fileUri, "picture-note.noteit");
+        } catch (error) {
+            Alert.alert(
+                "Couldn't export",
+                error instanceof TransferError ? error.message : "That note didn't export. Try again.",
+            );
+        } finally {
+            setExporting(false);
+        }
+    };
+
     // --- deleting ----------------------------------------------------------
 
     const confirmDelete = () => {
@@ -293,7 +324,7 @@ export default function ViewNotes() {
                         <Pressable
                             onPress={handleShareAsync}
                             hitSlop={8}
-                            accessibilityLabel="Share this picture-note"
+                            accessibilityLabel="Share this picture-note as text"
                             style={[styles.headerButton, { backgroundColor: colors.surface }]}
                         >
                             <Feather name="share" size={16} color={colors.textPrimary} />
@@ -315,6 +346,12 @@ export default function ViewNotes() {
                                     label: "Edit note",
                                     icon: "edit-2",
                                     onPress: beginEdit,
+                                },
+                                {
+                                    key: "export",
+                                    label: "Export note",
+                                    icon: "upload",
+                                    onPress: exportNoteAsync,
                                 },
                                 {
                                     key: "delete",

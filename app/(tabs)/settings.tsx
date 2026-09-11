@@ -8,9 +8,22 @@ import { useTheme } from "@/theme/ThemeContext";
 import { fonts } from "@/theme/fonts";
 import TopBar from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
+import ImportSummary from "@/components/ImportSummary";
+import SettingsActionRow from "@/components/SettingsActionRow";
 import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
-import { getSnippetsFromStorageAsync, saveSnippetsToStorageAsync } from "@/persistence/FileStorage";
+import type { ExportPayload } from "@/models/ExportModel";
+import {
+    importExportFileAsync,
+    pickExportFileAsync,
+    readExportManifestAsync,
+    TransferError,
+} from "@/lib/noteTransfer";
+import {
+    getSnippetsFromStorageAsync,
+    getTagsFromStorageAsync,
+    saveSnippetsToStorageAsync,
+} from "@/persistence/FileStorage";
 
 type ThemeOption = {
     id: ThemeMode;
@@ -93,6 +106,76 @@ export default function Settings() {
                 getSnippetsAsync();
             }, []),
         );
+    // --- import ------------------------------------------------------------
+
+    //* the summary is open on its own flag, not on having a uri: a picker that
+    //* fails outright has no file to show but still owes the user a reason
+    const [importOpen, setImportOpen] = useState(false);
+    //* the picked file. The payload stays null until its manifest has been
+    //* read, which is what the modal shows its loading state for.
+    const [importUri, setImportUri] = useState<string | null>(null);
+    const [importPayload, setImportPayload] = useState<ExportPayload | null>(null);
+    const [importError, setImportError] = useState<string | undefined>(undefined);
+    const [importing, setImporting] = useState(false);
+
+    //* a failed transfer already carries a sentence worth showing; anything
+    //* else is a bug and should not be pasted at the user verbatim
+    const messageFor = (error: unknown, fallback: string) =>
+        error instanceof TransferError ? error.message : fallback;
+
+    const startImport = async () => {
+        let uri: string | null = null;
+        try {
+            uri = await pickExportFileAsync();
+        } catch (error) {
+            //* the picker itself failed, which is not the same as backing out
+            setImportOpen(true);
+            setImportUri(null);
+            setImportPayload(null);
+            setImportError(messageFor(error, "Couldn't open the file picker."));
+            return;
+        }
+
+        //* cancelled — no modal, no error, nothing happened
+        if (uri == null) return;
+
+        setImportOpen(true);
+        setImportUri(uri);
+        setImportPayload(null);
+        setImportError(undefined);
+
+        try {
+            //* read before confirming: the summary has to say what is in the
+            //* file before the user agrees to write any of it
+            setImportPayload(await readExportManifestAsync(uri));
+        } catch (error) {
+            setImportError(messageFor(error, "That file isn't a NoteIt export."));
+        }
+    };
+
+    const closeImport = () => {
+        setImportOpen(false);
+        setImportUri(null);
+        setImportPayload(null);
+        setImportError(undefined);
+    };
+
+    const confirmImport = async () => {
+        if (importUri == null || importPayload == null || importing) return;
+        setImporting(true);
+        try {
+            const tags = await getTagsFromStorageAsync();
+            await importExportFileAsync(importUri, importPayload, tags);
+            closeImport();
+        } catch (error) {
+            //* stays open on the error so the summary is still on screen
+            //* explaining what was being attempted
+            setImportError(messageFor(error, "Couldn't import that file. Try again."));
+        } finally {
+            setImporting(false);
+        }
+    };
+
     //* "Add" doesn't commit — it carries the name into the modal, which is
     //* where the body actually gets written
     const startWritingSnippet = () => {
@@ -212,6 +295,22 @@ export default function Settings() {
                 </View>
 
                 <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Data</Text>
+                    {/* Import lives here rather than on a note screen because
+                        it isn't about any one note — it drops a file's whole
+                        contents into the app. Exporting is the opposite: it is
+                        always about the thing you are looking at, so it sits in
+                        the viewer's and the folder's own menus. */}
+                    <SettingsActionRow
+                        icon="download"
+                        title="Import from a file"
+                        subtitle="Add picture-notes or a whole folder from a .noteit file."
+                        colors={colors}
+                        onPress={startImport}
+                    />
+                </View>
+
+                <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Snippets</Text>
                     <Text style={[styles.sectionHint, { color: colors.stone }]}>
                         Create reusable phrases to quickly drop into a picture-note while you&apos;re writing.
@@ -299,6 +398,16 @@ export default function Settings() {
                     </View>
                 </View>
             </ScrollView>
+
+            <ImportSummary
+                visible={importOpen}
+                payload={importPayload}
+                error={importError}
+                busy={importing}
+                colors={colors}
+                onCancel={closeImport}
+                onConfirm={confirmImport}
+            />
 
             <NewSnippet
                 visible={pendingName != null}

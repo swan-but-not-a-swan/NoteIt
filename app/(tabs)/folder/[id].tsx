@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
@@ -13,6 +13,12 @@ import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromSt
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
+import {
+    buildExportPayload,
+    shareExportFileAsync,
+    TransferError,
+    writeExportFileAsync,
+} from "@/lib/noteTransfer";
 
 // A folder's own picture-notes — same grid/viewer as Gallery, just filtered
 // down to this folder's id instead of showing everything.
@@ -54,6 +60,30 @@ export default function FolderNotes() {
     //* new notes default into the folder being viewed
     const openAddNoteHere = () => addNote.open(id);
 
+    //* guards a second tap while the container is still being written
+    const [exporting, setExporting] = useState(false);
+
+    const exportFolderAsync = async () => {
+        if (folder == null || exporting) return;
+        setExporting(true);
+        try {
+            //* the folder travels with its notes, so they land inside a folder
+            //* of the same name on the other side rather than loose in a gallery
+            const { payload, mediaUris } = buildExportPayload(folderNotes, tags, folder);
+            const fileUri = await writeExportFileAsync(payload, mediaUris);
+            await shareExportFileAsync(fileUri, `${folder.name}.noteit`);
+        } catch (error) {
+            Alert.alert(
+                "Couldn't export",
+                error instanceof TransferError
+                    ? error.message
+                    : "That folder didn't export. Try again.",
+            );
+        } finally {
+            setExporting(false);
+        }
+    };
+
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <TopBar
@@ -71,6 +101,12 @@ export default function FolderNotes() {
                                 label: "Add picture-note",
                                 icon: "plus",
                                 onPress: openAddNoteHere,
+                            },
+                            {
+                                key: "export",
+                                label: "Export folder",
+                                icon: "upload",
+                                onPress: exportFolderAsync,
                             },
                         ]}
                     />
