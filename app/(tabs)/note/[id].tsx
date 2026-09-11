@@ -14,6 +14,12 @@ import { useEndAd } from "@/components/EndAd";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { useLibrary } from "@/lib/LibraryContext";
 import { NoteModel, TagModel } from "@/models/NoteModel";
+import {
+    buildExportPayload,
+    shareExportFileAsync,
+    TransferError,
+    writeExportFileAsync,
+} from "@/lib/noteTransfer";
 import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 
 // The picture-note viewer screen: header, the card itself, the filmstrip and
@@ -96,6 +102,31 @@ export default function ViewNotes() {
     const openEditor = () => {
         if (note == null) return;
         router.push({ pathname: "/(tabs)/enter-note", params: { id: note.id } });
+    };
+
+    // --- exporting ---------------------------------------------------------
+
+    //* guards a second tap while the container is still being written — the
+    //* same reason saveEditAsync has one
+    const [exporting, setExporting] = useState(false);
+
+    const exportNoteAsync = async () => {
+        if (note == null || exporting) return;
+        setExporting(true);
+        try {
+            //* a single note travels without its folder: on the way back in it
+            //* has nowhere to belong, so it lands in the gallery
+            const { payload, mediaUris } = buildExportPayload([note], tags, null);
+            const fileUri = await writeExportFileAsync(payload, mediaUris);
+            await shareExportFileAsync(fileUri, "picture-note.noteit");
+        } catch (error) {
+            Alert.alert(
+                "Couldn't export",
+                error instanceof TransferError ? error.message : "That note didn't export. Try again.",
+            );
+        } finally {
+            setExporting(false);
+        }
     };
 
     // --- deleting ----------------------------------------------------------
@@ -195,7 +226,9 @@ export default function ViewNotes() {
                         <Pressable
                             onPress={handleShareAsync}
                             hitSlop={8}
-                            accessibilityLabel="Share this picture-note"
+                            //* "as text" since the overflow now also exports the
+                            //* note as a file, and the two need telling apart
+                            accessibilityLabel="Share this picture-note as text"
                             style={[styles.headerButton, glass(colors)]}
                         >
                             <Feather name="share" size={16} color={colors.textPrimary} />
@@ -212,7 +245,7 @@ export default function ViewNotes() {
                                     //* adding from inside a folder stays in it
                                     onPress: () =>
                                         router.push({
-                                            pathname: "/(tabs)/add-note",
+                                            pathname: "/(tabs)/enter-note",
                                             params: folderId != null ? { folderId } : undefined,
                                         }),
                                 },
@@ -221,6 +254,12 @@ export default function ViewNotes() {
                                     label: "Edit note",
                                     icon: "edit-2",
                                     onPress: openEditor,
+                                },
+                                {
+                                    key: "export",
+                                    label: "Export note",
+                                    icon: "upload",
+                                    onPress: exportNoteAsync,
                                 },
                                 {
                                     key: "delete",
