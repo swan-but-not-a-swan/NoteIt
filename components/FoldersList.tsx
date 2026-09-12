@@ -31,7 +31,7 @@ export default function FolderList({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {items.map(({ folder, count }, i) => (
+      {items.map(({ folder, count }) => (
         <View key={folder.id} style={styles.item}>
           <Folder
             folder={folder}
@@ -40,7 +40,6 @@ export default function FolderList({
             onOpen={() => onOpenFolder(folder.id)}
             onEdit={() => onEditFolder(folder)}
           />
-          {showAdBanner && i === 1 && <AdBannerStrip colors={colors} />}
         </View>
       ))}
 
@@ -51,6 +50,20 @@ export default function FolderList({
         <Feather name="folder-plus" size={17} color={colors.stone} />
         <Text style={[styles.newFolderLabel, { color: colors.stone }]}>New folder</Text>
       </Pressable>
+
+      {/*
+        Fixed position, below the list rather than woven into it. This used to
+        sit inside the map at `i === 1`, which meant it only mounted once a
+        second folder existed — so a new install, which is every user at some
+        point, never requested an ad at all and never gathered consent. The
+        placement quietly disabled the app's only revenue path for exactly the
+        people most likely to be using it.
+
+        Below "New folder" also keeps the ad out of the way of the list's own
+        rhythm: it reads as a footer rather than as something impersonating a
+        folder, which is the failure mode of in-feed ads.
+      */}
+      {showAdBanner && <AdBannerStrip colors={colors} />}
 
       {/*
         TODO (business logic): pull-up-past-the-bottom-of-the-list also
