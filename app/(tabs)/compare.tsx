@@ -7,7 +7,7 @@ import {
     View,
     useWindowDimensions,
 } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { type ThemeColors } from "@/theme/colors";

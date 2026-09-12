@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";

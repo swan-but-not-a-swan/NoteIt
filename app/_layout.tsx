@@ -16,7 +16,9 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+import { ICON_FONTS } from "@/lib/iconFont";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
+import { EntitlementsProvider } from "@/lib/EntitlementsContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -39,6 +41,9 @@ function AppShell() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    //* empty on native — the icon font is compiled in there. Only the web
+    //* build has anything to load.
+    ...ICON_FONTS,
   });
 
   // Wait for the saved theme as well as the fonts. Reading it is one
@@ -91,7 +96,15 @@ function AppShell() {
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <AppShell />
+      {/* Outside AppShell on purpose: AppShell renders null until the fonts
+          and saved theme resolve, so a provider nested inside it would not
+          mount — and so would not start configuring RevenueCat or reading
+          entitlements — until after that gate opens. Out here the
+          entitlement read overlaps the font load instead of queueing behind
+          it, which is free latency. */}
+      <EntitlementsProvider>
+        <AppShell />
+      </EntitlementsProvider>
     </ThemeProvider>
   );
 }

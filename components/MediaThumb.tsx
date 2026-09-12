@@ -1,6 +1,6 @@
 import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { NoteModel } from "../models/NoteModel";
 
 type Props = {

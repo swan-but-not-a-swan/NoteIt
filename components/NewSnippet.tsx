@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";

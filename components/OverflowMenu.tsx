@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather";
+import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Keyboard, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";

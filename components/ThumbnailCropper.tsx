@@ -7,7 +7,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { Image } from "expo-image";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 

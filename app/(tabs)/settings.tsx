@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";

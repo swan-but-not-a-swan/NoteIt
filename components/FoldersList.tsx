@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import Folder from "./Folder";

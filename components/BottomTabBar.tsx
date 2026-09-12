@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather";
+import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {

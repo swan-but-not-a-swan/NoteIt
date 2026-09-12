@@ -1,5 +1,5 @@
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
@@ -22,6 +22,7 @@ import { FolderListItemModel } from "@/models/FolderListItemModel";
 import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
+import { useEntitlements } from "@/lib/EntitlementsContext";
 import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteFilter";
 import { useAddNote } from "@/lib/useAddNote";
 import { Directory, Paths } from "expo-file-system";
@@ -65,6 +66,12 @@ export default function Home() {
     const [cropSourceUri, setCropSourceUri] = useState<string | null>(null);
     const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
     const [folders, setFolders] = useState<FolderListItemModel[]>([]);
+
+    // Tri-state: null while the first entitlement read is in flight. Passed
+    // to FoldersList as `=== false` rather than `!isAdFree` so the unresolved
+    // case renders no strip at all — see EntitlementsContext for why that
+    // matters on cold start.
+    const { isAdFree } = useEntitlements();
 
     const [storedTags, setStoredTags] = useState<TagModel[]>([]);
     const [snippets, setSnippets] = useState<SnippetModel[]>([]);
@@ -370,6 +377,7 @@ export default function Home() {
                                 }
                                 onEditFolder={onEditFolder}
                                 onNewFolder={openNewFolder}
+                                showAdBanner={isAdFree === false}
                             />
                         </SlideInPage>
                     ) : (
