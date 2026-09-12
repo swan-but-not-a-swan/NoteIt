@@ -68,10 +68,10 @@ export default function Home() {
     const [folders, setFolders] = useState<FolderListItemModel[]>([]);
 
     // Tri-state: null while the first entitlement read is in flight. Passed
-    // to FoldersList as `=== false` rather than `!isAdFree` so the unresolved
+    // to FoldersList as `=== false` rather than `!isPro` so the unresolved
     // case renders no strip at all — see EntitlementsContext for why that
     // matters on cold start.
-    const { isAdFree } = useEntitlements();
+    const { isPro } = useEntitlements();
 
     const [storedTags, setStoredTags] = useState<TagModel[]>([]);
     const [snippets, setSnippets] = useState<SnippetModel[]>([]);
@@ -377,7 +377,7 @@ export default function Home() {
                                 }
                                 onEditFolder={onEditFolder}
                                 onNewFolder={openNewFolder}
-                                showAdBanner={isAdFree === false}
+                                showAdBanner={isPro === false}
                             />
                         </SlideInPage>
                     ) : (

@@ -14,6 +14,27 @@ import { Platform } from "react-native";
 const ANDROID_KEY = process.env.EXPO_PUBLIC_RC_ANDROID_KEY;
 const IOS_KEY = process.env.EXPO_PUBLIC_RC_IOS_KEY;
 
+// The Test Store key (test_… prefix) routes every purchase to RevenueCat's
+// own Test Store instead of Play Billing or StoreKit, so purchase flows can
+// be exercised end to end with no Play Console or App Store Connect account
+// behind them. It is project-wide rather than per-platform, which is why it
+// short-circuits the Platform.select below rather than sitting inside it.
+const TEST_KEY = process.env.EXPO_PUBLIC_RC_TEST_KEY;
+
+/** True when the app is running against the Test Store rather than a real
+ *  store. Surface this in the UI during development so a fake purchase is
+ *  never mistaken for a real one. */
+export function isTestStore(): boolean {
+  return usableKey(TEST_KEY) != null;
+}
+
+function usableKey(key: string | undefined): string | null {
+  // An env var that exists but is empty ("EXPO_PUBLIC_RC_IOS_KEY=") is the
+  // common half-configured state — treat it as absent, not as a valid key.
+  if (key == null) return null;
+  return key.trim().length > 0 ? key : null;
+}
+
 /**
  * The RevenueCat SDK key for the platform currently running, or null when
  * none is configured (web, or a missing/blank env var).
@@ -23,6 +44,18 @@ const IOS_KEY = process.env.EXPO_PUBLIC_RC_IOS_KEY;
  * machine that simply hasn't set the vars yet.
  */
 export function revenueCatApiKey(): string | null {
+  // Test Store wins when present. __DEV__ guards it so a test key left in
+  // the environment cannot follow the app into a release build — Test Store
+  // purchases are free and unverified, so shipping one would hand out Pro to
+  // everybody.
+  const testKey = usableKey(TEST_KEY);
+  if (testKey != null) {
+    if (__DEV__) return testKey;
+    console.warn(
+      "A RevenueCat Test Store key is set in a production build and is being ignored. Remove EXPO_PUBLIC_RC_TEST_KEY from the release environment.",
+    );
+  }
+
   const key = Platform.select({
     android: ANDROID_KEY,
     ios: IOS_KEY,
@@ -32,13 +65,7 @@ export function revenueCatApiKey(): string | null {
     default: undefined,
   });
 
-  if (key == null) {
-    return null;
-  }
-
-  // An env var that exists but is empty ("EXPO_PUBLIC_RC_IOS_KEY=") is the
-  // common half-configured state — treat it as absent, not as a valid key.
-  return key.trim().length > 0 ? key : null;
+  return usableKey(key);
 }
 
 /**
