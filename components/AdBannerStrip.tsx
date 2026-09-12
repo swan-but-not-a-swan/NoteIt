@@ -1,77 +1,65 @@
-import { useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { StyleSheet, View } from "react-native";
 import { BannerAd, BannerAdSize } from "react-native-google-mobile-ads";
 import type { ThemeColors } from "@/theme/colors";
-import { bannerAdUnitId, initializeAds } from "@/lib/ads";
+import { BANNER_AD_UNIT_ID } from "@/lib/ads";
+
+type LoadState = "loading" | "loaded" | "failed";
 
 // The "strip" ad placement — shared wherever the web reference reuses its
 // AdBanner variant="strip" (FoldersList, the picture-note Viewer).
 //
-// The card chrome below is ours; everything inside it is Google's creative
-// and cannot be styled. So the container only supplies the border, radius
-// and background that let an ad sit in the folders list without looking
-// pasted on top of it.
+// Whether this renders at all is decided upstream by the entitlement gate
+// (see EntitlementsContext) — this component assumes it should show an ad and
+// concerns itself only with how that goes.
 export default function AdBannerStrip({ colors }: { colors: ThemeColors }) {
-  // Three states, and the failure one matters: an ad that no-fills or errors
-  // must collapse completely rather than leave a bordered empty box. No-fill
-  // is normal and frequent — inventory simply isn't always available — so
-  // the layout has to treat "no ad" as an ordinary outcome, not an error.
-  const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [state, setState] = useState<LoadState>("loading");
 
-  // Initialising here rather than at app startup is deliberate: this
-  // component only renders when isPro === false, so a paying customer never
-  // gets an ATT prompt or a GDPR consent form for ads they will never be
-  // shown. initializeAds() guards itself, so several banners mounting at
-  // once still only bring the SDK up a single time.
-  //
-  // The banner is held back until initialisation resolves — requesting
-  // before the SDK is up means the first impression goes out without the
-  // consent signals gathered in initializeAds().
-  useEffect(() => {
-    let cancelled = false;
-    initializeAds()
-      .catch((error) => {
-        console.warn("Ad initialisation failed; the slot will stay empty.", error);
-      })
-      .finally(() => {
-        if (!cancelled) setReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // react-native-google-mobile-ads has no web implementation, and app.json
-  // still builds web (web.output: "static"), so this would throw there.
-  if (Platform.OS === "web" || failed || !ready) {
+  // No-fill is routine, not exceptional — inventory varies by region, and
+  // Myanmar is a thin market. Collapsing to nothing is the right answer:
+  // a permanently empty bordered box in the middle of someone's folder list
+  // looks like a bug, whereas an absent ad looks like no ad.
+  if (state === "failed") {
     return null;
   }
 
   return (
     <View
       style={[
-        styles.ad,
-        { backgroundColor: colors.surfaceHi, borderColor: colors.line },
-        // Stay invisible until the first impression actually renders,
-        // otherwise an empty framed box flashes in the list while the
-        // request is in flight.
-        !loaded && styles.pending,
+        styles.frame,
+        // The chrome only appears once an ad is actually in the frame.
+        // Drawing the border first would flash an empty box on every mount,
+        // since BannerAd occupies no height until it fills.
+        state === "loaded" && {
+          backgroundColor: colors.surfaceHi,
+          borderColor: colors.line,
+          borderWidth: 1,
+          padding: 6,
+        },
       ]}
     >
       <BannerAd
-        unitId={bannerAdUnitId()}
-        // Inline adaptive is the size Google documents for scrolling
-        // content, which is what the folders list is. The anchored sizes are
-        // for pinning to the top or bottom of a screen.
-        size={BannerAdSize.INLINE_ADAPTIVE_BANNER}
-        onAdLoaded={() => setLoaded(true)}
+        unitId={BANNER_AD_UNIT_ID}
+        // Anchored adaptive sizes itself to the device width and returns a
+        // height Google has picked for that screen, rather than a fixed 320x50
+        // that looks stranded on a tablet.
+        size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+        onAdLoaded={() => setState("loaded")}
         onAdFailedToLoad={(error) => {
-          // Logged rather than surfaced: a no-fill is not something the
-          // person writing a journal entry can act on.
-          console.warn("Banner ad failed to load.", error);
-          setFailed(true);
+          // Warn rather than error: this fires for ordinary no-fill as well as
+          // for genuine misconfiguration, and shouting about it would train
+          // everyone to ignore the log.
+          console.warn("Banner ad did not load.", error?.message ?? error);
+          setState("failed");
+        }}
+        // Impression-level revenue. This is the seam where RevenueCat's
+        // adTracker.trackAdRevenue() goes, so ad earnings land on the same
+        // charts as purchases — it needs an impressionId generated per load,
+        // so it is deliberately left for that phase rather than half-done.
+        onPaid={(event) => {
+          if (__DEV__) {
+            console.log(`Ad revenue: ${event.value} ${event.currency} (precision ${event.precision})`);
+          }
         }}
       />
     </View>
@@ -79,16 +67,10 @@ export default function AdBannerStrip({ colors }: { colors: ThemeColors }) {
 }
 
 const styles = StyleSheet.create({
-  ad: {
+  frame: {
     borderRadius: 14,
-    borderWidth: 1,
-    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-  },
-  pending: {
-    height: 0,
-    borderWidth: 0,
-    opacity: 0,
+    overflow: "hidden",
   },
 });
