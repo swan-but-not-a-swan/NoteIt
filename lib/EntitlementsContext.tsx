@@ -8,7 +8,6 @@ import {
 } from "./entitlements";
 import { paywallGrantedAccess, presentCustomerCenter, presentPaywallIfNeeded } from "./paywall";
 import { isTestStore } from "./purchases";
-import { initializeAds } from "./ads";
 
 type EntitlementsContextValue = {
   /** Whether this customer has Pro — and so whether ads are suppressed.
@@ -77,20 +76,10 @@ export function EntitlementsProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Start the ads SDK only once we know this customer will actually see ads.
-  // Initialising unconditionally at startup would show the UMP consent form —
-  // and on iOS the ATT prompt — to someone who has paid not to see ads, which
-  // is both pointless and a bad first impression. Waiting costs nothing: the
-  // entitlement read resolves from RevenueCat's on-device cache, so this fires
-  // within a frame or two of launch on any run after the first.
-  //
-  // Deliberately `=== false`, not `!isPro`: while the read is unresolved the
-  // right move is to do nothing rather than assume either answer.
-  useEffect(() => {
-    if (isPro === false) {
-      void initializeAds();
-    }
-  }, [isPro]);
+  // The ads SDK is brought up by AdBannerStrip rather than here. That keeps
+  // the ATT prompt and GDPR consent form tied to the component that actually
+  // shows an ad, so a paying customer — whose banners never mount — is never
+  // asked to consent to something they will not see.
 
   const refresh = useCallback(() => {
     fetchCustomerInfo()
