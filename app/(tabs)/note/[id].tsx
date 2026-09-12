@@ -218,8 +218,13 @@ export default function ViewNotes() {
             <TopBar
                 title={title}
                 colors={colors}
-                //* presented modally — the card already clears the status bar
-                insetTop={false}
+                //* Modal presentation only insets the card on iOS, where it genuinely
+                //* starts below the status bar. Android renders a "modal" route
+                //* full-screen, so nothing clears the status bar there and the
+                //* header lands on the clock — hence a platform split, not a flat
+                //* false. Only visible on a real Android surface, which is why it
+                //* survived until the first emulator run.
+                insetTop={Platform.OS !== "ios"}
                 //* while editing the arrow means "get me out of this edit",
                 //* not "leave the viewer" — leaving with the draft still in
                 //* hand would discard it with no warning at all
