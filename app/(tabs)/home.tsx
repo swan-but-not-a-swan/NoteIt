@@ -1,20 +1,16 @@
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather/static";
+import { Alert, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { FOLDER_SWATCHES } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import { fonts } from "@/theme/fonts";
 import TopBar, { SettingsButton } from "@/components/TopBar";
 import BottomTabBar, { MainTab } from "@/components/BottomTabBar";
 import FoldersList from "@/components/FoldersList";
-import GalleryGrid from "@/components/GalleryGrid";
+import GalleryView from "@/components/GalleryView";
 import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
-import GalleryToolbar from "@/components/GalleryToolbar";
-import SearchNotesModal from "@/components/SearchNotesModal";
-import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, loadFoldersWithCountsAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
+import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
 import { useRouter } from "expo-router";
@@ -23,7 +19,6 @@ import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useEntitlements } from "@/lib/EntitlementsContext";
-import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteFilter";
 import { useAddNote } from "@/lib/useAddNote";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
@@ -33,30 +28,51 @@ import { SnippetModel } from "@/models/SnippetModel";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 
-// Slides its content in from the side matching `dir` (or renders in place
-// when null, e.g. on first mount). Give it a `key` that changes whenever the
-// active tab changes so it remounts and the animation replays each switch —
-// same trick as the reference's `key={tab}` + CSS entrance animation.
+//* dir: 'forward' (folders -> gallery), 'backward' (gallery -> folders), null (first render, no animation)
+//* Give it a `key` that changes whenever the active tab changes so the animation replays on each switch.
+
 function SlideInPage({ dir, children }: { dir: "forward" | "backward" | null; children: React.ReactNode }) {
     const translateX = useSharedValue(dir === "forward" ? 70 : dir === "backward" ? -70 : 0);
     const opacity = useSharedValue(dir != null ? 0 : 1);
 
+
     useEffect(() => {
-        translateX.value = withTiming(0, { duration: 280 });
-        opacity.value = withTiming(1, { duration: 280 });
-    }, []);
+        translateX.set(withTiming(0, { duration: 200 })); //* shared values are stable objects, so listing them never re-runs this —
+        opacity.set(withTiming(1, { duration: 200 })); //* it still fires once, on mount, which is what replays the slide
+    }, [translateX, opacity]);
 
     const style = useAnimatedStyle(() => ({
-        transform: [{ translateX: translateX.value }],
-        opacity: opacity.value,
+        transform: [{ translateX: translateX.get() }],
+        opacity: opacity.get(),
     }));
 
     return <Animated.View style={[styles.page, style]}>{children}</Animated.View>;
 }
 
+//* pairs each folder with its note count.
+function groupFoldersWithNotes(folders: FolderModel[], notes: NoteModel[]): FolderListItemModel[] {
+    const notesByFolder: Record<string, NoteModel[]> = {};
+    for (const note of notes) {
+        const key = note.folderId ?? "gallery";
+        (notesByFolder[key] ??= []).push(note);
+    }
+
+    const data = folders.map((folder) => {
+        const folderNotes = notesByFolder[folder.id] ?? [];
+        return { folder, count: folderNotes.length };
+    });
+
+    return data;
+}
+
 export default function Home() {
     const { colors } = useTheme();
     const router = useRouter();
+
+    //* hasPlus: null while the first entitlement read is in flight, true if the user has Plus, false if they don't. 
+    //* Plus is on during the free trial as well as once paid: the store treats the trial as a subscription period like any other.
+    const { hasPlus } = useEntitlements();
+
     const [showNewFolder, setShowNewFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState("");
     const [newFolderColor, setNewFolderColor] = useState(FOLDER_SWATCHES[0]);
@@ -65,113 +81,64 @@ export default function Home() {
     const [originalFolderThumbnailUri, setOriginalFolderThumbnailUri] = useState<string | null>(null);
     const [cropSourceUri, setCropSourceUri] = useState<string | null>(null);
     const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
-    const [folders, setFolders] = useState<FolderListItemModel[]>([]);
+    const [folders, setFolders] = useState<FolderModel[]>([]);
 
-    // Tri-state: null while the first entitlement read is in flight. Passed
-    // to FoldersList as `=== false` rather than `!isPro` so the unresolved
-    // case renders no strip at all — see EntitlementsContext for why that
-    // matters on cold start.
-    const { isPro } = useEntitlements();
-
+    const [notes, setNotes] = useState<NoteModel[]>([]);
     const [storedTags, setStoredTags] = useState<TagModel[]>([]);
     const [snippets, setSnippets] = useState<SnippetModel[]>([]);
 
-    const [notes, setNotes] = useState<NoteModel[]>([]);
     const [activeTab, setActiveTab] = useState<MainTab>("folders");
-    // 'forward' (folders -> gallery) slides the incoming screen in from the
-    // right; 'backward' (gallery -> folders) from the left — same as an iOS
-    // push/pop transition. Switching the tab and starting this animation
-    // happen in the same call, so the header changes the instant the swipe
-    // (or tab tap) resolves, instead of trying to track a live scroll
-    // position — that's what made the previous drag-following pager feel
-    // laggy and left the header out of sync.
     const [tabDir, setTabDir] = useState<"forward" | "backward" | null>(null);
-
-    const getFoldersWithCountsAsync = async () => {
-        const data = await loadFoldersWithCountsAsync();
-        setFolders(data);
-    };
 
     useFocusEffect(
         useCallback(() => {
-            getFoldersWithCountsAsync();
-            getTagsFromStorageAsync().then(setStoredTags);
-            //* re-read on focus, so a snippet added in Settings shows up here
-            //* the moment you come back
-            getSnippetsFromStorageAsync().then(setSnippets);
-            getNotesFromStorageAsync().then(setNotes);
-        }, []),
+            //Claude to review this code
+            Promise.all([
+                getFoldersFromStorageAsync(),
+                getNotesFromStorageAsync(),
+                getTagsFromStorageAsync(),
+                getSnippetsFromStorageAsync(),
+            ]).then(([loadedFolders, loadedNotes, loadedTags, loadedSnippets]) => {
+                setFolders(loadedFolders);
+                setNotes(loadedNotes);
+                setStoredTags(loadedTags);
+                setSnippets(loadedSnippets);
+            });
+
+        }, []), //! Might have to remove snippets to improve performance
     );
 
+    //* Navigation codes
+
     const switchTab = (tab: MainTab) => {
-        setActiveTab((current) => {
-            if (tab === current) return current;
-            setTabDir(tab === "gallery" ? "forward" : "backward");
-            //* a half-made selection shouldn't survive leaving the grid it was
-            //* made in — returning to lit-up tiles you no longer remember
-            //* choosing is worse than starting again
-            leaveCompareMode();
-            return tab;
-        });
+        //* checks state directly rather than inside a setActiveTab updater, which
+        //* must stay pure. Leaving the gallery unmounts GalleryView, and that
+        //* clears its search and compare state on its own
+        if (tab === activeTab) return;
+        setTabDir(tab === "gallery" ? "forward" : "backward");
+        setActiveTab(tab);
     };
 
     const tabSwipeAxis = useSharedValue<"x" | "y" | null>(null);
     const tabSwipeGesture = Gesture.Pan()
         .onStart(() => {
-            tabSwipeAxis.value = null;
+            tabSwipeAxis.set(null);
         })
         .onUpdate((e) => {
-            if (tabSwipeAxis.value === null) {
+            if (tabSwipeAxis.get() === null) {
                 if (Math.abs(e.translationX) > 10 || Math.abs(e.translationY) > 10) {
-                    tabSwipeAxis.value = Math.abs(e.translationX) > Math.abs(e.translationY) ? "x" : "y";
+                    tabSwipeAxis.set(Math.abs(e.translationX) > Math.abs(e.translationY) ? "x" : "y");
                 }
             }
         })
         .onEnd((e) => {
-            if (tabSwipeAxis.value === "x" && Math.abs(e.translationX) > 70) {
+            if (tabSwipeAxis.get() === "x" && Math.abs(e.translationX) > 70) {
                 scheduleOnRN(switchTab, e.translationX < 0 ? "gallery" : "folders");
             }
-            tabSwipeAxis.value = null;
+            tabSwipeAxis.set(null);
         });
 
-    //* a push leaves this screen mounted underneath, so without this a
-    //* double-tap opens the same folder (or note) twice
-    const navigateOnce = useNavigateOnce();
-
-    //* gallery search. Derived, not stored: filtering a loaded array is cheap
-    //* enough to redo per keystroke, and keeping only the query in state means
-    //* there's no filtered copy to fall out of sync when notes reload.
-    const [noteQuery, setNoteQuery] = useState<NoteQuery>(EMPTY_QUERY);
-    const [searchOpen, setSearchOpen] = useState(false);
-    const visibleNotes = filterNotes(notes, noteQuery, storedTags);
-
-    //* picking notes to compare, rather than opening them. Capped at
-    //* MAX_COMPARE because past four the cards are too narrow to compare
-    //* anything, which is the whole point of the screen.
-    const [compareMode, setCompareMode] = useState(false);
-    const [compareIds, setCompareIds] = useState<string[]>([]);
-
-    const leaveCompareMode = () => {
-        setCompareMode(false);
-        setCompareIds([]);
-    };
-
-    const toggleCompareNote = (note: NoteModel) => {
-        setCompareIds((ids) => {
-            if (ids.includes(note.id)) return ids.filter((id) => id !== note.id);
-            //* silently ignored rather than shown as disabled: the cap is a
-            //* property of the compare screen, not something every tile in the
-            //* grid should be explaining
-            if (ids.length >= MAX_COMPARE) return ids;
-            return [...ids, note.id];
-        });
-    };
-
-    const startCompare = () => {
-        const ids = compareIds.join(",");
-        leaveCompareMode();
-        navigateOnce(() => router.push({ pathname: "/(tabs)/compare", params: { ids } }));
-    };
+    const navigateOnce = useNavigateOnce(); //* protects against double taps on folders or notes
 
     const openNewFolder = () => {
         setEditingFolderId(null);
@@ -183,21 +150,6 @@ export default function Home() {
         setCropSourceUri(null);
         setShowNewFolder(true);
     };
-
-    //* AddNote's composition state lives in a hook so the folder screen can
-    //* present the same modal over its own grid, rather than navigating here
-    //* to reach it. onSaved reloads what this screen shows.
-    const addNote = useAddNote({
-        storedTags,
-        snippets,
-        onSaved: async () => {
-            await getFoldersWithCountsAsync();
-            setStoredTags(await getTagsFromStorageAsync());
-            setNotes(await getNotesFromStorageAsync());
-        },
-    });
-
-    const openAddNote = () => addNote.open();
 
     const onEditFolder = (folder: FolderModel) => {
         setEditingFolderId(folder.id);
@@ -214,55 +166,60 @@ export default function Home() {
         // *The folder was never saved, so orphaned files are deleted when the operation is canceled.
         if (newFolderThumbnailUri !== originalFolderThumbnailUri) 
         {
-            if(newFolderThumbnailUri != null) 
-            {
+            if(newFolderThumbnailUri != null)
                 deleteFileIfExists(newFolderThumbnailUri);
-            }
             else
-            {
                 setNewFolderThumbnailUri(originalFolderThumbnailUri);
-            }
         }
         setEditingFolderId(null);
         setShowNewFolder(false);
     };
 
+    //* a crop made in this session is a file nothing else owns yet. The saved
+    //* cover (originalFolderThumbnailUri) is left alone until Save replaces it
+    const deleteUnsavedThumbnail = () => {
+        if (newFolderThumbnailUri != null && newFolderThumbnailUri !== originalFolderThumbnailUri)
+            deleteFileIfExists(newFolderThumbnailUri);
+    };
+
     const confirmDeleteFolder = () => {
         if (editingFolderId == null) return;
-        const folderId = editingFolderId;
+        const entry = folders.find((f) => f.id === editingFolderId);
+        if (entry == null) return;
+        const count = notes.filter((note) => note.folderId === entry.id).length;
 
-        const entry = folders.find((f) => f.folder.id === folderId);
-        const count = entry?.count ?? 0;
-
-        //* states what actually happens. This used to promise the notes would
-        //* be "moved out of the folder" — what the abandoned reassign approach
-        //* would have done — so anyone consenting to it lost every photo in
-        //* the folder instead. The count is here because "4 picture-notes" is
-        //* a decision you can make and "its notes" isn't.
         Alert.alert(
-            `Delete "${entry?.folder.name ?? "this folder"}"?`,
+            `Delete "${entry.name}"?`,
             count === 0
                 ? "This can't be undone."
-                : `Its ${count} picture-notes${count === 1 ? "" : "s"} will be deleted too, along with their photos and videos. This can't be undone.`,
+                : `Its ${count} picture-note${count === 1 ? "" : "s"} will be deleted too, along with their photos and videos. This can't be undone.`,
             [
                 { text: "Cancel", style: "cancel" },
-                { text: "Delete", style: "destructive", onPress: () => performDeleteFolderAsync(folderId) },
+                { text: "Delete", style: "destructive", onPress: () => performDeleteFolderAsync(editingFolderId) },
             ],
         );
     };
 
     const performDeleteFolderAsync = async (folderId: string) => {
-        //* cascades: the folder, its notes, and every media and thumbnail file
-        //* those notes own
-        await deleteFolderFromStorageAsync(folderId);
-
-        setEditingFolderId(null);
-        setShowNewFolder(false);
-        //* notes as well as folders — the gallery tab is currently rendering
-        //* the ones that were just deleted, so refreshing only the folder list
-        //* leaves them on screen pointing at files that no longer exist
-        await getFoldersWithCountsAsync();
-        setNotes(await getNotesFromStorageAsync());
+        try {
+            await deleteFolderFromStorageAsync(folderId);
+            deleteUnsavedThumbnail(); //* storage only knew about the saved cover
+            setFolders((current) => current.filter((f) => f.id !== folderId)); //* mirrors what was deleted
+            setNotes((current) => current.filter((note) => note.folderId !== folderId));
+            setEditingFolderId(null);
+            setShowNewFolder(false);
+        } catch {
+            //* the modal stays open so the message is seen.
+            setNewFolderError("Couldn't delete that folder. Try again.");
+            Promise.all([getFoldersFromStorageAsync(), getNotesFromStorageAsync()])
+                .then(([loadedFolders, loadedNotes]) => {
+                    setFolders(loadedFolders);
+                    setNotes(loadedNotes);
+                })
+                .catch(() => {
+                    //* storage is failing outright; the message above is already showing
+                });
+        }
     };
 
     const pickThumbnailAsync = async () => {
@@ -283,20 +240,16 @@ export default function Home() {
     }
 
     const confirmCroppedThumbnail = async (croppedUri: string) => {
-        //*delete any orphaned thumbail from previous(failed to save) crop session
-        if (newFolderThumbnailUri != null && newFolderThumbnailUri !== originalFolderThumbnailUri) {
-            deleteFileIfExists(newFolderThumbnailUri);
-        }
-
         const destUri = await getThumbnailFileUri(getThumbnailDir(), croppedUri);
-        setNewFolderThumbnailUri(destUri); // ...the reference is kept
-        setCropSourceUri(null); // back to the form, still the same modal
+        //* the previous crop is only deleted once the new copy exists, so a failed
+        //* copy can't leave the preview pointing at a file that's gone
+        deleteUnsavedThumbnail();
+        setNewFolderThumbnailUri(destUri);
+        setCropSourceUri(null);
     };
-    
+
     const removeNewFolderThumbnail = () => {
-        if (newFolderThumbnailUri != null && editingFolderId == null) {
-            deleteFileIfExists(newFolderThumbnailUri);
-        }
+        deleteUnsavedThumbnail();
         setNewFolderThumbnailUri(null);
     };
 
@@ -307,7 +260,7 @@ export default function Home() {
             return;
         }
 
-        const existing = await getFoldersFromStorageAsync(); //TODO check whether this is duplicating the getFoldersWithCountsAsync call above, and if so, refactor to avoid the double read
+        const existing = await getFoldersFromStorageAsync(); //* reloads to ensure the latest state
         //*checks duplicate, rejects if the name is same as any other folder except the one being edited
         const isDuplicate = existing.some(
             (folder) => folder.id !== editingFolderId &&
@@ -322,17 +275,15 @@ export default function Home() {
         let updatedExisting: FolderModel[];
 
         //* if editing, update the existing folder; else creating, add a new folder to the list
-        if (editingFolderId != null) 
-        {
+        if (editingFolderId != null) {
             updatedExisting = existing.map((folder) =>
                 folder.id === editingFolderId
                     ? { ...folder, name: trimmed, accent: newFolderColor, coverUri: newFolderThumbnailUri }
                     : folder
             );
         }
-        else
-        {
-            const newFolder:FolderModel = {
+        else {
+            const newFolder: FolderModel = {
                 id: Crypto.randomUUID(),
                 name: trimmed,
                 accent: newFolderColor,
@@ -341,14 +292,30 @@ export default function Home() {
             };
             updatedExisting = [...existing, newFolder];
         }
-        
+
         await saveFoldersToStorageAsync(updatedExisting);
-        if (editingFolderId != null && originalFolderThumbnailUri != null && originalFolderThumbnailUri !== newFolderThumbnailUri) {
+        //* delete the original thumbnail if it was replaced with a new one, and the folder is being edited
+        if (editingFolderId != null && originalFolderThumbnailUri != null && originalFolderThumbnailUri !== newFolderThumbnailUri)
             deleteFileIfExists(originalFolderThumbnailUri);
-        }
-        await getFoldersWithCountsAsync();
+        setFolders(updatedExisting); //* the exact array just saved, so there's nothing to read back
         setShowNewFolder(false);
     };
+
+    //* AddNote's composition state lives in a hook so it can be presented anywhere without navigating to home.tsx
+    const addNote = useAddNote({
+        storedTags,
+        snippets,
+        onSaved: async () => {
+            const [loadedTags, loadedNotes] = await Promise.all([
+                getTagsFromStorageAsync(),
+                getNotesFromStorageAsync(),
+            ]);
+            setStoredTags(loadedTags);
+            setNotes(loadedNotes);
+        },
+    });
+
+    const openAddNote = () => addNote.open();
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -358,7 +325,7 @@ export default function Home() {
                 right={
                     <SettingsButton
                         colors={colors}
-                        onPress={() => router.push("/(tabs)/settings")}
+                        onPress={() => navigateOnce(() => router.push("/(tabs)/settings"))}
                     />
                 }
             />
@@ -368,7 +335,7 @@ export default function Home() {
                     {activeTab === "folders" ? (
                         <SlideInPage key="folders" dir={tabDir}>
                             <FoldersList
-                                items={folders}
+                                items={groupFoldersWithNotes(folders, notes)}
                                 colors={colors}
                                 onOpenFolder={(id) =>
                                     navigateOnce(() =>
@@ -377,33 +344,23 @@ export default function Home() {
                                 }
                                 onEditFolder={onEditFolder}
                                 onNewFolder={openNewFolder}
-                                showAdBanner={isPro === false}
+                                showAdBanner={hasPlus === false}
                             />
                         </SlideInPage>
                     ) : (
                         <SlideInPage key="gallery" dir={tabDir}>
-                            <GalleryToolbar
-                                colors={colors}
-                                query={noteQuery}
-                                onQueryChange={setNoteQuery}
+                            <GalleryView
+                                notes={notes}
                                 tags={storedTags}
-                                resultCount={visibleNotes.length}
-                                onOpenSearch={() => setSearchOpen(true)}
-                                compareMode={compareMode}
-                                onToggleCompare={() =>
-                                    compareMode ? leaveCompareMode() : setCompareMode(true)
-                                }
-                            />
-                            <GalleryGrid
-                                notes={visibleNotes}
                                 colors={colors}
-                                filtered={!isEmptyQuery(noteQuery)}
-                                selectionMode={compareMode}
-                                selectedIds={compareIds}
-                                onToggleSelect={toggleCompareNote}
                                 onOpenNote={(note) =>
                                     navigateOnce(() =>
                                         router.push({ pathname: "/(tabs)/note/[id]", params: { id: note.id } })
+                                    )
+                                }
+                                onCompare={(ids) =>
+                                    navigateOnce(() =>
+                                        router.push({ pathname: "/(tabs)/compare", params: { ids: ids.join(",") } })
                                     )
                                 }
                             />
@@ -411,53 +368,6 @@ export default function Home() {
                     )}
                 </View>
             </GestureDetector>
-
-            {compareMode && activeTab === "gallery" && (
-                <View
-                    style={[
-                        styles.compareBar,
-                        { backgroundColor: colors.bg, borderTopColor: colors.line },
-                    ]}
-                >
-                    <Pressable
-                        onPress={leaveCompareMode}
-                        style={[styles.compareCancel, { backgroundColor: colors.surface }]}
-                    >
-                        <Text style={[styles.compareCancelLabel, { color: colors.textPrimary }]}>
-                            Cancel
-                        </Text>
-                    </Pressable>
-                    <Pressable
-                        onPress={startCompare}
-                        //* two is the minimum that is a comparison at all
-                        disabled={compareIds.length < 2}
-                        style={[
-                            styles.compareGo,
-                            {
-                                backgroundColor:
-                                    compareIds.length < 2 ? colors.surfaceHi : colors.accent,
-                            },
-                        ]}
-                    >
-                        <Feather
-                            name="columns"
-                            size={15}
-                            color={compareIds.length < 2 ? colors.stoneDim : colors.onAccent}
-                        />
-                        <Text
-                            style={[
-                                styles.compareGoLabel,
-                                {
-                                    color:
-                                        compareIds.length < 2 ? colors.stoneDim : colors.onAccent,
-                                },
-                            ]}
-                        >
-                            Compare{compareIds.length > 0 ? " (" + compareIds.length + ")" : ""}
-                        </Text>
-                    </Pressable>
-                </View>
-            )}
 
             <BottomTabBar
                 activeTab={activeTab}
@@ -468,18 +378,8 @@ export default function Home() {
 
             <AddNote
                 colors={colors}
-                folders={folders.map((f) => f.folder)}
+                folders={folders}
                 {...addNote.props}
-            />
-
-            <SearchNotesModal
-                visible={searchOpen}
-                colors={colors}
-                query={noteQuery}
-                onQueryChange={setNoteQuery}
-                tags={storedTags}
-                resultCount={visibleNotes.length}
-                onClose={() => setSearchOpen(false)}
             />
 
             <NewFolder
@@ -506,38 +406,10 @@ export default function Home() {
     );
 }
 
-/** Cards narrower than this stop being worth putting side by side. */
-const MAX_COMPARE = 4;
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
     },
-    compareBar: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        paddingHorizontal: 18,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-    },
-    compareCancel: {
-        borderRadius: 10,
-        paddingVertical: 11,
-        paddingHorizontal: 16,
-    },
-    compareCancelLabel: { fontFamily: fonts.interSemiBold, fontSize: 13 },
-    compareGo: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        borderRadius: 10,
-        paddingVertical: 11,
-        paddingHorizontal: 16,
-    },
-    compareGoLabel: { fontFamily: fonts.interBold, fontSize: 13.5 },
     pager: {
         flex: 1,
     },

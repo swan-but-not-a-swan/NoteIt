@@ -21,7 +21,7 @@ export default function AdBannerStrip({ colors }: { colors: ThemeColors }) {
   const [ready, setReady] = useState(false);
 
   // Initialising here rather than at app startup is deliberate: this
-  // component only renders when isPro === false, so a paying customer never
+  // component only renders when hasPlus === false, so a subscriber never
   // gets an ATT prompt or a GDPR consent form for ads they will never be
   // shown. initializeAds() guards itself, so several banners mounting at
   // once still only bring the SDK up a single time.

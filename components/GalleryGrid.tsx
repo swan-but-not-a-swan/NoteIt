@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
@@ -22,6 +22,11 @@ type Props = {
 
 // 3-across grid of real photo/video thumbnails — ported from the web
 // reference's GalleryView grid, including its compare-mode selection state.
+//
+// A FlatList rather than a ScrollView over notes.map: a ScrollView mounts
+// every tile up front, so opening a gallery of 300 notes started 300 image
+// loads before the first row was even on screen. FlatList only mounts the
+// rows near the viewport and adds more as you scroll.
 export default function GalleryGrid({
   notes,
   colors,
@@ -49,44 +54,60 @@ export default function GalleryGrid({
   }
 
   return (
-    <ScrollView
+    <FlatList
       style={styles.scroll}
+      data={notes}
+      keyExtractor={(note) => note.id}
+      numColumns={3}
+      columnWrapperStyle={styles.row}
+      ItemSeparatorComponent={RowGap}
       contentContainerStyle={[styles.content, { paddingBottom: 18 + contentBottomInset }]}
       showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.grid}>
-        {notes.map((note) => {
-          const selected = selectedIds.includes(note.id);
-          return (
-            <Pressable
-              key={note.id}
-              onPress={() => (selectionMode ? onToggleSelect?.(note) : onOpenNote(note))}
-              style={[
-                styles.tile,
-                selectionMode && selected && { borderWidth: 2.5, borderColor: colors.accent },
-              ]}
-            >
-              {/* Unpicked tiles recede while choosing, so the selection is
-                  readable at a glance rather than only by its checkmark. */}
-              <View style={{ flex: 1, opacity: selectionMode && !selected ? 0.55 : 1 }}>
-                <MediaThumb note={note} borderRadius={8} />
-              </View>
+      //* the default window keeps ten screens of rows mounted either side, which
+      //* on a large gallery ends up mounting (and loading) nearly every tile
+      //* anyway, just later. Two screens either side is enough to scroll into
+      //* without blank tiles at a normal pace.
+      windowSize={5}
+      //* selection lives outside `data`, so FlatList has to be handed it —
+      //* otherwise it can skip re-rendering tiles when only the selection changed
+      extraData={{ selectionMode, selectedIds }}
+      renderItem={({ item: note }) => {
+        const selected = selectedIds.includes(note.id);
+        return (
+          <Pressable
+            onPress={() => (selectionMode ? onToggleSelect?.(note) : onOpenNote(note))}
+            style={[
+              styles.tile,
+              selectionMode && selected && { borderWidth: 2.5, borderColor: colors.accent },
+            ]}
+          >
+            {/* Unpicked tiles recede while choosing, so the selection is
+                readable at a glance rather than only by its checkmark. */}
+            <View style={{ flex: 1, opacity: selectionMode && !selected ? 0.55 : 1 }}>
+              <MediaThumb note={note} borderRadius={8} />
+            </View>
 
-              {selectionMode && (
-                <View style={styles.checkSlot}>
-                  <Feather
-                    name={selected ? "check-circle" : "circle"}
-                    size={19}
-                    color={selected ? colors.accent : "rgba(255,255,255,0.85)"}
-                  />
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
-      </View>
-    </ScrollView>
+            {selectionMode && (
+              <View style={styles.checkSlot}>
+                <Feather
+                  name={selected ? "check-circle" : "circle"}
+                  size={19}
+                  color={selected ? colors.accent : "rgba(255,255,255,0.85)"}
+                />
+              </View>
+            )}
+          </Pressable>
+        );
+      }}
+    />
   );
+}
+
+//* FlatList renders separators between rows only, so this is the vertical gap
+//* the old flex-wrap grid got from `gap` — never above the first row or below
+//* the last
+function RowGap() {
+  return <View style={styles.rowGap} />;
 }
 
 const styles = StyleSheet.create({
@@ -96,10 +117,11 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 18,
   },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  row: {
     gap: 6,
+  },
+  rowGap: {
+    height: 6,
   },
   tile: {
     width: "32%",
