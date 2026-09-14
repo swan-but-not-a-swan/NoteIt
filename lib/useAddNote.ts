@@ -5,10 +5,10 @@ import * as Crypto from "expo-crypto";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import {
-    getNoteMediaFileUri,
-    getThumbnailFileUri,
+    copyAndGetMediaFileUri,
+    moveAndGetImageUri,
     getThumbnailFromImageAsync,
-    getThumbnailFromVideo,
+    getThumbnailFromVideoAsync,
     SourceMedia,
 } from "@/lib/mediaHelper";
 import { todayISO } from "@/lib/date";
@@ -187,20 +187,20 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
             //* Save media to app storage
             const notemediaType: NoteMediaType = noteMediaType ?? "image";
             const source: SourceMedia = { uri: noteMediaUri, mimeType: noteMediaMimeType };
-            const destUri = await getNoteMediaFileUri(getNoteMediaDir(), source, notemediaType);
+            const destUri = await copyAndGetMediaFileUri(getNoteMediaDir(), source, notemediaType);
             //* get thumbnail of the media and save it to app storage — a video's
-            //* first frame, or a tile-sized copy of a photo so the gallery isn't
+            //* first frame or the photo itself, shrunk to tile size so the gallery isn't
             //* decoding full camera resolution per cell. Both are generated into
-            //* the cache directory, so both get copied into app storage to survive
+            //* the cache directory, so both get moved into app storage to survive
             //* an OS cache sweep. Generation can throw on an unsupported codec —
             //* the note is still worth saving, the tiles just fall back to a
             //* placeholder (photos fall back to their full-size media).
             let coverUri: string | null = null;
             try {
                 const generatedUri = notemediaType === "video"
-                    ? await getThumbnailFromVideo(destUri)
-                    : await getThumbnailFromImageAsync(destUri);
-                coverUri = await getThumbnailFileUri(getNoteMediaDir(), generatedUri);
+                    ? await getThumbnailFromVideoAsync(destUri)
+                    : await getThumbnailFromImageAsync(destUri); //* result file is stored in cache
+                coverUri = await moveAndGetImageUri(getNoteMediaDir(), generatedUri); //* move the file from cache into app storage
             } catch {
                 coverUri = null;
             }

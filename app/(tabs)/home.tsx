@@ -1,3 +1,5 @@
+//! Manually reviewed since 14/09/2026
+
 import { Alert, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
@@ -22,7 +24,7 @@ import { useEntitlements } from "@/lib/EntitlementsContext";
 import { useAddNote } from "@/lib/useAddNote";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import { deleteFileIfExists, getThumbnailFileUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
+import { deleteFileIfExists, moveAndGetImageUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
 
@@ -164,9 +166,8 @@ export default function Home() {
 
     const cancelNewFolder = () => {
         // *The folder was never saved, so orphaned files are deleted when the operation is canceled.
-        if (newFolderThumbnailUri !== originalFolderThumbnailUri) 
-        {
-            if(newFolderThumbnailUri != null)
+        if (newFolderThumbnailUri !== originalFolderThumbnailUri) {
+            if (newFolderThumbnailUri != null)
                 deleteFileIfExists(newFolderThumbnailUri);
             else
                 setNewFolderThumbnailUri(originalFolderThumbnailUri);
@@ -224,7 +225,7 @@ export default function Home() {
 
     const pickThumbnailAsync = async () => {
         const validationError = await thumbnailFileValidatorAsync();
-        if (validationError != null) {
+        if (validationError !== undefined) {
             setNewFolderError(validationError);
             return;
         }
@@ -240,7 +241,7 @@ export default function Home() {
     }
 
     const confirmCroppedThumbnail = async (croppedUri: string) => {
-        const destUri = await getThumbnailFileUri(getThumbnailDir(), croppedUri);
+        const destUri = await moveAndGetImageUri(getThumbnailDir(), croppedUri);
         //* the previous crop is only deleted once the new copy exists, so a failed
         //* copy can't leave the preview pointing at a file that's gone
         deleteUnsavedThumbnail();
