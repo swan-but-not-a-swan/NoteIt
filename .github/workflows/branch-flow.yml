@@ -1,0 +1,33 @@
+# Enforces the branch flow: experimental/* -> develop -> master.
+#
+# master is production, so the only pull requests allowed into it are from
+# develop in this repository. The master ruleset lists this job as a required
+# status check, so a PR from any other branch (or from a fork's develop) can't
+# be merged.
+name: Branch flow
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions: {}
+
+jobs:
+  source-branch:
+    name: Source branch is develop
+    runs-on: ubuntu-latest
+    steps:
+      - name: Only develop from this repository can merge into master
+        # Branch and repo names come in through env, never ${{ }} inside the
+        # script: a branch name is attacker-controlled on a public repo, and
+        # interpolating it into shell would let it run commands.
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          THIS_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HEAD_REPO" != "$THIS_REPO" ] || [ "$HEAD_REF" != "develop" ]; then
+            echo "::error::Pull requests into master must come from develop in $THIS_REPO (this one is from $HEAD_REPO:$HEAD_REF)."
+            exit 1
+          fi
+          echo "OK: $HEAD_REPO:$HEAD_REF -> master"
