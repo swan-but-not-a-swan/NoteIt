@@ -1,3 +1,5 @@
+//! Manually reviewed since 14/09/2026
+
 import { Directory, File } from "expo-file-system";
 import { Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";

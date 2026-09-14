@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { Appearance } from "react-native";
 import * as SystemUI from "expo-system-ui";
 import { themeFor, type ThemeColors, type ThemeMode } from "./colors";
-import { getThemeModeFromStorageAsync, saveThemeModeToStorageAsync } from "@/persistence/FileStorage";
+import { getThemeModeFromStorageAsync, setThemeModeToStorageAsync } from "@/persistence/FileStorage";
 
 /** The app's default when nothing has ever been chosen. The palette was
  *  designed dark-first (see colors.ts), so an unconfigured install should
@@ -78,7 +78,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     // instant, and a failed write only costs the choice at next launch, which
     // is not worth blocking the repaint on.
     setModeState(next);
-    saveThemeModeToStorageAsync(next).catch((error) => {
+    setThemeModeToStorageAsync(next).catch((error) => {
       console.warn("Could not save the theme choice.", error);
     });
   }, []);

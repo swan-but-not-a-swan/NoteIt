@@ -12,7 +12,7 @@ import FoldersList from "@/components/FoldersList";
 import GalleryView from "@/components/GalleryView";
 import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
-import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, saveFoldersToStorageAsync } from "@/persistence/FileStorage";
+import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, setFoldersToStorageAsync } from "@/persistence/FileStorage";
 import { useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "expo-router/react-navigation"
 import { useRouter } from "expo-router";
@@ -294,7 +294,7 @@ export default function Home() {
             updatedExisting = [...existing, newFolder];
         }
 
-        await saveFoldersToStorageAsync(updatedExisting);
+        await setFoldersToStorageAsync(updatedExisting);
         //* delete the original thumbnail if it was replaced with a new one, and the folder is being edited
         if (editingFolderId != null && originalFolderThumbnailUri != null && originalFolderThumbnailUri !== newFolderThumbnailUri)
             deleteFileIfExists(originalFolderThumbnailUri);

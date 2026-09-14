@@ -1,3 +1,5 @@
+//! Manually reviewed since 14/09/2026
+
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
@@ -14,13 +16,8 @@ type Props = {
   color: string;
   onColorChange: (color: string) => void;
   swatches: string[];
-  /** Custom cover photo URI (already persisted — see the folder-thumbnails
-   *  storage pattern), or null/undefined to fall back to the folder icon. */
   thumbnailUri?: string | null;
-  /** Launch the image picker; this component doesn't touch
-   *  expo-image-picker itself, only what happens after a photo comes back. */
   onPickThumbnail: () => void;
-  /** Omit to hide the "Remove photo" action entirely (e.g. while nothing's picked). */
   onRemoveThumbnail?: () => void;
   cropSourceUri?: string | null;
   onCropCancel: () => void;

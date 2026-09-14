@@ -6,6 +6,7 @@ import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import {
     copyAndGetMediaFileUri,
+    deleteFileIfExists,
     moveAndGetImageUri,
     getThumbnailFromImageAsync,
     getThumbnailFromVideoAsync,
@@ -13,7 +14,7 @@ import {
 } from "@/lib/mediaHelper";
 import { todayISO } from "@/lib/date";
 import { appendSnippet } from "@/lib/snippetText";
-import { saveNoteToStorageAsync, saveTagsToStorageAsync } from "@/persistence/FileStorage";
+import { setNoteToStorageAsync, setTagsToStorageAsync } from "@/persistence/FileStorage";
 import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
 
@@ -167,7 +168,7 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
         const newTags: TagModel[] = newTagNames.map((title) => ({ id: Crypto.randomUUID(), title }));
         const allTags = [...storedTags, ...newTags];
         if (newTags.length > 0) {
-            await saveTagsToStorageAsync(allTags);
+            await setTagsToStorageAsync(allTags);
         }
         //* return tagIds for the note, matching the order of noteTags (which is what the user sees)
         const tagIds = noteTags.map(
@@ -188,21 +189,22 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
             const notemediaType: NoteMediaType = noteMediaType ?? "image";
             const source: SourceMedia = { uri: noteMediaUri, mimeType: noteMediaMimeType };
             const destUri = await copyAndGetMediaFileUri(getNoteMediaDir(), source, notemediaType);
-            //* get thumbnail of the media and save it to app storage — a video's
-            //* first frame or the photo itself, shrunk to tile size so the gallery isn't
-            //* decoding full camera resolution per cell. Both are generated into
-            //* the cache directory, so both get moved into app storage to survive
-            //* an OS cache sweep. Generation can throw on an unsupported codec —
-            //* the note is still worth saving, the tiles just fall back to a
-            //* placeholder (photos fall back to their full-size media).
-            let coverUri: string | null = null;
+            //* every note must have a thumbnail — a video's first frame or the photo
+            //* itself, shrunk to tile size so the gallery isn't decoding full camera
+            //* resolution per cell. Both are generated into the cache directory, so
+            //* both get moved into app storage to survive an OS cache sweep.
+            //* Generation can throw on an unsupported codec: the note is then not
+            //* saved, and the media copy is removed so nothing is left orphaned.
+            let thumbnailUri: string;
             try {
                 const generatedUri = notemediaType === "video"
                     ? await getThumbnailFromVideoAsync(destUri)
                     : await getThumbnailFromImageAsync(destUri); //* result file is stored in cache
-                coverUri = await moveAndGetImageUri(getNoteMediaDir(), generatedUri); //* move the file from cache into app storage
+                thumbnailUri = await moveAndGetImageUri(getNoteMediaDir(), generatedUri); //* move the file from cache into app storage
             } catch {
-                coverUri = null;
+                deleteFileIfExists(destUri);
+                setNoteError("Couldn't make a preview for that photo or video, so it wasn't saved. Try a different one.");
+                return;
             }
             //* Save tags to storage
             const noteTagIds = await saveTagsAsync();
@@ -211,7 +213,7 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
                 id: Crypto.randomUUID(),
                 mediaUri: destUri,
                 mediaType: notemediaType,
-                thumbnailUri: coverUri,
+                thumbnailUri,
                 note: noteText,
                 date: noteDate,
                 tagIds: noteTagIds,
@@ -219,7 +221,7 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
                 createdAt: new Date().toISOString(),
             };
             //* Save picture-note to storage
-            await saveNoteToStorageAsync(newNote);
+            await setNoteToStorageAsync(newNote);
             setVisible(false);
             await onSaved();
         } catch {

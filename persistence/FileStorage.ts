@@ -1,41 +1,70 @@
+//! Manually reviewed since 14/09/2026
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FolderModel } from '../models/FolderModel';
-import { FolderListItemModel } from '../models/FolderListItemModel';
 import { NoteModel, TagModel } from '../models/NoteModel';
 import { deleteFileIfExists } from '@/lib/mediaHelper';
 import type { ThemeMode } from '@/theme/colors';
 import { SnippetModel } from '@/models/SnippetModel';
 
-const THEME_MODE_KEY = 'themeMode';
+const STORAGE_KEYS = {
+    themeMode: 'themeMode',
+    folders: 'folders',
+    noteIds: 'noteIds',
+    tags: 'tags',
+    snippets: 'snippets',
+} as const;
 
-/** Null means "never chosen" — distinct from "chose dark". The caller owns
- *  the default so this layer doesn't quietly invent a preference, and a
- *  value written by an older or broken build is treated as never-chosen rather
- *  than trusted into a ThemeMode it doesn't match. */
+//* Each note is stored under its own key, e.g. "note:<id>"
+const noteKey = (id: string) => `note:${id}`;
+
+//! Manually reviewed since 14/09/2026
 export async function getThemeModeFromStorageAsync(): Promise<ThemeMode | null> {
-    const data = await AsyncStorage.getItem(THEME_MODE_KEY);
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.themeMode);
     return data === 'light' || data === 'dark' ? data : null;
 }
 
-export async function saveThemeModeToStorageAsync(mode: ThemeMode): Promise<void> {
-    await AsyncStorage.setItem(THEME_MODE_KEY, mode);
+//! Manually reviewed since 14/09/2026
+export async function setThemeModeToStorageAsync(mode: ThemeMode): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.themeMode, mode);
 }
 
+//! Manually reviewed since 14/09/2026
 export async function getFoldersFromStorageAsync(): Promise<FolderModel[]> {
-    const data = await AsyncStorage.getItem('folders');
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.folders);
     return data ? JSON.parse(data) : [];
 }
-const noteKey = (id: string) => `note:${id}`;
 
+//! Manually reviewed since 14/09/2026
+export async function setFoldersToStorageAsync(folders: FolderModel[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.folders, JSON.stringify(folders));
+}
+
+//! Manually reviewed since 14/09/2026
+export async function deleteFolderFromStorageAsync(folderId: string): Promise<void> {
+    //* delete all notes that point to the folderId
+    const all = await getNotesFromStorageAsync();
+    const notesToDelete = all.filter((note) => note.folderId === folderId);
+    await deleteNotesFromStorageAsync(notesToDelete);
+
+    //* delete folder cover and the folder itself
+    const folders = await getFoldersFromStorageAsync();
+    const folder = folders.find((f) => f.id === folderId);
+    if (folder?.coverUri != null) deleteFileIfExists(folder.coverUri);
+    await setFoldersToStorageAsync(folders.filter((f) => f.id !== folderId));
+}
+
+//! Manually reviewed since 14/09/2026
 async function getNoteIdsFromStorageAsync(): Promise<string[]> {
-    const data = await AsyncStorage.getItem('noteIds');
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.noteIds);
     return data ? JSON.parse(data) : [];
 }
 
-async function saveNoteIdsToStorageAsync(ids: string[]): Promise<void> {
-    await AsyncStorage.setItem('noteIds', JSON.stringify(ids));
+//! Manually reviewed since 14/09/2026
+async function setNoteIdsToStorageAsync(ids: string[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.noteIds, JSON.stringify(ids));
 }
 
+//! Manually reviewed since 14/09/2026
 export async function getNotesFromStorageAsync(): Promise<NoteModel[]> {
     const ids = await getNoteIdsFromStorageAsync();
     if (ids.length === 0) return [];
@@ -46,101 +75,53 @@ export async function getNotesFromStorageAsync(): Promise<NoteModel[]> {
         .filter((note): note is NoteModel => note != null);
 }
 
-export async function loadFoldersWithCountsAsync(): Promise<FolderListItemModel[]> {
-    const [folders, notes] = await Promise.all([
-        getFoldersFromStorageAsync(),
-        getNotesFromStorageAsync(),
-    ]);
-
-    const notesByFolder = groupNotesByFolder(notes); // one O(n) pass over notes
-
-    return folders.map((folder) => {
-        const notes = notesByFolder[folder.id] ?? [];
-        return {
-            folder,
-            count: notes.length
-        };
-    });
-}
-
-function groupNotesByFolder(notes: NoteModel[]): Record<string, NoteModel[]> {
-    const map: Record<string, NoteModel[]> = {};
-    for (const note of notes) {
-        const key = note.folderId ?? "gallery";
-        (map[key] ??= []).push(note);
-    }
-    return map;
-}
-
-export async function saveFoldersToStorageAsync(folders: FolderModel[]): Promise<void> {
-    await AsyncStorage.setItem('folders', JSON.stringify(folders));
-}
-
-export async function getTagsFromStorageAsync(): Promise<TagModel[]> {
-    const data = await AsyncStorage.getItem('tags');
-    return data ? JSON.parse(data) : [];
-}
-
-export async function saveTagsToStorageAsync(tags: TagModel[]): Promise<void> {
-    await AsyncStorage.setItem('tags', JSON.stringify(tags));
-}
-
-export async function saveNoteToStorageAsync(note: NoteModel): Promise<void> {
+//! Manually reviewed since 14/09/2026
+export async function setNoteToStorageAsync(note: NoteModel): Promise<void> {
     await AsyncStorage.setItem(noteKey(note.id), JSON.stringify(note));
 
     const ids = await getNoteIdsFromStorageAsync();
     if (!ids.includes(note.id)) {
-        await saveNoteIdsToStorageAsync([...ids, note.id]);
+        await setNoteIdsToStorageAsync([...ids, note.id]);
     }
 }
 
+//! Manually reviewed since 14/09/2026
 async function deleteNoteIdsFromStorageAsync(noteIds: string[]): Promise<void> {
     const idSet = new Set(noteIds);
     const ids = await getNoteIdsFromStorageAsync();
-    await saveNoteIdsToStorageAsync(ids.filter((id) => !idSet.has(id)));
+    await setNoteIdsToStorageAsync(ids.filter((id) => !idSet.has(id)));
 }
 
-export async function deleteNotesFromStorageAsync(notesToDelete: NoteModel[]): Promise<void> 
-{
+//! Manually reviewed since 14/09/2026
+export async function deleteNotesFromStorageAsync(notesToDelete: NoteModel[]): Promise<void> {
     const noteIdsToDelete = notesToDelete.map((note) => note.id);
     await deleteNoteIdsFromStorageAsync(noteIdsToDelete); //* delete noteIds first from storage, so they don't appear in the list of notes anymore
     await AsyncStorage.multiRemove(notesToDelete.map((note) => noteKey(note.id))); //* delete the notes themselves from storage
 
-    for(const note of notesToDelete) 
-    {
+    for (const note of notesToDelete) {
         deleteFileIfExists(note.mediaUri); //* delete the media Uri from storage
-        if(note.thumbnailUri != null)
-        {
-            deleteFileIfExists(note.thumbnailUri);
-        }
+        deleteFileIfExists(note.thumbnailUri); //* delete the thumbnail Uri from storage
     }
 }
 
-export async function deleteFolderFromStorageAsync(folderId: string): Promise<void>
-{
-    //* delete all notes that point to the folderId
-    const all = await getNotesFromStorageAsync();
-    const notesToDelete = all.filter((note) => note.folderId === folderId);
-    await deleteNotesFromStorageAsync(notesToDelete);
-
-    //* delete folder cover and the folder itself
-    const folders = await getFoldersFromStorageAsync();
-    const folder = folders.find((f) => f.id === folderId);
-    if (folder?.coverUri != null) deleteFileIfExists(folder.coverUri);
-    await saveFoldersToStorageAsync(folders.filter((f) => f.id !== folderId));
-}
-
-export async function getSnippetsFromStorageAsync(): Promise<SnippetModel[]> 
-{
-    const data = await AsyncStorage.getItem('snippets');
+//! Manually reviewed since 14/09/2026
+export async function getTagsFromStorageAsync(): Promise<TagModel[]> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.tags);
     return data ? JSON.parse(data) : [];
 }
 
-/** The whole array in one key, like folders and tags — not a per-id split
- *  like notes. Snippets are a handful of short strings with no media, so
- *  there is nothing to gain from reading them one at a time, and saving the
- *  array is what makes delete just "save the rest". */
-export async function saveSnippetsToStorageAsync(snippets: SnippetModel[]): Promise<void>
-{
-    await AsyncStorage.setItem('snippets', JSON.stringify(snippets));
+//! Manually reviewed since 14/09/2026
+export async function setTagsToStorageAsync(tags: TagModel[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.tags, JSON.stringify(tags));
+}
+
+//! Manually reviewed since 14/09/2026
+export async function getSnippetsFromStorageAsync(): Promise<SnippetModel[]> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.snippets);
+    return data ? JSON.parse(data) : [];
+}
+
+//! Manually reviewed since 14/09/2026
+export async function setSnippetsToStorageAsync(snippets: SnippetModel[]): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.snippets, JSON.stringify(snippets));
 }

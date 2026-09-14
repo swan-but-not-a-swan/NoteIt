@@ -11,10 +11,9 @@ export { PAYWALL_RESULT };
  * or swapping the hero image becomes a dashboard edit rather than an app
  * release and a week of store review.
  *
- * Resolves to a PAYWALL_RESULT. NOT_PRESENTED is the one worth handling
- * explicitly: it means no paywall is configured for the current offering,
- * so the customer saw nothing at all. Silently treating that as "declined"
- * hides a misconfiguration that would otherwise be obvious.
+ * Resolves to a PAYWALL_RESULT: PURCHASED, RESTORED, CANCELLED or ERROR.
+ * NOT_PRESENTED never comes from here; RevenueCat only returns it from
+ * presentPaywallIfNeeded, when the customer already has the entitlement.
  */
 export async function presentPaywall(): Promise<PAYWALL_RESULT> {
   if (!configurePurchases()) {

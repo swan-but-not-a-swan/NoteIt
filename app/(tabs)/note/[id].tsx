@@ -12,7 +12,7 @@ import ViewNote from "@/components/ViewNote";
 import AddNote from "@/components/AddNote";
 import OverflowMenu from "@/components/OverflowMenu";
 import { useAddNote } from "@/lib/useAddNote";
-import { deleteNotesFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, saveNoteToStorageAsync } from "@/persistence/FileStorage";
+import { deleteNotesFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, setNoteToStorageAsync } from "@/persistence/FileStorage";
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
@@ -150,9 +150,9 @@ export default function ViewNotes() {
         }
         setSavingEdit(true);
         try {
-            //* saveNoteToStorageAsync overwrites by id and only appends to the
+            //* setNoteToStorageAsync overwrites by id and only appends to the
             //* id list when it's new, so this is an update, not a second note
-            await saveNoteToStorageAsync({ ...note, note: draft });
+            await setNoteToStorageAsync({ ...note, note: draft });
             endEdit();
             await loadAsync();
         } catch {

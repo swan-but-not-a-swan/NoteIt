@@ -10,7 +10,8 @@ import TopBar from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
 import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
-import { getSnippetsFromStorageAsync, saveSnippetsToStorageAsync } from "@/persistence/FileStorage";
+import { getSnippetsFromStorageAsync, setSnippetsToStorageAsync } from "@/persistence/FileStorage";
+import { useEntitlements } from "@/lib/EntitlementsContext";
 
 type ThemeOption = {
     id: ThemeMode;
@@ -60,6 +61,61 @@ function AppearanceToggle({
                 );
             })}
         </View>
+    );
+}
+
+//* The one place Plus is reachable without first hitting a limit. The subtitle
+//* carries the state, so someone mid-trial can see when it ends without
+//* opening anything. Subscribers get Customer Center rather than the paywall:
+//* what they need from here is managing or cancelling, not buying again.
+//*
+//* No price or trial length in the copy on purpose. Both come from the store
+//* (localised, and eligibility-dependent: someone who has used their trial
+//* before won't get another), so the paywall is the only place that can state
+//* them truthfully.
+function PlusRow({ colors }: { colors: ThemeColors }) {
+    const { hasPlus, plus, openPaywall, openCustomerCenter } = useEntitlements();
+
+    const until = (date: Date) => date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+    const subtitle =
+        hasPlus !== true || plus == null
+            ? "No ads and unlimited compare."
+            : plus.expiresAt == null
+              ? "Active."
+              : plus.inTrial
+                ? plus.willRenew
+                    ? `Free trial until ${until(plus.expiresAt)}, then your subscription starts.`
+                    : `Trial cancelled. Plus stays on until ${until(plus.expiresAt)}.`
+                : plus.willRenew
+                  ? `Active. Renews ${until(plus.expiresAt)}.`
+                  : `Cancelled. Plus stays on until ${until(plus.expiresAt)}.`;
+
+    return (
+        <Pressable
+            onPress={() => {
+                if (hasPlus === true) {
+                    void openCustomerCenter();
+                } else {
+                    void openPaywall();
+                }
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="NoteIt Plus"
+            style={({ pressed }) => [
+                styles.plusRow,
+                { backgroundColor: colors.surface, borderColor: colors.line, opacity: pressed ? 0.85 : 1 },
+            ]}
+        >
+            <View style={[styles.plusBadge, { backgroundColor: colors.accent }]}>
+                <Feather name="star" size={16} color={colors.onAccent} />
+            </View>
+            <View style={styles.plusText}>
+                <Text style={[styles.plusTitle, { color: colors.textPrimary }]}>NoteIt Plus</Text>
+                <Text style={[styles.plusSubtitle, { color: colors.stone }]}>{subtitle}</Text>
+            </View>
+            <Feather name="chevron-right" size={18} color={colors.stoneDim} />
+        </Pressable>
     );
 }
 
@@ -163,7 +219,7 @@ export default function Settings() {
 
         try
         {
-            await saveSnippetsToStorageAsync(updatedSnippets);
+            await setSnippetsToStorageAsync(updatedSnippets);
             await getSnippetsAsync(); // reload from storage to ensure consistency
             //* only the create path consumed the inline field — clearing it
             //* after an edit throws away a name the user was midway through
@@ -184,7 +240,7 @@ export default function Settings() {
         //* saving the rest — no separate delete call needed
         try
         {
-            await saveSnippetsToStorageAsync(snippets.filter((s) => s.id !== editingId));
+            await setSnippetsToStorageAsync(snippets.filter((s) => s.id !== editingId));
             await getSnippetsAsync();
             closeForm();
         }
@@ -206,6 +262,7 @@ export default function Settings() {
                 //* is the gesture people reach for
                 keyboardDismissMode="on-drag"
             >
+                <PlusRow colors={colors} />
                 <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Appearance</Text>
                     <AppearanceToggle colors={colors} mode={mode} onSelect={setMode} />
@@ -341,6 +398,35 @@ const styles = StyleSheet.create({
     },
     section: {
         gap: 10,
+    },
+    plusRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        borderWidth: 1,
+        borderRadius: 16,
+        paddingVertical: 14,
+        paddingHorizontal: 14,
+    },
+    plusBadge: {
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    plusText: {
+        flex: 1,
+        gap: 2,
+    },
+    plusTitle: {
+        fontFamily: fonts.frauncesSemiBold,
+        fontSize: 16,
+    },
+    plusSubtitle: {
+        fontFamily: fonts.interRegular,
+        fontSize: 12.5,
+        lineHeight: 17,
     },
     sectionLabel: {
         fontFamily: fonts.interBold,
