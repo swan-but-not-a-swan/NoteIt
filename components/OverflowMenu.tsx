@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
+import { overflowMenuStyles as styles } from "@/theme/styles/app.styles";
 
 export type OverflowMenuItem = {
   key: string;
@@ -114,38 +114,3 @@ export default function OverflowMenu({ colors, items, accessibilityLabel = "More
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  trigger: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backdrop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  card: {
-    position: "absolute",
-    minWidth: 184,
-    borderWidth: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  item: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-  },
-  label: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
-  },
-});

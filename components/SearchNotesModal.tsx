@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -13,11 +12,11 @@ import { Feather } from "@react-native-vector-icons/feather/static";
 import Animated, { SlideInUp } from "react-native-reanimated";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatDayDate, todayISO } from "@/lib/date";
-import { isEmptyQuery, withRange, type NoteQuery } from "@/lib/noteFilter";
+import { isEmptyQuery, withRange, type NoteQuery } from "@/lib/noteHelper";
 import { TagModel } from "../models/NoteModel";
+import { searchNotesModalStyles as styles } from "@/theme/styles/gallery.styles";
 
 type Props = {
   visible: boolean;
@@ -210,9 +209,8 @@ function DateField({ caption, value, colors, onChange, onUnsupported }: DateFiel
     DateTimePickerAndroid.open({
       value: new Date(`${value}T00:00:00`),
       mode: "date",
-      onChange: (event, selected) => {
-        if (event.type === "set" && selected != null) onChange(isoOf(selected));
-      },
+      //* onValueChange only fires when a date is picked (not on dismiss)
+      onValueChange: (_event, selected) => onChange(isoOf(selected)),
     });
   };
 
@@ -237,9 +235,7 @@ function DateField({ caption, value, colors, onChange, onUnsupported }: DateFiel
               //* identity check keeps this correct once theming is wired
               themeVariant={colors === LIGHT_THEME ? "light" : "dark"}
               accentColor={colors.accent}
-              onChange={(event, selected) => {
-                if (event.type === "set" && selected != null) onChange(isoOf(selected));
-              }}
+              onValueChange={(_event, selected) => onChange(isoOf(selected))}
             />
           </View>
         ) : (
@@ -271,116 +267,3 @@ function isoOf(date: Date): string {
   const day = `${date.getDate()}`.padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1 },
-  backdrop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  sheet: {
-    //* hangs from the top edge, and is capped so a long tag list scrolls
-    //* inside the sheet instead of pushing the footer off the screen
-    maxHeight: "82%",
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 18,
-    borderBottomWidth: 1,
-    paddingTop: 54,
-    paddingHorizontal: 18,
-    paddingBottom: 18,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  title: { fontFamily: fonts.frauncesSemiBold, fontSize: 18 },
-  closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  scroll: { flexGrow: 0 },
-  scrollContent: { paddingBottom: 4 },
-  label: {
-    fontFamily: fonts.interBold,
-    fontSize: 10.5,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  field: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
-    marginBottom: 18,
-  },
-  input: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: fonts.interRegular,
-    fontSize: 14,
-    //* RN gives TextInput a default vertical padding that shifts the caret off
-    //* the row's centre; zeroing it lets the fixed height do the centring
-    paddingVertical: 0,
-  },
-  tagWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginBottom: 18,
-  },
-  tagChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  tagLabel: { fontFamily: fonts.interSemiBold, fontSize: 12.5 },
-  emptyNote: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-    marginBottom: 18,
-  },
-  dateRow: { flexDirection: "row", gap: 10 },
-  dateCol: { flex: 1, minWidth: 0 },
-  dateCaption: { fontFamily: fonts.interRegular, fontSize: 11.5, marginBottom: 5 },
-  dateBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 42,
-  },
-  dateFill: { flex: 1, minWidth: 0, justifyContent: "center" },
-  dateValue: { fontFamily: fonts.interRegular, fontSize: 13 },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 18,
-  },
-  clearLabel: { fontFamily: fonts.interSemiBold, fontSize: 12.5 },
-  confirm: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-  },
-  confirmLabel: { fontFamily: fonts.interBold, fontSize: 13.5 },
-});

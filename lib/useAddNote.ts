@@ -1,52 +1,20 @@
+//! Manually reviewed since 15/09/2026
+
 import { useState } from "react";
 import { Platform } from "react-native";
-import { DateTimePickerAndroid, DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import * as Crypto from "expo-crypto";
-import { Directory, Paths } from "expo-file-system";
+import { DateTimePickerAndroid, DateTimePickerChangeEvent } from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
-import {
-    copyAndGetMediaFileUri,
-    deleteFileIfExists,
-    moveAndGetImageUri,
-    getThumbnailFromImageAsync,
-    getThumbnailFromVideoAsync,
-    SourceMedia,
-} from "@/lib/mediaHelper";
-import { todayISO } from "@/lib/date";
-import { appendSnippet } from "@/lib/snippetText";
-import { setNoteToStorageAsync, setTagsToStorageAsync } from "@/persistence/FileStorage";
-import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
+import { toLocalISODate, todayISO } from "@/lib/date";
+import { appendSnippet, saveNoteDraftAsync } from "@/lib/noteHelper";
+import { NoteMediaType, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
 
-const getNoteMediaDir = () => new Directory(Paths.document, "note-media");
-
 type Options = {
-    /** Previously used tags — drives the quick-pick row, and resolves names to
-     *  ids on save. */
     storedTags: TagModel[];
-    /** Saved snippets from Settings — drives the quick-insert chip row.
-     *  Injected like storedTags rather than read here, so this hook stays a
-     *  state container plus the save pipeline, with no reads of its own. */
     snippets: SnippetModel[];
-    /** Runs once a note has been written, so the screen can reload whichever
-     *  lists it shows. The modal has already closed by this point. */
     onSaved: () => void | Promise<void>;
 };
 
-/**
- * Everything the AddNote modal needs, so a screen can present it without
- * owning the composition state itself.
- *
- * Extracted from home so the folder screen can show the same modal in place,
- * over its own grid, instead of navigating back to home to reach it. The
- * alternative was duplicating fifteen useStates and the whole save pipeline
- * in a second file, where the two copies would drift the first time one was
- * touched.
- *
- * `props` is shaped to match AddNote's own props exactly, minus the two a
- * screen has to supply itself (`colors` and `folders`), so a caller spreads it
- * rather than restating twenty lines of plumbing.
- */
 export function useAddNote({ storedTags, snippets, onSaved }: Options) {
     const [visible, setVisible] = useState(false);
     const [noteText, setNoteText] = useState("");
@@ -58,11 +26,8 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
     const [noteTagInput, setNoteTagInput] = useState("");
     const [noteFolderId, setNoteFolderId] = useState<string | null>(null);
     const [noteError, setNoteError] = useState<string | undefined>(undefined);
-    //* guards a second Save while the first is still writing — every await in
-    //* saveNoteAsync is a chance for another tap to start a duplicate note
     const [saving, setSaving] = useState(false);
 
-    /** Opens a blank note. Pass a folder id to preselect it. */
     const open = (folderId: string | null = null) => {
         setNoteText("");
         setNoteMediaUri(null);
@@ -82,19 +47,22 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
 
     const commitNoteTag = () => {
         const clean = noteTagInput.trim().replace(/^#/, "").toLowerCase();
-        if (clean.length > 0 && !noteTags.includes(clean)) {
-            setNoteTags((tags) => [...tags, clean]);
+        if (clean.length > 0) {
+            setNoteTags((current) => (current.some((t) => t.toLowerCase() === clean) ? current : [...current, clean]));
         }
         setNoteTagInput("");
     };
 
     const removeNoteTag = (tag: string) => {
-        setNoteTags((tags) => tags.filter((t) => t !== tag));
+        setNoteTags((current) => current.filter((t) => t !== tag));
     };
 
     const toggleStoredTag = (tag: TagModel) => {
-        setNoteTags((tags) =>
-            tags.includes(tag.title) ? tags.filter((t) => t !== tag.title) : [...tags, tag.title]
+        const title = tag.title.toLowerCase();
+        setNoteTags((current) =>
+            current.some((tag) => tag.toLowerCase() === title) //* adds or removes the tag from the note's list of tags
+                ? current.filter((t) => t.toLowerCase() !== title)
+                : [...current, tag.title]
         );
     };
 
@@ -130,22 +98,15 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
     };
 
     const removeNoteMedia = () => {
-        // Just the raw picker URI at this point, not a copy in app storage —
-        // that only happens once saveNoteAsync actually persists the note — so
-        // there's no file to delete here, unlike folder thumbnails.
         setNoteMediaUri(null);
         setNoteMediaType(null);
         setNoteMediaMimeType(null);
     };
 
-    const onChangeNoteDate = (event: DateTimePickerEvent, selectedDate?: Date) => {
-        if (event.type === "set" && selectedDate != null) {
-            setNoteDate(selectedDate.toISOString().slice(0, 10));
-        }
+    const onChangeNoteDate = (_event: DateTimePickerChangeEvent, selectedDate: Date) => {
+        setNoteDate(toLocalISODate(selectedDate));
     };
 
-    //* only android and web reach this — ios renders UIDatePicker's compact
-    //* control, which owns its own trigger and popover, so AddNote never calls it
     const pressNoteDate = () => {
         if (Platform.OS === "web") {
             setNoteError("Date picker isn't supported in the web preview — test this on a device or simulator.");
@@ -156,25 +117,8 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
         DateTimePickerAndroid.open({
             value: new Date(`${noteDate}T00:00:00`),
             mode: "date",
-            onChange: onChangeNoteDate,
+            onValueChange: onChangeNoteDate,
         });
-    };
-
-    const saveTagsAsync = async (): Promise<string[]> => {
-        //* check for new tags that don't exist in storage yet
-        const newTagNames = noteTags.filter(
-            (name) => !storedTags.some((tag) => tag.title.toLowerCase() === name.toLowerCase())
-        );
-        const newTags: TagModel[] = newTagNames.map((title) => ({ id: Crypto.randomUUID(), title }));
-        const allTags = [...storedTags, ...newTags];
-        if (newTags.length > 0) {
-            await setTagsToStorageAsync(allTags);
-        }
-        //* return tagIds for the note, matching the order of noteTags (which is what the user sees)
-        const tagIds = noteTags.map(
-            (name) => allTags.find((tag) => tag.title.toLowerCase() === name.toLowerCase())!.id
-        );
-        return tagIds;
     };
 
     const saveNoteAsync = async () => {
@@ -183,55 +127,31 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
             setNoteError("Add a photo or video first.");
             return;
         }
+
         setSaving(true);
-        try {
-            //* Save media to app storage
-            const notemediaType: NoteMediaType = noteMediaType ?? "image";
-            const source: SourceMedia = { uri: noteMediaUri, mimeType: noteMediaMimeType };
-            const destUri = await copyAndGetMediaFileUri(getNoteMediaDir(), source, notemediaType);
-            //* every note must have a thumbnail — a video's first frame or the photo
-            //* itself, shrunk to tile size so the gallery isn't decoding full camera
-            //* resolution per cell. Both are generated into the cache directory, so
-            //* both get moved into app storage to survive an OS cache sweep.
-            //* Generation can throw on an unsupported codec: the note is then not
-            //* saved, and the media copy is removed so nothing is left orphaned.
-            let thumbnailUri: string;
-            try {
-                const generatedUri = notemediaType === "video"
-                    ? await getThumbnailFromVideoAsync(destUri)
-                    : await getThumbnailFromImageAsync(destUri); //* result file is stored in cache
-                thumbnailUri = await moveAndGetImageUri(getNoteMediaDir(), generatedUri); //* move the file from cache into app storage
-            } catch {
-                deleteFileIfExists(destUri);
-                setNoteError("Couldn't make a preview for that photo or video, so it wasn't saved. Try a different one.");
-                return;
-            }
-            //* Save tags to storage
-            const noteTagIds = await saveTagsAsync();
-            //* Connect note to folder if one is selected, else null (gallery)
-            const newNote: NoteModel = {
-                id: Crypto.randomUUID(),
-                mediaUri: destUri,
-                mediaType: notemediaType,
-                thumbnailUri,
-                note: noteText,
+        const error = await saveNoteDraftAsync(
+            {
+                mediaUri: noteMediaUri,
+                mediaType: noteMediaType ?? "image",
+                mimeType: noteMediaMimeType,
+                text: noteText,
                 date: noteDate,
-                tagIds: noteTagIds,
+                tags: noteTags,
                 folderId: noteFolderId,
-                createdAt: new Date().toISOString(),
-            };
-            //* Save picture-note to storage
-            await setNoteToStorageAsync(newNote);
-            setVisible(false);
-            await onSaved();
-        } catch {
-            //* the copy, the storage write or the tag write failed. without this
-            //* the rejection escapes a Pressable's onPress as an unhandled
-            //* promise and the sheet just sits there saying nothing
-            setNoteError("Couldn't save that note. Try again.");
-        } finally {
-            setSaving(false);
+            },
+            storedTags,
+        );
+        setSaving(false);
+
+        if (error != null) {
+            setNoteError(error);
+            return;
         }
+
+        setVisible(false);
+        Promise.resolve(onSaved()).catch((reloadError) => {
+            console.warn("Saved the note, but couldn't reload the list.", reloadError);
+        });
     };
 
     return {
@@ -262,6 +182,7 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
             error: noteError,
             onCancel: cancel,
             onSave: saveNoteAsync,
+            saving,
         },
     };
 }

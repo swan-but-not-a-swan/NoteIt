@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Keyboard, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Alert, Keyboard, Platform, Pressable, Share, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
-import { fonts } from "@/theme/fonts";
 import { formatDayDate } from "@/lib/date";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
@@ -16,6 +15,7 @@ import { deleteNotesFromStorageAsync, getFoldersFromStorageAsync, getNotesFromSt
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
+import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 
 // The picture-note viewer screen: header, the card itself, the filmstrip and
 // the ad slot.
@@ -374,36 +374,3 @@ export default function ViewNotes() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    screen: {
-        flex: 1,
-    },
-    headerRight: {
-        flexDirection: "row",
-        alignItems: "center",
-        //* three buttons and a counter now share this row, so the gap is
-        //* tighter than the 10 a lone share button could afford
-        gap: 8,
-    },
-    counter: {
-        fontFamily: fonts.interRegular,
-        fontSize: 12,
-    },
-    headerButton: {
-        width: 38,
-        height: 38,
-        borderRadius: 10,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    body: {
-        flex: 1,
-        //* no horizontal padding: the photo is full-bleed, and anything that
-        //* does want an inset (the note text, the filmstrip) applies its own
-        paddingHorizontal: 0,
-    },
-    adSlot: {
-        borderTopWidth: 1,
-    },
-});

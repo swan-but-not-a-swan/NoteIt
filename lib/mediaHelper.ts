@@ -110,3 +110,17 @@ export async function getThumbnailFromVideoAsync(source: string): Promise<string
         deleteFileIfExists(uri); //* the full-size frame is only an intermediate
     }
 }
+
+//* A tile-sized thumbnail for a note's media, moved into `destDir` — or null if
+//* one couldn't be made (an unsupported video codec, for instance). Both
+//* generators write to the cache directory, which the OS may clear, hence the move.
+export async function createThumbnailAsync(destDir: Directory, mediaUri: string, mediaType: "image" | "video"): Promise<string | null> {
+    try {
+        const generatedUri = mediaType === "video"
+            ? await getThumbnailFromVideoAsync(mediaUri)
+            : await getThumbnailFromImageAsync(mediaUri);
+        return await moveAndGetImageUri(destDir, generatedUri);
+    } catch {
+        return null;
+    }
+}

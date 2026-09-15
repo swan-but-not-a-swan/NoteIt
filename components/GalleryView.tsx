@@ -1,14 +1,15 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { useEntitlements } from "@/lib/EntitlementsContext";
-import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteFilter";
+import { FREE_COMPARE_LIMIT } from "@/lib/entitlements";
+import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
 import GalleryGrid from "./GalleryGrid";
 import GalleryToolbar from "./GalleryToolbar";
 import SearchNotesModal from "./SearchNotesModal";
+import { galleryViewStyles as styles } from "@/theme/styles/gallery.styles";
 
 type Props = {
   notes: NoteModel[];
@@ -19,9 +20,6 @@ type Props = {
   /** Called with the picked note ids, in the order they were picked. */
   onCompare: (ids: string[]) => void;
 };
-
-/** How many notes a free user can compare at once. Plus removes the cap. */
-const FREE_COMPARE_LIMIT = 4;
 
 // The Gallery tab: search and filters, the grid, and picking notes to compare.
 //
@@ -38,6 +36,8 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
   const [searchOpen, setSearchOpen] = useState(false);
   const visibleNotes = filterNotes(notes, query, tags);
 
+  //* picks deliberately survive a filter change, so you can pick one note,
+  //* search for another and pick that too — the count includes both
   const [compareMode, setCompareMode] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const canCompare = compareIds.length >= 2; //* two is the minimum that is a comparison at all
@@ -52,18 +52,30 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
     else setCompareMode(true);
   };
 
+  const addCompareId = (id: string) => {
+    setCompareIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+  };
+
   const toggleCompareNote = (note: NoteModel) => {
     if (compareIds.includes(note.id)) { //* removes the note to compare if pressed again
       setCompareIds((ids) => ids.filter((id) => id !== note.id));
       return;
     }
-    if (hasPlus !== true && compareIds.length >= FREE_COMPARE_LIMIT) { //* free users have a limit of 4 notes to compare
-      openPaywall().then((granted) => {
-        if (granted) setCompareIds((ids) => (ids.includes(note.id) ? ids : [...ids, note.id]));
+    if (hasPlus !== true && compareIds.length >= FREE_COMPARE_LIMIT) { //* free users have a limit of notes to compare
+      openPaywall().then((outcome) => {
+        if (outcome === "granted") addCompareId(note.id);
+        //* the paywall couldn't be shown (offline, or no store configured) —
+        //* say so rather than leave the tap doing nothing
+        else if (outcome === "unavailable") {
+          Alert.alert(
+            "NoteIt Plus isn't available right now",
+            `Free accounts can compare up to ${FREE_COMPARE_LIMIT} notes. Check your connection and try again.`,
+          );
+        }
       });
       return;
     }
-    setCompareIds((ids) => (ids.includes(note.id) ? ids : [...ids, note.id]));
+    addCompareId(note.id);
   };
 
   const startCompare = () => {
@@ -98,6 +110,8 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         <View style={[styles.compareBar, { backgroundColor: colors.bg, borderTopColor: colors.line }]}>
           <Pressable
             onPress={leaveCompareMode}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel comparing"
             style={[styles.compareCancel, { backgroundColor: colors.surface }]}
           >
             <Text style={[styles.compareCancelLabel, { color: colors.textPrimary }]}>Cancel</Text>
@@ -105,6 +119,10 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
           <Pressable
             onPress={startCompare}
             disabled={!canCompare}
+            accessibilityRole="button"
+            accessibilityLabel={`Compare ${compareIds.length} notes`}
+            accessibilityState={{ disabled: !canCompare }}
+            accessibilityHint={canCompare ? undefined : "Pick at least two notes"}
             style={[styles.compareGo, { backgroundColor: canCompare ? colors.accent : colors.surfaceHi }]}
           >
             <Feather name="columns" size={15} color={canCompare ? colors.onAccent : colors.stoneDim} />
@@ -127,34 +145,3 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  compareBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-  },
-  compareCancel: {
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-  },
-  compareCancelLabel: { fontFamily: fonts.interSemiBold, fontSize: 13 },
-  compareGo: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-  },
-  compareGoLabel: { fontFamily: fonts.interBold, fontSize: 13.5 },
-});

@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, View } from "react-native";
 import { BannerAd, BannerAdSize } from "react-native-google-mobile-ads";
 import type { ThemeColors } from "@/theme/colors";
 import { bannerAdUnitId, initializeAds } from "@/lib/ads";
+import { adBannerStripStyles as styles, AD_BORDER_WIDTH } from "@/theme/styles/app.styles";
+
+//* Tallest the banner may be, in dp. Without a cap an inline adaptive banner can
+//* be as tall as the screen (Google serves 300x250 rectangles into it), which
+//* crowds out the folders it sits between. 100 still allows a 320x100 banner.
+const AD_MAX_HEIGHT = 100;
 
 // The "strip" ad placement — shared wherever the web reference reuses its
 // AdBanner variant="strip" (FoldersList, the picture-note Viewer).
@@ -19,6 +25,9 @@ export default function AdBannerStrip({ colors }: { colors: ThemeColors }) {
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [ready, setReady] = useState(false);
+  //* the card's inner width. Adaptive banners default to the full device width,
+  //* which the card's side padding would clip, so the request waits for this
+  const [width, setWidth] = useState<number | null>(null);
 
   // Initialising here rather than at app startup is deliberate: this
   // component only renders when hasPlus === false, so a subscriber never
@@ -59,36 +68,26 @@ export default function AdBannerStrip({ colors }: { colors: ThemeColors }) {
         // request is in flight.
         !loaded && styles.pending,
       ]}
+      onLayout={(e) => setWidth(Math.floor(e.nativeEvent.layout.width - AD_BORDER_WIDTH * 2))}
     >
-      <BannerAd
-        unitId={bannerAdUnitId()}
-        // Inline adaptive is the size Google documents for scrolling
-        // content, which is what the folders list is. The anchored sizes are
-        // for pinning to the top or bottom of a screen.
-        size={BannerAdSize.INLINE_ADAPTIVE_BANNER}
-        onAdLoaded={() => setLoaded(true)}
-        onAdFailedToLoad={(error) => {
-          // Logged rather than surfaced: a no-fill is not something the
-          // person writing a journal entry can act on.
-          console.warn("Banner ad failed to load.", error);
-          setFailed(true);
-        }}
-      />
+      {width != null && (
+        <BannerAd
+          unitId={bannerAdUnitId()}
+          // Inline adaptive is the size Google documents for scrolling
+          // content, which is what the folders list is. The anchored sizes are
+          // for pinning to the top or bottom of a screen.
+          size={BannerAdSize.INLINE_ADAPTIVE_BANNER}
+          width={width}
+          maxHeight={AD_MAX_HEIGHT}
+          onAdLoaded={() => setLoaded(true)}
+          onAdFailedToLoad={(error) => {
+            // Logged rather than surfaced: a no-fill is not something the
+            // person writing a journal entry can act on.
+            console.warn("Banner ad failed to load.", error);
+            setFailed(true);
+          }}
+        />
+      )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  ad: {
-    borderRadius: 14,
-    borderWidth: 1,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pending: {
-    height: 0,
-    borderWidth: 0,
-    opacity: 0,
-  },
-});

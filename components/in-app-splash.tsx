@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import Animated, {
   cancelAnimation,
   Easing,
@@ -12,15 +12,11 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from "react-native-svg";
-import { DARK_THEME } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
-import { hexToRgba } from "@/lib/color";
+import { splashStyles as styles, SPLASH_COLORS } from "@/theme/styles/app.styles";
 
 type Props = {
   onFinish: () => void;
 };
-
-const colors = DARK_THEME;
 
 // Matches the "Note It Splash" concept: icon mark + "POWERED BY" caption +
 // glowing "SMKTechnologies" wordmark, same structure as the Unity "Powered
@@ -120,9 +116,9 @@ export default function InAppSplash({ onFinish }: Props) {
         <Svg width={320} height={320} viewBox="0 0 320 320">
           <Defs>
             <RadialGradient id="splashGlow" cx="50%" cy="50%" r="50%">
-              <Stop offset="0%" stopColor={colors.accent} stopOpacity={0.9} />
-              <Stop offset="65%" stopColor={colors.accent} stopOpacity={0.25} />
-              <Stop offset="100%" stopColor={colors.accent} stopOpacity={0} />
+              <Stop offset="0%" stopColor={SPLASH_COLORS.accent} stopOpacity={0.9} />
+              <Stop offset="65%" stopColor={SPLASH_COLORS.accent} stopOpacity={0.25} />
+              <Stop offset="100%" stopColor={SPLASH_COLORS.accent} stopOpacity={0} />
             </RadialGradient>
           </Defs>
           <Circle cx={160} cy={160} r={160} fill="url(#splashGlow)" />
@@ -134,10 +130,10 @@ export default function InAppSplash({ onFinish }: Props) {
           <Svg width={34} height={34} viewBox="0 0 24 24" fill="none">
             <Path
               d="M5 3.5C5 2.67 5.67 2 6.5 2H14L19 7V20.5C19 21.33 18.33 22 17.5 22H6.5C5.67 22 5 21.33 5 20.5V3.5Z"
-              fill={colors.onAccent}
+              fill={SPLASH_COLORS.onAccent}
               opacity={0.92}
             />
-            <Path d="M14 2L19 7H15C14.45 7 14 6.55 14 6V2Z" fill={colors.paper} opacity={0.55} />
+            <Path d="M14 2L19 7H15C14.45 7 14 6.55 14 6V2Z" fill={SPLASH_COLORS.paper} opacity={0.55} />
           </Svg>
         </View>
 
@@ -148,71 +144,3 @@ export default function InAppSplash({ onFinish }: Props) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  glow: {
-    pointerEvents: "none",
-    position: "absolute",
-    width: 320,
-    height: 320,
-  },
-
-  lockup: {
-    alignItems: "center",
-    gap: 20,
-    paddingHorizontal: 32,
-  },
-
-  mark: {
-    width: 76,
-    height: 76,
-    borderRadius: 20,
-    backgroundColor: colors.accent,
-    alignItems: "center",
-    justifyContent: "center",
-    // A soft colored glow. boxShadow replaces the old shadowColor/Opacity/
-    // Radius/Offset set (and Android's elevation) with one cross-platform
-    // prop that does carry colour on Android, unlike elevation — the .glow
-    // blob behind this still does the heavy lifting for the wide halo.
-    boxShadow: [
-      { offsetX: 0, offsetY: 0, blurRadius: 24, color: hexToRgba(colors.accent, 0.6) },
-    ],
-  },
-
-  label: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
-    letterSpacing: 3,
-    textTransform: "uppercase",
-    color: colors.stoneDim,
-  },
-
-  rule: {
-    width: 140,
-    height: 1,
-    backgroundColor: colors.accent,
-    opacity: 0.8,
-  },
-
-  wordmark: {
-    fontFamily: fonts.frauncesSemiBold,
-    fontSize: 30,
-    lineHeight: 36,
-    textAlign: "center",
-    color: colors.textPrimary,
-    // Native shadow rendering (especially Android) doesn't blur nearly as
-    // smoothly as a browser's CSS text-shadow — the same values that read
-    // as a soft glow on web looked like a solid highlighted block on a real
-    // device. Toned down: much lower opacity, smaller radius.
-    textShadowColor: "rgba(184,127,66,0.35)",
-    textShadowRadius: 8,
-    textShadowOffset: { width: 0, height: 0 },
-  },
-});

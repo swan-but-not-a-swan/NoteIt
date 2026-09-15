@@ -51,10 +51,30 @@ export async function presentPaywallIfNeeded(): Promise<PAYWALL_RESULT> {
   }
 }
 
-/** True when the paywall ended with the customer holding Pro — either they
- *  bought it just now or restored an earlier purchase. */
-export function paywallGrantedAccess(result: PAYWALL_RESULT): boolean {
-  return result === PAYWALL_RESULT.PURCHASED || result === PAYWALL_RESULT.RESTORED;
+/**
+ * What a paywall result means for the feature that asked for it:
+ * - "granted": the customer holds Plus — bought or restored just now, or
+ *   already had it, in which case presentPaywallIfNeeded skipped the paywall.
+ * - "declined": the paywall was shown and closed without buying.
+ * - "unavailable": the paywall couldn't be shown or the purchase failed —
+ *   offline, or no store configured for this build.
+ */
+export type PaywallOutcome = "granted" | "declined" | "unavailable";
+
+export function paywallOutcome(result: PAYWALL_RESULT): PaywallOutcome {
+  switch (result) {
+    case PAYWALL_RESULT.PURCHASED:
+    case PAYWALL_RESULT.RESTORED:
+    // NOT_PRESENTED means they already have the entitlement. Treating it as
+    // "not granted" left Plus users with a tap that did nothing whenever the
+    // app's own entitlement read hadn't landed yet (at launch, or offline).
+    case PAYWALL_RESULT.NOT_PRESENTED:
+      return "granted";
+    case PAYWALL_RESULT.ERROR:
+      return "unavailable";
+    default:
+      return "declined";
+  }
 }
 
 /**

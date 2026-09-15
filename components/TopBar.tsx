@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
+import { topBarStyles as styles } from "@/theme/styles/app.styles";
 
 type Props = {
   title: string;
@@ -65,34 +65,3 @@ export function SettingsButton({ colors, onPress }: SettingsButtonProps) {
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 18,
-    // paddingTop is set inline from useSafeAreaInsets() above.
-    paddingBottom: 10,
-  },
-  left: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    minWidth: 0,
-    flexShrink: 1,
-  },
-  iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontFamily: fonts.frauncesSemiBold,
-    fontSize: 30,
-    fontWeight: "600",
-    flexShrink: 1,
-  },
-});

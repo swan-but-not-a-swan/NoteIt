@@ -441,9 +441,7 @@ components/               Presentational pieces, all fully controlled
 
 lib/                      Logic kept out of components so it can be read and tested
   useAddNote.ts           Compose state + the whole save pipeline
-  noteFilter.ts           Pure filtering, date presets, query description
-  notePager.ts            The pager's two arithmetic rules (rubber band, snap)
-  snippetText.ts          How a snippet joins existing text
+  noteHelper.ts           Note filtering, the pager's rules, snippet joining, saving a new note
   mediaHelper.ts          Copying media into app storage, thumbnails
   entitlements.ts         RevenueCat reads
   EntitlementsContext.tsx Entitlement state for the tree

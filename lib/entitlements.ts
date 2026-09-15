@@ -13,6 +13,11 @@ import { revenueCatApiKey } from "./purchases";
 // from the dashboard, or a Test Store purchase all land here identically.
 export const PRO_ENTITLEMENT = "noteit_pro";
 
+// How many notes a free user can compare at once; Plus removes the cap. Shared
+// by the gallery, which opens the paywall at the limit, and the compare screen,
+// which applies it again because its note ids come from a link anyone can edit.
+export const FREE_COMPARE_LIMIT = 4;
+
 // Purchases.configure() is not idempotent — calling it twice re-initialises
 // the SDK and is a documented source of odd behaviour. React StrictMode and
 // Fast Refresh both re-run effects, so the guard is not optional.

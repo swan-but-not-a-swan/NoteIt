@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -10,8 +10,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
+import { bottomTabBarStyles as styles } from "@/theme/styles/app.styles";
 
 export type MainTab = "folders" | "gallery";
 
@@ -150,55 +150,3 @@ function TabButton({ icon, label, active, colors, onPress }: TabButtonProps) {
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    borderTopWidth: 1,
-    paddingTop: 10,
-    paddingHorizontal: 12,
-  },
-  tab: {
-    flex: 1,
-    alignItems: "center",
-    gap: 4,
-    paddingBottom: 4,
-  },
-  tabLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11,
-  },
-  addSlot: {
-    width: 76,
-    alignItems: "center",
-  },
-  addButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: -34,
-    // The shadow itself is applied inline above, since it needs the accent
-    // colour from the theme.
-  },
-  hint: {
-    pointerEvents: "none",
-    position: "absolute",
-    top: -60,
-    left: -60,
-    right: -60,
-    alignItems: "center",
-  },
-  hintPill: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  hintLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
-  },
-});

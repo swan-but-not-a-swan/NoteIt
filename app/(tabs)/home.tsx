@@ -306,7 +306,7 @@ export default function Home() {
     const addNote = useAddNote({
         storedTags,
         snippets,
-        onSaved: async () => {
+        onSaved: async () => { //* reload the tags and notes from storage, when a new note is saved
             const [loadedTags, loadedNotes] = await Promise.all([
                 getTagsFromStorageAsync(),
                 getNotesFromStorageAsync(),

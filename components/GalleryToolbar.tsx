@@ -1,7 +1,6 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import {
   DATE_PRESETS,
@@ -9,8 +8,9 @@ import {
   isEmptyQuery,
   withPreset,
   type NoteQuery,
-} from "@/lib/noteFilter";
+} from "@/lib/noteHelper";
 import { TagModel } from "../models/NoteModel";
+import { galleryToolbarStyles as styles } from "@/theme/styles/gallery.styles";
 
 type Props = {
   colors: ThemeColors;
@@ -151,87 +151,3 @@ export default function GalleryToolbar({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    paddingHorizontal: 18,
-    paddingTop: 6,
-    // Separates the chip row from the first row of tiles. Without it the grid
-    // starts immediately under the pills and the two read as one overlapping
-    // block — the chips have no background of their own to sit the grid off.
-    paddingBottom: 12,
-    gap: 10,
-    // The grid scrolls; this does not. Yoga defaults a flex child to
-    // flexShrink: 0, but the horizontal ScrollView inside still reports a
-    // content-driven height, so pin the whole strip rather than trusting that.
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  searchButton: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
-  },
-  searchLabel: {
-    flex: 1,
-    minWidth: 0,
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
-  },
-  compareButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipScroll: {
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  chips: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingRight: 18,
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  chipLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 12,
-  },
-  hint: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-  },
-  summary: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  summaryLabel: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12,
-  },
-  clearLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 12,
-  },
-});

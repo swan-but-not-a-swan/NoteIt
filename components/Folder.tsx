@@ -1,10 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { FolderModel } from "../models/FolderModel";
+import { folderStyles as styles } from "@/theme/styles/folders.styles";
 
 
 type Props = {
@@ -66,54 +66,3 @@ export default function Folder({ folder, count, colors, onOpen, onEdit }: Props)
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    overflow: "hidden",
-  },
-  tint: {
-    pointerEvents: "none",
-    ...StyleSheet.absoluteFill,
-  },
-  thumb: {
-    width: 58,
-    height: 58,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  thumbImage: {
-    width: "100%",
-    height: "100%",
-  },
-  info: {
-    flex: 1,
-    minWidth: 0,
-  },
-  name: {
-    fontFamily: fonts.frauncesSemiBold,
-    fontSize: 16.5,
-  },
-  count: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-    marginTop: 3,
-  },
-  editButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chevron: {
-    padding: 8,
-  },
-});

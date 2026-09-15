@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import { Pressable, useWindowDimensions } from "react-native";
 import Animated, {
   scrollTo,
   useAnimatedReaction,
@@ -10,6 +10,7 @@ import Animated, {
 import type { ThemeColors } from "@/theme/colors";
 import { NoteModel } from "../models/NoteModel";
 import MediaThumb from "./MediaThumb";
+import { filmStripStyles as styles, FILM_STRIP_GAP, FILM_STRIP_PAD_TOP, FILM_STRIP_PAD_BOTTOM } from "@/theme/styles/note.styles";
 
 type Props = {
   notes: NoteModel[];
@@ -29,9 +30,6 @@ type Props = {
 const DEFAULT_TILE = 44;
 /** How much bigger the active tile is than its neighbours. */
 const ACTIVE_BUMP = 8;
-const GAP = 6;
-const PAD_TOP = 14;
-const PAD_BOTTOM = 2;
 /** Corner radius as a fraction of a tile's size, so a 96pt tile reads as
  *  softly rounded and a 44pt one doesn't turn into a blob. */
 const RADIUS_RATIO = 0.2;
@@ -48,9 +46,9 @@ export function filmStripMetrics(tileSize: number = DEFAULT_TILE) {
   const activeSize = tileSize + ACTIVE_BUMP;
   return {
     activeSize,
-    height: activeSize + PAD_TOP + PAD_BOTTOM,
+    height: activeSize + FILM_STRIP_PAD_TOP + FILM_STRIP_PAD_BOTTOM,
     radius: radiusFor(activeSize),
-    padTop: PAD_TOP,
+    padTop: FILM_STRIP_PAD_TOP,
   };
 }
 
@@ -93,7 +91,7 @@ export default function FilmStrip({
   //* left edge of one tile to the left edge of the next. Only inactive tiles
   //* ever sit to the left of the active one, so this stride is constant and
   //* the scroll offset can be computed rather than measured.
-  const stride = inactiveSize + GAP;
+  const stride = inactiveSize + FILM_STRIP_GAP;
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const { width: windowWidth } = useWindowDimensions();
@@ -166,21 +164,3 @@ export default function FilmStrip({
     </Animated.ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  strip: {
-    flexGrow: 0,
-    flexShrink: 0,
-  },
-  content: {
-    gap: GAP,
-    paddingTop: PAD_TOP,
-    paddingBottom: PAD_BOTTOM,
-  },
-  tile: {
-    flexShrink: 0,
-    //* borderRadius is set per tile from its size
-    borderWidth: 2,
-    overflow: "hidden",
-  },
-});

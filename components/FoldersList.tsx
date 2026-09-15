@@ -1,11 +1,11 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import Folder from "./Folder";
 import AdBannerStrip from "./AdBannerStrip";
 import { FolderModel } from "../models/FolderModel";
 import { FolderListItemModel } from "../models/FolderListItemModel";
+import { foldersListStyles as styles } from "@/theme/styles/folders.styles";
 
 type Props = {
   items: FolderListItemModel[];
@@ -75,32 +75,3 @@ export default function FolderList({
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 18,
-    paddingBottom: 18,
-    gap: 10,
-  },
-  item: {
-    gap: 10,
-  },
-  newFolder: {
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  newFolderLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
-  },
-});

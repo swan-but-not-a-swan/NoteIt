@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { View } from "react-native";
 import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
@@ -13,6 +13,7 @@ import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromSt
 import { FolderModel } from "@/models/FolderModel";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
+import { folderScreenStyles as styles } from "@/theme/styles/folders.styles";
 
 // A folder's own picture-notes — same grid/viewer as Gallery, just filtered
 // down to this folder's id instead of showing everything.
@@ -94,9 +95,3 @@ export default function FolderNotes() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-});

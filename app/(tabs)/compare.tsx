@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 import {
     Pressable,
     ScrollView,
-    StyleSheet,
     Text,
     View,
     useWindowDimensions,
@@ -12,17 +11,17 @@ import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { type ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatShortDate } from "@/lib/date";
+import { useEntitlements } from "@/lib/EntitlementsContext";
+import { FREE_COMPARE_LIMIT } from "@/lib/entitlements";
 import TopBar from "@/components/TopBar";
 import MediaThumb from "@/components/MediaThumb";
 import MarkdownText from "@/components/MarkdownText";
 import { getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
 import { NoteModel, TagModel } from "@/models/NoteModel";
+import { compareScreenStyles as styles, COMPARE_H_PADDING, COMPARE_GAP } from "@/theme/styles/gallery.styles";
 
-const H_PADDING = 18;
-const GAP = 12;
 /** Fixed width once three or more are side by side, so a fourth is reachable
  *  by scrolling rather than by shrinking every card past legibility. */
 const MANY_CARD_W = 180;
@@ -39,6 +38,7 @@ export default function Compare() {
     const router = useRouter();
     const { width } = useWindowDimensions();
     const { ids } = useLocalSearchParams<{ ids?: string }>();
+    const { hasPlus } = useEntitlements();
 
     const [notes, setNotes] = useState<NoteModel[]>([]);
     const [tags, setTags] = useState<TagModel[]>([]);
@@ -54,8 +54,12 @@ export default function Compare() {
     );
 
     //* driven by the id list, not by storage order, so the cards sit in the
-    //* order they were picked
-    const selectedIds = (ids ?? "").split(",").filter((id) => id.length > 0);
+    //* order they were picked. The free limit is applied again here because
+    //* the ids come from the route's URL, which a link can set to anything —
+    //* the gallery's check only covers picking. Derived, so the cap lifts on
+    //* its own once a Plus user's entitlement read lands.
+    const pickedIds = (ids ?? "").split(",").filter((id) => id.length > 0);
+    const selectedIds = hasPlus === true ? pickedIds : pickedIds.slice(0, FREE_COMPARE_LIMIT);
     const items = selectedIds
         .filter((id) => !removedIds.includes(id))
         .map((id) => notes.find((n) => n.id === id))
@@ -63,9 +67,9 @@ export default function Compare() {
 
     const cardWidth =
         items.length === 1
-            ? width - H_PADDING * 2
+            ? width - COMPARE_H_PADDING * 2
             : items.length === 2
-              ? (width - H_PADDING * 2 - GAP) / 2
+              ? (width - COMPARE_H_PADDING * 2 - COMPARE_GAP) / 2
               : MANY_CARD_W;
 
     if (items.length === 0) {
@@ -183,72 +187,3 @@ function CompareCard({ note, tags, colors, width, onRemove }: CardProps) {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    screen: { flex: 1 },
-    row: {
-        flexDirection: "row",
-        gap: GAP,
-        paddingHorizontal: H_PADDING,
-        paddingTop: 6,
-        paddingBottom: 18,
-    },
-    card: {
-        flexShrink: 0,
-        borderWidth: 1,
-        borderRadius: 14,
-        overflow: "hidden",
-    },
-    cardMedia: {
-        width: "100%",
-        height: 190,
-    },
-    removeButton: {
-        position: "absolute",
-        top: 8,
-        right: 8,
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: "rgba(0,0,0,0.55)",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    datePill: {
-        pointerEvents: "none",
-        position: "absolute",
-        bottom: 8,
-        left: 8,
-        backgroundColor: "rgba(0,0,0,0.45)",
-        borderRadius: 999,
-        paddingVertical: 3,
-        paddingHorizontal: 8,
-    },
-    datePillLabel: {
-        fontFamily: fonts.interSemiBold,
-        fontSize: 10.5,
-        color: "#fff",
-    },
-    cardBody: { flex: 1 },
-    cardBodyContent: { padding: 14, paddingBottom: 16 },
-    noteText: {
-        fontFamily: fonts.frauncesMedium,
-        fontSize: 14.5,
-        lineHeight: 22,
-    },
-    tagsRow: {
-        flexDirection: "row",
-        flexWrap: "wrap",
-        gap: 5,
-        marginTop: 12,
-    },
-    tagPill: { borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 },
-    tagLabel: { fontFamily: fonts.interSemiBold, fontSize: 10.5 },
-    empty: {
-        flex: 1,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 10,
-    },
-    emptyLabel: { fontFamily: fonts.interRegular, fontSize: 13 },
-});

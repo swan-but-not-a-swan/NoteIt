@@ -7,7 +7,7 @@ import {
   subscribeToCustomerInfo,
   type PurchaseOutcome,
 } from "./entitlements";
-import { paywallGrantedAccess, presentCustomerCenter, presentPaywallIfNeeded } from "./paywall";
+import { paywallOutcome, presentCustomerCenter, presentPaywallIfNeeded, type PaywallOutcome } from "./paywall";
 import { isTestStore } from "./purchases";
 
 /** The subscription behind an active Plus entitlement. */
@@ -59,9 +59,10 @@ type EntitlementsContextValue = {
   /** True when running against RevenueCat's Test Store, where purchases are
    *  free and simulated. */
   isTestStore: boolean;
-  /** Show the paywall unless they already have Plus. Resolves true if they
-   *  came out of it with access. */
-  openPaywall: () => Promise<boolean>;
+  /** Show the paywall unless they already have Plus. Resolves "granted" if
+   *  they have access afterwards (including when they already had it),
+   *  "declined" if they closed it, and "unavailable" if it couldn't be shown. */
+  openPaywall: () => Promise<PaywallOutcome>;
   /** Self-service subscription management: cancel, change plan, refund. */
   openCustomerCenter: () => Promise<void>;
   /** Restore previous purchases. Required by both stores. */
@@ -127,13 +128,13 @@ export function EntitlementsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openPaywall = useCallback(async () => {
-    const result = await presentPaywallIfNeeded();
-    const granted = paywallGrantedAccess(result);
+    const outcome = paywallOutcome(await presentPaywallIfNeeded());
     // The listener normally fires on purchase and updates state on its own.
     // Refreshing anyway costs one cached read and closes the gap if the
-    // paywall resolved without emitting an update.
-    if (granted) refresh();
-    return granted;
+    // paywall resolved without emitting an update — including when it was
+    // skipped because they already had Plus but `hasPlus` hadn't caught up.
+    if (outcome === "granted") refresh();
+    return outcome;
   }, [refresh]);
 
   const openCustomerCenter = useCallback(async () => {

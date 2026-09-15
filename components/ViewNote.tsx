@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -16,16 +16,15 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import { useVideoPlayer, VideoView } from "expo-video";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatDayDate, formatShortDate } from "@/lib/date";
-import { rubberBand, snapTarget } from "@/lib/notePager";
-import { appendSnippet } from "@/lib/snippetText";
+import { appendSnippet, rubberBand, snapTarget } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
 import { SnippetModel } from "../models/SnippetModel";
 import FilmStrip, { filmStripMetrics } from "./FilmStrip";
 import MarkdownText from "./MarkdownText";
 import MediaThumb from "./MediaThumb";
+import { viewNoteStyles as styles } from "@/theme/styles/note.styles";
 
 /** Dead space between two pages, so the photo arriving is visibly a separate
  *  one rather than the same photo sliding. iOS Photos uses the same trick. */
@@ -34,9 +33,6 @@ const GUTTER = 16;
 /** One line of note plus its padding — what shows under the photo while the
  *  photo is the thing you're looking at. */
 const HINT_H = 46;
-
-/** Horizontal inset for everything that isn't the full-bleed photo. */
-const SIDE_PAD = 18;
 
 /** Inactive tile size for the strip while the note is open. The active tile
  *  comes out 8 larger — 96 — which is exactly what the standalone thumbnail
@@ -612,133 +608,3 @@ function NoteCard({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
-  viewport: {
-    flex: 1,
-    //* the neighbours live outside this box until you drag them in
-    overflow: "hidden",
-  },
-  track: {
-    flex: 1,
-  },
-  slot: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: "100%",
-  },
-  card: {
-    flex: 1,
-  },
-  photo: {
-    position: "absolute",
-    overflow: "hidden",
-  },
-  //* until onLayout lands there is no height to animate between, so the photo
-  //* simply fills the card — which is what picture mode looks like anyway
-  photoFill: {
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  media: {
-    width: "100%",
-    height: "100%",
-  },
-  datePill: {
-    pointerEvents: "none",
-    position: "absolute",
-    top: 12,
-    left: 12,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  datePillLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11,
-    color: "#fff",
-  },
-  noteArea: {
-    flex: 1,
-  },
-  stripLayer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    overflow: "hidden",
-  },
-  noteContent: {
-    paddingHorizontal: SIDE_PAD,
-    paddingTop: 12,
-    paddingBottom: 18,
-    gap: 10,
-  },
-  hintText: {
-    fontFamily: fonts.frauncesMedium,
-    fontSize: 20,
-    lineHeight: 22,
-  },
-  noteText: {
-    fontFamily: fonts.frauncesMedium,
-    fontSize: 22,
-    lineHeight: 27,
-  },
-  //* same pill as AddNote's row — one snippet chip should look like a snippet
-  //* chip wherever you meet it
-  snippets: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  snippetChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 5,
-    paddingHorizontal: 11,
-    maxWidth: 220,
-  },
-  snippetLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 12,
-    flexShrink: 1,
-  },
-  noteInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    minHeight: 120,
-    //* Android centres multiline text vertically by default, which puts a
-    //* one-line note in the middle of a 120pt box
-    textAlignVertical: "top",
-  },
-  noteDate: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
-  },
-  tagsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-  },
-  tagPill: {
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  tagLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
-  },
-});

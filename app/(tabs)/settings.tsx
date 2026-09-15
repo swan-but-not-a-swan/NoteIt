@@ -1,17 +1,17 @@
 import { useCallback, useState } from "react";
-import { Keyboard, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useFocusEffect, useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import { fonts } from "@/theme/fonts";
 import TopBar from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
 import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
 import { getSnippetsFromStorageAsync, setSnippetsToStorageAsync } from "@/persistence/FileStorage";
 import { useEntitlements } from "@/lib/EntitlementsContext";
+import { settingsScreenStyles as styles } from "@/theme/styles/settings.styles";
 
 type ThemeOption = {
     id: ThemeMode;
@@ -386,130 +386,3 @@ export default function Settings() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    content: {
-        paddingHorizontal: 18,
-        paddingBottom: 24,
-        gap: 24,
-    },
-    section: {
-        gap: 10,
-    },
-    plusRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 12,
-        borderWidth: 1,
-        borderRadius: 16,
-        paddingVertical: 14,
-        paddingHorizontal: 14,
-    },
-    plusBadge: {
-        width: 34,
-        height: 34,
-        borderRadius: 10,
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    plusText: {
-        flex: 1,
-        gap: 2,
-    },
-    plusTitle: {
-        fontFamily: fonts.frauncesSemiBold,
-        fontSize: 16,
-    },
-    plusSubtitle: {
-        fontFamily: fonts.interRegular,
-        fontSize: 12.5,
-        lineHeight: 17,
-    },
-    sectionLabel: {
-        fontFamily: fonts.interBold,
-        fontSize: 10.5,
-        letterSpacing: 1,
-        textTransform: "uppercase",
-    },
-    sectionHint: {
-        fontFamily: fonts.interRegular,
-        fontSize: 12.5,
-        lineHeight: 18,
-        marginTop: -4,
-    },
-    segment: {
-        flexDirection: "row",
-        borderWidth: 1,
-        borderRadius: 14,
-        padding: 5,
-        gap: 5,
-    },
-    segmentItem: {
-        flex: 1,
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 7,
-        borderRadius: 10,
-        paddingVertical: 10,
-    },
-    segmentLabel: {
-        fontFamily: fonts.interSemiBold,
-        fontSize: 13,
-    },
-    snippetList: {
-        gap: 8,
-    },
-    snippetRow: {
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 10,
-        borderWidth: 1,
-        borderRadius: 12,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-    },
-    snippetBody: {
-        flex: 1,
-        minWidth: 0,
-        gap: 1,
-    },
-    snippetName: {
-        fontFamily: fonts.interSemiBold,
-        fontSize: 13,
-    },
-    snippetText: {
-        fontFamily: fonts.interRegular,
-        fontSize: 12,
-    },
-    emptyLabel: {
-        fontFamily: fonts.interRegular,
-        fontSize: 12.5,
-    },
-    addRow: {
-        flexDirection: "row",
-        gap: 8,
-    },
-    addInput: {
-        flex: 1,
-        minWidth: 0,
-        borderWidth: 1,
-        borderRadius: 10,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        fontFamily: fonts.interRegular,
-        fontSize: 13,
-    },
-    addButton: {
-        justifyContent: "center",
-        borderRadius: 10,
-        paddingHorizontal: 16,
-    },
-    addButtonLabel: {
-        fontFamily: fonts.interBold,
-        fontSize: 13,
-    },
-});

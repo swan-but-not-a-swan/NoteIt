@@ -4,15 +4,14 @@ import {
   Modal,
   Platform,
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
+import { newSnippetStyles as styles } from "@/theme/styles/settings.styles";
 
 type Props = {
   visible: boolean;
@@ -181,114 +180,3 @@ export default function NewSnippet({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  card: {
-    width: "100%",
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  title: {
-    fontFamily: fonts.frauncesSemiBold,
-    fontSize: 18,
-    flexShrink: 1,
-  },
-  deleteButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  nameInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    fontFamily: fonts.interRegular,
-    fontSize: 14,
-    marginBottom: 18,
-  },
-  namePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    alignSelf: "flex-start",
-    maxWidth: "100%",
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    marginBottom: 18,
-  },
-  nameLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13,
-    flexShrink: 1,
-  },
-  label: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    fontFamily: fonts.interRegular,
-    fontSize: 14,
-    lineHeight: 20,
-    minHeight: 108,
-    //* Android centres multiline text vertically by default, which strands a
-    //* one-line snippet in the middle of the box
-    textAlignVertical: "top",
-  },
-  hint: {
-    fontFamily: fonts.interRegular,
-    fontSize: 11.5,
-    marginTop: 7,
-    marginBottom: 18,
-  },
-  error: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-    //* pulls up against the hint's margin so the message sits with the field
-    //* it belongs to rather than floating between the two
-    marginTop: -8,
-    marginBottom: 14,
-  },
-  buttons: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  buttonLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
-  },
-});

@@ -1,9 +1,14 @@
-import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
+import { formatShortDate } from "@/lib/date";
 import { NoteModel } from "../models/NoteModel";
 import MediaThumb from "./MediaThumb";
+import {
+  galleryGridStyles as styles,
+  GALLERY_GRID_GAP,
+  GALLERY_GRID_PADDING,
+} from "@/theme/styles/gallery.styles";
 
 type Props = {
   notes: NoteModel[];
@@ -13,12 +18,17 @@ type Props = {
   selectionMode?: boolean;
   selectedIds?: string[];
   onToggleSelect?: (note: NoteModel) => void;
-  /** Extra bottom padding so a floating bar can't cover the last row. */
-  contentBottomInset?: number;
   /** Shown instead of "Nothing here yet" when a filter is hiding everything —
    *  an empty result and an empty gallery need different advice. */
   filtered?: boolean;
 };
+
+const COLUMNS = 3;
+
+//* one shared empty list for callers that don't pass selectedIds (the folder
+//* screen). A `= []` default is a new array every render, which changes
+//* extraData and makes FlatList re-render every visible tile each time
+const NO_IDS: string[] = [];
 
 // 3-across grid of real photo/video thumbnails — ported from the web
 // reference's GalleryView grid, including its compare-mode selection state.
@@ -32,60 +42,64 @@ export default function GalleryGrid({
   colors,
   onOpenNote,
   selectionMode = false,
-  selectedIds = [],
+  selectedIds = NO_IDS,
   onToggleSelect,
-  contentBottomInset = 0,
   filtered = false,
 }: Props) {
-  if (notes.length === 0) {
-    return (
-      <View style={styles.empty}>
-        <Feather name="image" size={30} color={colors.stoneDim} />
-        <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
-          {filtered ? "No notes match" : "Nothing here yet"}
-        </Text>
-        <Text style={[styles.emptySubtitle, { color: colors.stone }]}>
-          {filtered
-            ? "Try different tags or dates."
-            : "Tap the plus button to add your first picture-note."}
-        </Text>
-      </View>
-    );
-  }
+  //* sized from the window rather than a percentage: "32%" plus two fixed
+  //* gaps never adds up to the row, so the right margin came out wider than
+  //* the left — by about 20pt on an iPad
+  const { width } = useWindowDimensions();
+  const tileSize = (width - GALLERY_GRID_PADDING * 2 - GALLERY_GRID_GAP * (COLUMNS - 1)) / COLUMNS;
 
   return (
     <FlatList
       style={styles.scroll}
       data={notes}
       keyExtractor={(note) => note.id}
-      numColumns={3}
+      numColumns={COLUMNS}
       columnWrapperStyle={styles.row}
       ItemSeparatorComponent={RowGap}
-      contentContainerStyle={[styles.content, { paddingBottom: 18 + contentBottomInset }]}
+      //* inside the list rather than instead of it, so a filter that empties
+      //* the grid doesn't tear the list down and rebuild it when cleared
+      ListEmptyComponent={<GalleryEmpty colors={colors} filtered={filtered} />}
+      contentContainerStyle={[styles.content, notes.length === 0 && styles.contentEmpty]}
       showsVerticalScrollIndicator={false}
       //* the default window keeps ten screens of rows mounted either side, which
       //* on a large gallery ends up mounting (and loading) nearly every tile
       //* anyway, just later. Two screens either side is enough to scroll into
       //* without blank tiles at a normal pace.
       windowSize={5}
-      //* selection lives outside `data`, so FlatList has to be handed it —
-      //* otherwise it can skip re-rendering tiles when only the selection changed
-      extraData={{ selectionMode, selectedIds }}
+      //* selection and tile size live outside `data`, so FlatList has to be
+      //* handed them — otherwise it can skip re-rendering tiles when they change
+      extraData={{ selectionMode, selectedIds, tileSize }}
       renderItem={({ item: note }) => {
-        const selected = selectedIds.includes(note.id);
+        const selected = selectionMode && selectedIds.includes(note.id);
+        const shortDate = formatShortDate(note.date);
+        const kind = note.mediaType === "video" ? "Video" : "Photo";
         return (
           <Pressable
             onPress={() => (selectionMode ? onToggleSelect?.(note) : onOpenNote(note))}
-            style={[
+            accessibilityRole={selectionMode ? "checkbox" : "button"}
+            accessibilityState={selectionMode ? { checked: selected } : undefined}
+            accessibilityLabel={shortDate.length > 0 ? `${kind} note, ${shortDate}` : `${kind} note`}
+            accessibilityHint={selectionMode ? undefined : "Opens the note"}
+            style={({ pressed }) => [
               styles.tile,
-              selectionMode && selected && { borderWidth: 2.5, borderColor: colors.accent },
+              { width: tileSize, height: tileSize },
+              pressed && styles.tilePressed,
             ]}
           >
             {/* Unpicked tiles recede while choosing, so the selection is
                 readable at a glance rather than only by its checkmark. */}
-            <View style={{ flex: 1, opacity: selectionMode && !selected ? 0.55 : 1 }}>
+            <View style={[styles.thumb, selectionMode && !selected && styles.thumbDimmed]}>
               <MediaThumb note={note} borderRadius={8} />
             </View>
+
+            {/* Drawn over the photo rather than as a border on the tile: a
+                border takes space inside the tile, so the photo used to shrink
+                by 2.5pt every time it was picked. */}
+            {selected && <View style={[styles.selectedRing, { borderColor: colors.accent }]} />}
 
             {selectionMode && (
               <View style={styles.checkSlot}>
@@ -103,53 +117,25 @@ export default function GalleryGrid({
   );
 }
 
+function GalleryEmpty({ colors, filtered }: { colors: ThemeColors; filtered: boolean }) {
+  return (
+    <View style={styles.empty}>
+      <Feather name="image" size={30} color={colors.stoneDim} />
+      <Text style={[styles.emptyTitle, { color: colors.textPrimary }]}>
+        {filtered ? "No notes match" : "Nothing here yet"}
+      </Text>
+      <Text style={[styles.emptySubtitle, { color: colors.stone }]}>
+        {filtered
+          ? "Try different tags or dates."
+          : "Tap the plus button to add your first picture-note."}
+      </Text>
+    </View>
+  );
+}
+
 //* FlatList renders separators between rows only, so this is the vertical gap
 //* the old flex-wrap grid got from `gap` — never above the first row or below
 //* the last
 function RowGap() {
   return <View style={styles.rowGap} />;
 }
-
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 18,
-  },
-  row: {
-    gap: 6,
-  },
-  rowGap: {
-    height: 6,
-  },
-  tile: {
-    width: "32%",
-    aspectRatio: 1,
-    borderRadius: 8,
-    overflow: "hidden",
-  },
-  checkSlot: {
-    position: "absolute",
-    top: 5,
-    right: 5,
-  },
-  empty: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    paddingHorizontal: 40,
-    paddingBottom: 60,
-  },
-  emptyTitle: {
-    fontFamily: fonts.frauncesSemiBold,
-    fontSize: 17,
-    marginTop: 10,
-  },
-  emptySubtitle: {
-    fontFamily: fonts.interRegular,
-    fontSize: 13,
-    textAlign: "center",
-  },
-});
