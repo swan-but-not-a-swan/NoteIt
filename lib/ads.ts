@@ -7,6 +7,10 @@ import { requestTrackingPermissionsAsync } from "expo-tracking-transparency";
 // interstitial unit, and an Android unit will simply no-fill on iOS.
 const ANDROID_BANNER = process.env.EXPO_PUBLIC_ADMOB_BANNER_ANDROID;
 const IOS_BANNER = process.env.EXPO_PUBLIC_ADMOB_BANNER_IOS;
+// The viewer's end-of-list ad is a native ad, and a banner unit can't serve
+// one — so it gets a unit pair of its own.
+const ANDROID_NATIVE = process.env.EXPO_PUBLIC_ADMOB_NATIVE_ANDROID;
+const IOS_NATIVE = process.env.EXPO_PUBLIC_ADMOB_NATIVE_IOS;
 
 // Devices allowed to receive *test* creatives from *real* ad units, as a
 // comma-separated list of the identifiers AdMob prints to the device log on
@@ -43,6 +47,23 @@ export function bannerAdUnitId(): string {
     return configured;
   }
   return TestIds.BANNER;
+}
+
+/**
+ * The native unit the picture-note viewer requests for its end-of-list page.
+ * Same rules as the banner: always Google's test unit in development, and the
+ * test unit in production when nothing is configured.
+ */
+export function nativeAdUnitId(): string {
+  if (__DEV__) {
+    return TestIds.NATIVE;
+  }
+
+  const configured = Platform.select({ android: ANDROID_NATIVE, ios: IOS_NATIVE });
+  if (configured != null && configured.trim().length > 0) {
+    return configured;
+  }
+  return TestIds.NATIVE;
 }
 
 /** True while the app can only serve Google's sample creatives — no AdMob

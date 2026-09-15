@@ -1,6 +1,4 @@
-import { useCallback, useState } from "react";
 import { View } from "react-native";
-import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
 import TopBar from "@/components/TopBar";
@@ -9,10 +7,7 @@ import AddNote from "@/components/AddNote";
 import OverflowMenu from "@/components/OverflowMenu";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useAddNote } from "@/lib/useAddNote";
-import { getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
-import { FolderModel } from "@/models/FolderModel";
-import { NoteModel, TagModel } from "@/models/NoteModel";
-import { SnippetModel } from "@/models/SnippetModel";
+import { useLibrary } from "@/lib/LibraryContext";
 import { folderScreenStyles as styles } from "@/theme/styles/folders.styles";
 
 // A folder's own picture-notes — same grid/viewer as Gallery, just filtered
@@ -22,35 +17,17 @@ export default function FolderNotes() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
 
-    const [folders, setFolders] = useState<FolderModel[]>([]);
-    const [notes, setNotes] = useState<NoteModel[]>([]);
-    const [tags, setTags] = useState<TagModel[]>([]);
-    const [snippets, setSnippets] = useState<SnippetModel[]>([]);
+    //* nothing to load: the store already holds everything, and stays current
+    //* when the viewer edits or deletes, so coming back here costs no reads
+    const { folders, notes, tags, snippets, refreshNotesAndTagsAsync } = useLibrary();
 
-    const loadAsync = useCallback(async () => {
-        setFolders(await getFoldersFromStorageAsync());
-        setNotes(await getNotesFromStorageAsync());
-        setTags(await getTagsFromStorageAsync());
-        //* re-read on focus, so a snippet added in Settings is offered here
-        //* the moment you come back
-        setSnippets(await getSnippetsFromStorageAsync());
-    }, []);
-
-    useFocusEffect(
-        useCallback(() => {
-            loadAsync();
-        }, [loadAsync]),
-    );
-
-    const folder = folders.find((f) => f.id === id) ?? null;
+    const folder = folders.find((f) => f.id === id) ?? null; 
     const folderNotes = notes.filter((note) => note.folderId === id);
 
     const navigateOnce = useNavigateOnce();
 
     //* the same modal home uses, presented here over this folder's own grid.
-    //* the composition state lives in the hook precisely so this screen can do
-    //* that without owning (or duplicating) the save pipeline
-    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: loadAsync });
+    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: refreshNotesAndTagsAsync });
 
     //* new notes default into the folder being viewed
     const openAddNoteHere = () => addNote.open(id);
@@ -61,8 +38,6 @@ export default function FolderNotes() {
                 title={folder?.name ?? "Folder"}
                 colors={colors}
                 onBack={() => router.back()}
-                //* this screen has no tab bar and so no add button of its own —
-                //* the menu is the only way in, now that hold-and-swipe is gone
                 right={
                     <OverflowMenu
                         colors={colors}

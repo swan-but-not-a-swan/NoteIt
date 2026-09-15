@@ -19,6 +19,7 @@ import {
 import { ICON_FONTS } from "@/lib/iconFont";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
 import { EntitlementsProvider } from "@/lib/EntitlementsContext";
+import { LibraryProvider, useLibrary } from "@/lib/LibraryContext";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -28,6 +29,7 @@ SplashScreen.preventAutoHideAsync();
 // lives here.
 function AppShell() {
   const { mode, ready: themeReady } = useTheme();
+  const { ready: libraryReady } = useLibrary();
 
   // theme/fonts.ts references these family names everywhere (Folder,
   // FoldersList, NewFolder, TopBar, the splash) but until now nothing ever
@@ -50,7 +52,11 @@ function AppShell() {
   // AsyncStorage hit and finishes long before the fonts do, so this costs
   // nothing in practice — but hiding the splash first would let the first
   // screen paint dark and then snap to light.
-  const startupReady = fontsLoaded && themeReady;
+  //
+  // The library too: the first screen would otherwise paint "Nothing here
+  // yet" and then fill in. Its read starts alongside the fonts (the provider
+  // sits outside this shell), so it only adds time if it outlasts them.
+  const startupReady = fontsLoaded && themeReady && libraryReady;
 
   useEffect(() => {
     // Keep the native splash up until the real fonts and the saved theme are
@@ -103,7 +109,11 @@ export default function RootLayout() {
           entitlement read overlaps the font load instead of queueing behind
           it, which is free latency. */}
       <EntitlementsProvider>
-        <AppShell />
+        {/* Outside AppShell for the same reason: the one storage read of the
+            session starts now, overlapping the font load. */}
+        <LibraryProvider>
+          <AppShell />
+        </LibraryProvider>
       </EntitlementsProvider>
     </ThemeProvider>
   );

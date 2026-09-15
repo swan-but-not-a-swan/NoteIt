@@ -22,9 +22,9 @@ export const noteScreenStyles = StyleSheet.create({
     //* no horizontal padding: the photo is full-bleed, and anything that
     //* does want an inset (the note text, the filmstrip) applies its own
     paddingHorizontal: 0,
-  },
-  adSlot: {
-    borderTopWidth: 1,
+    //* room between the filmstrip (or the note, once it is open) and the ad
+    //* bar under it — 12 plus the strip's own 2 matches the 14 above its tiles
+    paddingBottom: 12,
   },
 });
 
@@ -60,6 +60,14 @@ export const viewNoteStyles = StyleSheet.create({
     bottom: 0,
   },
   media: common.fullSize,
+  //* the end-of-list ad takes the photo's box exactly; width and height come
+  //* from the same measurement the photo uses
+  adPage: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    overflow: "hidden",
+  },
   datePill: {
     pointerEvents: "none",
     position: "absolute",
@@ -141,6 +149,76 @@ export const filmStripStyles = StyleSheet.create({
     //* borderRadius is set per tile from its size
     borderWidth: 2,
     overflow: "hidden",
+  },
+});
+
+//* components/EndAd.tsx
+export const endAdStyles = StyleSheet.create({
+  root: {
+    flex: 1,
+    paddingHorizontal: VIEW_NOTE_SIDE_PAD,
+    paddingTop: 12,
+    paddingBottom: 16,
+    gap: 12,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  badge: {
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  badgeLabel: {
+    fontFamily: fonts.interBold,
+    fontSize: 11,
+  },
+  advertiser: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  //* takes whatever height the rows leave. NativeMediaView sets an aspectRatio
+  //* from the creative, which would size the view to the creative instead of
+  //* the box, so it is cleared here
+  media: {
+    flex: 1,
+    width: "100%",
+    aspectRatio: undefined,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  icon: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+  },
+  titleText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  headline: {
+    fontFamily: fonts.frauncesSemiBold,
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  body: common.regular13,
+  //* padding on the Text itself rather than a Pressable around it: the SDK
+  //* handles the click on the registered view, so the whole button has to be
+  //* that view
+  callToAction: {
+    overflow: "hidden",
+    borderRadius: 12,
+    paddingVertical: 13,
+    textAlign: "center",
+    fontFamily: fonts.interBold,
+    fontSize: 14,
   },
 });
 

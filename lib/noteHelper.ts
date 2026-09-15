@@ -6,11 +6,13 @@
 //
 // Parts 1–3 are pure: no storage, no React. Part 4 holds the save pipeline for
 // a new note, outside useAddNote, so the hook itself has no try/catch; the
-// file steps it calls live in mediaHelper.
+// file steps it calls live in mediaHelper. Because part 4 imports storage and
+// file-system modules, a test that imports anything from this file has to mock
+// those, even to test the pure parts.
 
 import * as Crypto from "expo-crypto";
 import { Directory, Paths } from "expo-file-system";
-import { formatShortDate } from "@/lib/date";
+import { formatShortDate, toLocalISODate } from "@/lib/date";
 import { copyAndGetMediaFileUri, createThumbnailAsync, deleteFileIfExists } from "@/lib/mediaHelper";
 import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
 import { setNoteToStorageAsync, setTagsToStorageAsync } from "@/persistence/FileStorage";
@@ -59,21 +61,22 @@ export function isEmptyQuery(q: NoteQuery): boolean {
 /** ISO "yyyy-mm-dd" for `daysAgo` days before today, in local time. */
 function isoDaysAgo(daysAgo: number): string {
     const d = new Date();
+    //* stepped back from noon rather than midnight, so a clock change on the
+    //* way can't tip it into a neighbouring calendar day
     d.setHours(12, 0, 0, 0);
     d.setDate(d.getDate() - daysAgo);
-    //* noon, not midnight, and built by hand rather than via toISOString():
-    //* toISOString() converts to UTC first, so east of Greenwich a local
-    //* midnight lands on the previous calendar day and "Today" silently
-    //* matches yesterday's notes
-    const month = `${d.getMonth() + 1}`.padStart(2, "0");
-    const day = `${d.getDate()}`.padStart(2, "0");
-    return `${d.getFullYear()}-${month}-${day}`;
+    return toLocalISODate(d);
 }
 
 /** Applies a preset pill, rewriting the from/to range it stands for. */
 export function withPreset(query: NoteQuery, preset: Exclude<DatePreset, "custom">): NoteQuery {
     if (preset === "any") return { ...query, from: "", to: "", preset: "any" };
-    const days = preset === "today" ? 0 : preset === "week" ? 6 : 29;
+    if (preset === "today") {
+        //* pinned at both ends: "Today" means today, not today onwards
+        const today = isoDaysAgo(0);
+        return { ...query, from: today, to: today, preset };
+    }
+    const days = preset === "week" ? 6 : 29;
     //* `to` stays open rather than pinned to today — a note dated in the
     //* future (the date field is free) shouldn't vanish from "7 days"
     return { ...query, from: isoDaysAgo(days), to: "", preset };
@@ -89,8 +92,7 @@ export function withRange(query: NoteQuery, from: string, to: string): NoteQuery
  * Filters notes by text, tags and a date range.
  *
  * Pure and synchronous: it takes the already-loaded list rather than reading
- * storage, so it can run on every keystroke without touching AsyncStorage, and
- * can be unit-tested without mocking anything.
+ * storage, so it can run on every keystroke without touching AsyncStorage.
  *
  * Tags are matched by id but *searched* by title, which is why `allTags` is
  * needed — a note only stores tagIds, and a user typing "beach" means the tag
@@ -147,7 +149,10 @@ export function describeQuery(query: NoteQuery, allTags: TagModel[]): string {
         );
     }
 
-    if (query.from.length > 0 || query.to.length > 0) {
+    if (query.from.length > 0 && query.from === query.to) {
+        //* a single day, e.g. the "Today" preset — "15 Sep", not "15 Sep → 15 Sep"
+        parts.push(formatShortDate(query.from));
+    } else if (query.from.length > 0 || query.to.length > 0) {
         const from = query.from.length > 0 ? formatShortDate(query.from) : "any";
         const to = query.to.length > 0 ? formatShortDate(query.to) : "any";
         parts.push(`${from} → ${to}`);
@@ -158,7 +163,7 @@ export function describeQuery(query: NoteQuery, allTags: TagModel[]): string {
 
 // ── 2. Pager ────────────────────────────────────────────────────────────────
 // The two arithmetic rules behind the picture-note pager, kept out of the
-// component so they can be read — and tested — on their own. Both are marked
+// component so they can be read on their own. Both are marked
 // "worklet" because the pan handler calls them on the UI thread; they are
 // ordinary pure functions from JS's point of view.
 
@@ -298,14 +303,22 @@ export async function saveNoteDraftAsync(draft: NoteDraft, storedTags: TagModel[
 }
 
 /** Stores any of `tagNames` that aren't stored yet, and returns the note's tag
- *  ids in the order the sheet showed them. Titles match without case. */
+ *  ids in the order the sheet showed them. Titles match without case, so
+ *  "Beach" and "beach" are the same tag. */
 async function saveTagsAsync(tagNames: string[], storedTags: TagModel[]): Promise<string[]> {
-    const newTags: TagModel[] = tagNames
+    //* repeats dropped first, keeping the first spelling — otherwise two new
+    //* names differing only in case would each become a tag, and the note
+    //* would get the same id twice
+    const uniqueNames = tagNames.filter(
+        (name, i) => tagNames.findIndex((other) => other.toLowerCase() === name.toLowerCase()) === i,
+    );
+    const newTags: TagModel[] = uniqueNames
         .filter((name) => !storedTags.some((tag) => tag.title.toLowerCase() === name.toLowerCase()))
         .map((title) => ({ id: Crypto.randomUUID(), title }));
     const allTags = [...storedTags, ...newTags];
     if (newTags.length > 0) {
         await setTagsToStorageAsync(allTags);
     }
-    return tagNames.map((name) => allTags.find((tag) => tag.title.toLowerCase() === name.toLowerCase())!.id);
+    //* every name is now either stored or new, so the lookup always finds one
+    return uniqueNames.map((name) => allTags.find((tag) => tag.title.toLowerCase() === name.toLowerCase())!.id);
 }

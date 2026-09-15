@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Keyboard, Platform, Pressable, Share, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
 import { formatDayDate } from "@/lib/date";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
 import AddNote from "@/components/AddNote";
+import AdBannerStrip from "@/components/AdBannerStrip";
 import OverflowMenu from "@/components/OverflowMenu";
+import { useEndAd } from "@/components/EndAd";
+import { useEntitlements } from "@/lib/EntitlementsContext";
 import { useAddNote } from "@/lib/useAddNote";
-import { deleteNotesFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, setNoteToStorageAsync } from "@/persistence/FileStorage";
-import { FolderModel } from "@/models/FolderModel";
+import { useLibrary } from "@/lib/LibraryContext";
 import { NoteModel, TagModel } from "@/models/NoteModel";
-import { SnippetModel } from "@/models/SnippetModel";
 import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 
 // The picture-note viewer screen: header, the card itself, the filmstrip and
@@ -31,10 +31,6 @@ import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 // AddNote over itself without closing first and waiting out the dismissal. As
 // a route the back gesture works natively and AddNote is just another modal
 // from an ordinary screen.
-/** Anchored-banner height. AdMob's adaptive anchored banners top out at 90,
- *  so this reserves the full footprint the real ad can claim rather than
- *  something it would later grow past and shift the layout. */
-const AD_H = 60;
 
 export default function ViewNotes() {
     const { colors } = useTheme();
@@ -43,27 +39,16 @@ export default function ViewNotes() {
     //* through, so the same screen serves a folder and the whole gallery
     const { id, folderId } = useLocalSearchParams<{ id: string; folderId?: string }>();
 
-    const [folders, setFolders] = useState<FolderModel[]>([]);
-    const [notes, setNotes] = useState<NoteModel[]>([]);
-    const [tags, setTags] = useState<TagModel[]>([]);
-    const [snippets, setSnippets] = useState<SnippetModel[]>([]);
-    const [loaded, setLoaded] = useState(false);
-
-    const loadAsync = useCallback(async () => {
-        setFolders(await getFoldersFromStorageAsync());
-        setNotes(await getNotesFromStorageAsync());
-        setTags(await getTagsFromStorageAsync());
-        //* re-read on focus, so a snippet added in Settings is offered here
-        //* the moment you come back
-        setSnippets(await getSnippetsFromStorageAsync());
-        setLoaded(true);
-    }, []);
-
-    useFocusEffect(
-        useCallback(() => {
-            loadAsync();
-        }, [loadAsync]),
-    );
+    const {
+        folders,
+        notes,
+        tags,
+        snippets,
+        ready,
+        saveNoteAsync,
+        deleteNotesAsync,
+        refreshNotesAndTagsAsync,
+    } = useLibrary();
 
     const scopedNotes = folderId != null ? notes.filter((n) => n.folderId === folderId) : notes;
     const folder = folderId != null ? folders.find((f) => f.id === folderId) ?? null : null;
@@ -79,6 +64,15 @@ export default function ViewNotes() {
 
     const [noteOpen, setNoteOpen] = useState(false);
 
+    //* free users get an ad as one more page after the last note. `hasPlus` is
+    //* null until entitlements load, and null must not mean "show ads"
+    const { hasPlus } = useEntitlements();
+    const endAd = useEndAd(hasPlus === false, index >= 0 && index >= scopedNotes.length - 2);
+    const [adShowing, setAdShowing] = useState(false);
+    //* if the ad goes away while its page is up (Plus kicking in), fall back to
+    //* the last note rather than jumping onto the next ad when one loads
+    if (adShowing && endAd == null) setAdShowing(false);
+
     //* the draft lives here rather than in ViewNote because the buttons that
     //* commit and discard it are in this screen's header, not in the card
     const [editing, setEditing] = useState(false);
@@ -89,10 +83,10 @@ export default function ViewNotes() {
 
     //* the note was deleted, or the folder emptied, while this screen was open
     useEffect(() => {
-        if (loaded && note == null) router.back();
-    }, [loaded, note, router]);
+        if (ready && note == null) router.back();
+    }, [ready, note, router]);
 
-    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: loadAsync });
+    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: refreshNotesAndTagsAsync });
 
     // Both routes to a different note land here — the pager's own swipe and a
     // filmstrip tap — so "showing a different note" means the same thing
@@ -142,19 +136,18 @@ export default function ViewNotes() {
 
     const saveEditAsync = async () => {
         if (note == null || savingEdit) return;
-        //* unchanged text still costs a write and a full reload, so treat it
-        //* as the cancel it effectively is
+        //* unchanged text would still cost a write, so treat it as the cancel
+        //* it effectively is
         if (draft === note.note) {
             endEdit();
             return;
         }
         setSavingEdit(true);
         try {
-            //* setNoteToStorageAsync overwrites by id and only appends to the
-            //* id list when it's new, so this is an update, not a second note
-            await setNoteToStorageAsync({ ...note, note: draft });
+            //* saveNoteAsync replaces by id, so this is an update, not a second
+            //* note — and every screen sees the new text without a reload
+            await saveNoteAsync({ ...note, note: draft });
             endEdit();
-            await loadAsync();
         } catch {
             //* the write failed and the draft is still the only copy of it —
             //* staying in edit mode is what keeps it from being thrown away
@@ -181,12 +174,15 @@ export default function ViewNotes() {
     const performDeleteAsync = async (target: NoteModel) => {
         //* chosen before the list changes underneath us: prefer the next note,
         //* fall back to the previous one. If neither exists this was the last
-        //* note, `note` goes null after the reload, and the effect above backs
-        //* out of the viewer on its own.
+        //* note, `note` goes null once it is deleted, and the effect above
+        //* backs out of the viewer on its own.
         const nextId = scopedNotes[index + 1]?.id ?? scopedNotes[index - 1]?.id ?? null;
-        await deleteNotesFromStorageAsync([target]);
+        //* moved *before* the delete, and that order is load-bearing: the
+        //* store drops the note the moment the write lands, and if currentId
+        //* still pointed at it for that one render, `note` would read null and
+        //* the effect above would back out of a viewer that still has notes
         if (nextId != null) setCurrentId(nextId);
-        await loadAsync();
+        await deleteNotesAsync([target]);
     };
 
     const handleShareAsync = async () => {
@@ -268,6 +264,9 @@ export default function ViewNotes() {
                                 <Feather name="check" size={16} color={colors.onAccent} />
                             </Pressable>
                         </View>
+                    ) : adShowing ? (
+                        //* an ad page has no note to count, open, share, edit or delete
+                        null
                     ) : (
                     <View style={styles.headerRight}>
                         <Text style={[styles.counter, { color: colors.stoneDim }]}>
@@ -348,27 +347,28 @@ export default function ViewNotes() {
                     draft={draft}
                     onDraftChange={setDraft}
                     snippets={snippets}
+                    endAd={endAd}
+                    adShowing={adShowing}
+                    onAdShowingChange={setAdShowing}
                 />
             </View>
 
             {/* Outside the body, so it is the screen's own bottom edge it sits
-                on — full width, no radius, nothing under it. The safe-area
-                inset is padding *inside* it rather than a gap beneath, so the
-                banner clears the home indicator while the bar still reaches
-                the bottom of the glass.
-                TODO (business logic): a real ad renders here once RevenueCat is
-                wired up — this just reserves its footprint. */}
-            <View
-                style={[
-                    styles.adSlot,
-                    {
-                        backgroundColor: colors.surfaceHi,
-                        borderTopColor: colors.line,
-                        height: AD_H + insets.bottom,
-                        paddingBottom: insets.bottom,
-                    },
-                ]}
-            />
+                on — full width, no radius, nothing under it. The bar pads the
+                safe-area inset inside itself; with no bar (Plus, or
+                entitlements still loading) the spacer does that job instead.
+                The banner comes down on the end-of-list ad page: a page that
+                is already an ad shouldn't carry a second one. */}
+            {hasPlus === false ? (
+                <AdBannerStrip
+                    variant="bar"
+                    colors={colors}
+                    bottomInset={insets.bottom}
+                    suppressed={adShowing}
+                />
+            ) : (
+                <View style={{ height: insets.bottom }} />
+            )}
 
             <AddNote colors={colors} folders={folders} {...addNote.props} />
         </View>

@@ -1,4 +1,4 @@
-//! Manually reviewed since 14/09/2026
+//! Manually reviewed since 15/09/2026
 
 import { Alert, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -12,21 +12,19 @@ import FoldersList from "@/components/FoldersList";
 import GalleryView from "@/components/GalleryView";
 import NewFolder from "@/components/NewFolder";
 import AddNote from "@/components/AddNote";
-import { deleteFolderFromStorageAsync, getFoldersFromStorageAsync, getNotesFromStorageAsync, getSnippetsFromStorageAsync, getTagsFromStorageAsync, setFoldersToStorageAsync } from "@/persistence/FileStorage";
-import { useCallback, useEffect, useState } from "react";
-import { useFocusEffect } from "expo-router/react-navigation"
+import { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { FolderListItemModel } from "@/models/FolderListItemModel";
 import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useEntitlements } from "@/lib/EntitlementsContext";
+import { useLibrary } from "@/lib/LibraryContext";
 import { useAddNote } from "@/lib/useAddNote";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { deleteFileIfExists, moveAndGetImageUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
-import { NoteModel, TagModel } from "@/models/NoteModel";
-import { SnippetModel } from "@/models/SnippetModel";
+import { NoteModel } from "@/models/NoteModel";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 
@@ -83,32 +81,22 @@ export default function Home() {
     const [originalFolderThumbnailUri, setOriginalFolderThumbnailUri] = useState<string | null>(null);
     const [cropSourceUri, setCropSourceUri] = useState<string | null>(null);
     const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
-    const [folders, setFolders] = useState<FolderModel[]>([]);
 
-    const [notes, setNotes] = useState<NoteModel[]>([]);
-    const [storedTags, setStoredTags] = useState<TagModel[]>([]);
-    const [snippets, setSnippets] = useState<SnippetModel[]>([]);
+    //* read from the shared store rather than re-read from storage whenever
+    //* this screen regains focus — see lib/LibraryContext.tsx
+    const {
+        folders,
+        notes,
+        tags: storedTags,
+        snippets,
+        saveFoldersAsync,
+        deleteFolderAsync,
+        refreshNotesAndTagsAsync,
+        reloadAsync,
+    } = useLibrary();
 
     const [activeTab, setActiveTab] = useState<MainTab>("folders");
     const [tabDir, setTabDir] = useState<"forward" | "backward" | null>(null);
-
-    useFocusEffect(
-        useCallback(() => {
-            //Claude to review this code
-            Promise.all([
-                getFoldersFromStorageAsync(),
-                getNotesFromStorageAsync(),
-                getTagsFromStorageAsync(),
-                getSnippetsFromStorageAsync(),
-            ]).then(([loadedFolders, loadedNotes, loadedTags, loadedSnippets]) => {
-                setFolders(loadedFolders);
-                setNotes(loadedNotes);
-                setStoredTags(loadedTags);
-                setSnippets(loadedSnippets);
-            });
-
-        }, []), //! Might have to remove snippets to improve performance
-    );
 
     //* Navigation codes
 
@@ -203,20 +191,16 @@ export default function Home() {
 
     const performDeleteFolderAsync = async (folderId: string) => {
         try {
-            await deleteFolderFromStorageAsync(folderId);
+            await deleteFolderAsync(folderId); //* removes the folder and its notes from memory too
             deleteUnsavedThumbnail(); //* storage only knew about the saved cover
-            setFolders((current) => current.filter((f) => f.id !== folderId)); //* mirrors what was deleted
-            setNotes((current) => current.filter((note) => note.folderId !== folderId));
             setEditingFolderId(null);
             setShowNewFolder(false);
         } catch {
             //* the modal stays open so the message is seen.
             setNewFolderError("Couldn't delete that folder. Try again.");
-            Promise.all([getFoldersFromStorageAsync(), getNotesFromStorageAsync()])
-                .then(([loadedFolders, loadedNotes]) => {
-                    setFolders(loadedFolders);
-                    setNotes(loadedNotes);
-                })
+            //* deleting a folder is several writes, so a failure part-way can leave
+            //* storage changed while memory isn't — resync from what storage holds
+            reloadAsync()
                 .catch(() => {
                     //* storage is failing outright; the message above is already showing
                 });
@@ -261,7 +245,7 @@ export default function Home() {
             return;
         }
 
-        const existing = await getFoldersFromStorageAsync(); //* reloads to ensure the latest state
+        const existing = folders; //* the store is the latest state; every folder write goes through it
         //*checks duplicate, rejects if the name is same as any other folder except the one being edited
         const isDuplicate = existing.some(
             (folder) => folder.id !== editingFolderId &&
@@ -294,11 +278,10 @@ export default function Home() {
             updatedExisting = [...existing, newFolder];
         }
 
-        await setFoldersToStorageAsync(updatedExisting);
+        await saveFoldersAsync(updatedExisting); //* writes storage, then updates the store
         //* delete the original thumbnail if it was replaced with a new one, and the folder is being edited
         if (editingFolderId != null && originalFolderThumbnailUri != null && originalFolderThumbnailUri !== newFolderThumbnailUri)
             deleteFileIfExists(originalFolderThumbnailUri);
-        setFolders(updatedExisting); //* the exact array just saved, so there's nothing to read back
         setShowNewFolder(false);
     };
 
@@ -306,14 +289,9 @@ export default function Home() {
     const addNote = useAddNote({
         storedTags,
         snippets,
-        onSaved: async () => { //* reload the tags and notes from storage, when a new note is saved
-            const [loadedTags, loadedNotes] = await Promise.all([
-                getTagsFromStorageAsync(),
-                getNotesFromStorageAsync(),
-            ]);
-            setStoredTags(loadedTags);
-            setNotes(loadedNotes);
-        },
+        //* AddNote writes through noteHelper rather than the store, so the store
+        //* re-reads the two things a save can change
+        onSaved: refreshNotesAndTagsAsync,
     });
 
     const openAddNote = () => addNote.open();

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import {
     Pressable,
     ScrollView,
@@ -7,7 +7,6 @@ import {
     useWindowDimensions,
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import { useFocusEffect } from "expo-router/react-navigation";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { type ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -18,7 +17,7 @@ import { FREE_COMPARE_LIMIT } from "@/lib/entitlements";
 import TopBar from "@/components/TopBar";
 import MediaThumb from "@/components/MediaThumb";
 import MarkdownText from "@/components/MarkdownText";
-import { getNotesFromStorageAsync, getTagsFromStorageAsync } from "@/persistence/FileStorage";
+import { useLibrary } from "@/lib/LibraryContext";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { compareScreenStyles as styles, COMPARE_H_PADDING, COMPARE_GAP } from "@/theme/styles/gallery.styles";
 
@@ -40,18 +39,10 @@ export default function Compare() {
     const { ids } = useLocalSearchParams<{ ids?: string }>();
     const { hasPlus } = useEntitlements();
 
-    const [notes, setNotes] = useState<NoteModel[]>([]);
-    const [tags, setTags] = useState<TagModel[]>([]);
+    const { notes, tags } = useLibrary();
     //* removing a card is local to this screen — it narrows the comparison
     //* without editing anything, so backing out and picking again is the undo
     const [removedIds, setRemovedIds] = useState<string[]>([]);
-
-    useFocusEffect(
-        useCallback(() => {
-            getNotesFromStorageAsync().then(setNotes);
-            getTagsFromStorageAsync().then(setTags);
-        }, []),
-    );
 
     //* driven by the id list, not by storage order, so the cards sit in the
     //* order they were picked. The free limit is applied again here because

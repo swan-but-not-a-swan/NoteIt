@@ -379,7 +379,7 @@ bunx expo lint
 - **Picking a photo or video** — the sheet tells you to test it on a device.
 - **The date picker** — same.
 
-Ad banners also render nothing on web. Treat the web build as a layout preview, not a way to exercise the app.
+Ads (the folder banner and the viewer's end-of-list page) also render nothing on web. Treat the web build as a layout preview, not a way to exercise the app.
 
 ---
 
@@ -394,6 +394,8 @@ Local values live in `.env`, which is **git-ignored** — copy the keys below an
 | `EXPO_PUBLIC_RC_TEST_KEY` | RevenueCat Test Store key (`test_…`) — routes purchases to RevenueCat's own test store so no Play/App Store account is needed |
 | `EXPO_PUBLIC_ADMOB_BANNER_ANDROID` | Real AdMob banner unit id for Android |
 | `EXPO_PUBLIC_ADMOB_BANNER_IOS` | Real AdMob banner unit id for iOS |
+| `EXPO_PUBLIC_ADMOB_NATIVE_ANDROID` | Real AdMob **native** unit id for Android — the ad page at the end of the picture-note viewer |
+| `EXPO_PUBLIC_ADMOB_NATIVE_IOS` | Real AdMob native unit id for iOS |
 | `EXPO_PUBLIC_ADMOB_TEST_DEVICE_IDS` | Comma-separated device ids allowed to receive test creatives from real ad units |
 
 Safety rails already built in, so you do not have to remember them:
@@ -401,7 +403,7 @@ Safety rails already built in, so you do not have to remember them:
 - **RevenueCat's public SDK keys are safe to ship** — they identify the app and authorise nothing. The *secret* API key is server-side only and must never appear in `.env`.
 - **The Test Store key is ignored in release builds** and logs a warning, so a test key left in the environment cannot hand out Pro to everybody.
 - **Development builds always request Google's test ad unit**, never a real one. Impressions you generate on your own live ads count as invalid traffic and AdMob suspends accounts for it, so the dev path is structurally unable to request a real unit.
-- If no banner unit is configured, the app falls back to the test unit rather than collapsing the layout.
+- If no banner or native unit is configured, the app falls back to Google's test unit rather than collapsing the layout.
 
 ---
 
@@ -437,6 +439,7 @@ components/               Presentational pieces, all fully controlled
   TopBar.tsx              Title, back arrow, right-hand slot
   BottomTabBar.tsx        Folders | + | Gallery, with swipe-up-to-add
   AdBannerStrip.tsx       The banner placement
+  EndAd.tsx               The native ad page after the viewer's last note
   in-app-splash.tsx       The animated splash
 
 lib/                      Logic kept out of components so it can be read and tested

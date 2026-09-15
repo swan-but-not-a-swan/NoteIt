@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
@@ -9,7 +9,7 @@ import TopBar from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
 import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
-import { getSnippetsFromStorageAsync, setSnippetsToStorageAsync } from "@/persistence/FileStorage";
+import { useLibrary } from "@/lib/LibraryContext";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { settingsScreenStyles as styles } from "@/theme/styles/settings.styles";
 
@@ -123,9 +123,9 @@ export default function Settings() {
     const { colors, mode, setMode } = useTheme();
     const router = useRouter();
 
-    //* re-read on focus rather than held across navigations, so returning
-    //* here after a change elsewhere shows what storage actually holds
-    const [snippets, setSnippets] = useState<SnippetModel[]>([]);
+    //* from the shared store, so a snippet saved here is already offered in
+    //* AddNote on every other screen — no re-read on the way back
+    const { snippets, saveSnippetsAsync } = useLibrary();
     const [newSnippetName, setNewSnippetName] = useState("");
 
     //* the name is parked here while the modal collects the body. Non-null is
@@ -139,16 +139,6 @@ export default function Settings() {
 
     const canAddSnippet = newSnippetName.trim().length > 0;
 
-    const getSnippetsAsync = async () => {
-            const data = await getSnippetsFromStorageAsync();
-            setSnippets(data);
-        };
-    
-    useFocusEffect(
-            useCallback(() => {
-                getSnippetsAsync();
-            }, []),
-        );
     //* "Add" doesn't commit — it carries the name into the modal, which is
     //* where the body actually gets written
     const startWritingSnippet = () => {
@@ -219,8 +209,7 @@ export default function Settings() {
 
         try
         {
-            await setSnippetsToStorageAsync(updatedSnippets);
-            await getSnippetsAsync(); // reload from storage to ensure consistency
+            await saveSnippetsAsync(updatedSnippets); //* storage first, then the store
             //* only the create path consumed the inline field — clearing it
             //* after an edit throws away a name the user was midway through
             if (editingId == null) setNewSnippetName("");
@@ -240,8 +229,7 @@ export default function Settings() {
         //* saving the rest — no separate delete call needed
         try
         {
-            await setSnippetsToStorageAsync(snippets.filter((s) => s.id !== editingId));
-            await getSnippetsAsync();
+            await saveSnippetsAsync(snippets.filter((s) => s.id !== editingId));
             closeForm();
         }
         catch

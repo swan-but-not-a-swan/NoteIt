@@ -15,12 +15,14 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useVideoPlayer, VideoView } from "expo-video";
+import type { NativeAd } from "react-native-google-mobile-ads";
 import type { ThemeColors } from "@/theme/colors";
 import { hexToRgba } from "@/lib/color";
 import { formatDayDate, formatShortDate } from "@/lib/date";
 import { appendSnippet, rubberBand, snapTarget } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
 import { SnippetModel } from "../models/SnippetModel";
+import EndAdCard from "./EndAd";
 import FilmStrip, { filmStripMetrics } from "./FilmStrip";
 import MarkdownText from "./MarkdownText";
 import MediaThumb from "./MediaThumb";
@@ -80,6 +82,14 @@ type Props = {
   /** Saved snippets, offered as chips under the field while editing. Pass an
    *  empty array (or omit) to hide the row. */
   snippets?: SnippetModel[];
+  /** A loaded ad to show as one more page after the last note, or null for
+   *  none (Plus, not loaded yet, or no fill). It never gets a filmstrip tile:
+   *  the strip navigates notes, and the ad isn't one. */
+  endAd?: NativeAd | null;
+  /** True while that ad page is the one on screen. Owned by the screen, like
+   *  `noteOpen`, because the header buttons it hides live up there. */
+  adShowing?: boolean;
+  onAdShowingChange?: (showing: boolean) => void;
 };
 
 // The picture-note viewer: a full-bleed photo with the first line of its note
@@ -96,6 +106,10 @@ type Props = {
 // commit buttons, because those live in the header; this only renders the
 // field. Deleting is entirely the screen's job: it has the storage call and
 // somewhere to navigate afterwards.
+//
+// Free users get one more page after the last note: an ad, in the same box the
+// photo takes. It is a page of the pager only — the filmstrip, the index and
+// the note gestures all still end at the last note.
 export default function ViewNote({
   notes,
   index,
@@ -108,6 +122,9 @@ export default function ViewNote({
   draft,
   onDraftChange,
   snippets,
+  endAd = null,
+  adShowing = false,
+  onAdShowingChange,
 }: Props) {
   // Width seeds from the window because the pager is full-bleed — there is no
   // padding between it and the screen edge for the two to disagree about. The
@@ -118,6 +135,12 @@ export default function ViewNote({
 
   const stride = box.w + GUTTER;
   const count = notes.length;
+  //* the ad, when there is one, is page `count` — one past the last note. The
+  //* pager counts it; everything that means "a note" still stops at `count`
+  const pageCount = endAd != null ? count + 1 : count;
+  const onAd = endAd != null && adShowing;
+  //* where the track rests: the ad page while it is showing, the note otherwise
+  const page = onAd ? count : index;
   const photoFull = Math.max(0, box.h - HINT_H);
   //* the photo closes all the way now, so a drag maps 1:1 onto its height
   const travel = Math.max(1, photoFull);
@@ -149,29 +172,31 @@ export default function ViewNote({
   // velocity a hard flick was carrying, one frame in.
   //
   // A shared value rather than a ref, and written on the JS thread in
-  // commitIndex rather than inside the gesture: both sides of the comparison
+  // commitPage rather than inside the gesture: both sides of the comparison
   // then happen in JS, in commit order, with no cross-thread propagation to
   // race. (react-hooks/refs also rejects a ref read from anything handed out
   // during render, which is what a gesture callback is.)
   const settled = useSharedValue(-1);
 
-  const commitIndex = useCallback(
+  const commitPage = useCallback(
     (next: number) => {
       settled.set(next);
-      onIndexChange(next);
+      onAdShowingChange?.(next === count);
+      //* the ad page has no note index, so the screen's stays on the last note
+      if (next < count) onIndexChange(next);
     },
-    [onIndexChange, settled],
+    [count, onAdShowingChange, onIndexChange, settled],
   );
 
   useEffect(() => {
     if (stride <= GUTTER) return; // not measured yet
-    if (settled.get() === index) return; // the gesture already animated there
+    if (settled.get() === page) return; // the gesture already animated there
     //* first positioning jumps: opening note #7 from the gallery should start
     //* on it, not scroll there from the beginning of the list
     const first = settled.get() === -1;
-    settled.set(index);
-    offset.set(first ? -index * stride : withSpring(-index * stride, SNAP));
-  }, [index, stride, offset, settled]);
+    settled.set(page);
+    offset.set(first ? -page * stride : withSpring(-page * stride, SNAP));
+  }, [page, stride, offset, settled]);
 
   useEffect(() => {
     noteOpenSV.set(noteOpen);
@@ -219,7 +244,9 @@ export default function ViewNote({
   useAnimatedReaction(
     () => offset.get(),
     (value) => {
-      if (stride > GUTTER) stripPos.set(-value / stride);
+      //* held at the last note while the ad slides in, so the strip never
+      //* scrolls towards a tile that doesn't exist
+      if (stride > GUTTER) stripPos.set(Math.min(count - 1, -value / stride));
     },
   );
 
@@ -241,6 +268,8 @@ export default function ViewNote({
       }
 
       if (axis.get() === "y") {
+        //* the ad page has no note to pull open
+        if (onAd) return;
         //* up opens it: the note is below the photo, so lifting the finger
         //* lifts the note into view and pushes the photo out of the way.
         //* translationY is negative upward, hence the subtraction.
@@ -251,11 +280,11 @@ export default function ViewNote({
 
       if (axis.get() === "x" && !noteOpenSV.get() && stride > GUTTER) {
         const raw = dragFrom.get() + e.translationX;
-        offset.set(rubberBand(raw, -(count - 1) * stride));
+        offset.set(rubberBand(raw, -(pageCount - 1) * stride));
       }
     })
     .onEnd((e) => {
-      if (axis.get() === "y") {
+      if (axis.get() === "y" && !onAd) {
         let shouldOpen = noteOpenSV.get();
         if (e.translationY < -OPEN_DISTANCE || e.velocityY < -OPEN_VELOCITY) shouldOpen = true;
         else if (e.translationY > OPEN_DISTANCE || e.velocityY > OPEN_VELOCITY) shouldOpen = false;
@@ -263,9 +292,9 @@ export default function ViewNote({
         scheduleOnRN(onToggleNote, shouldOpen);
       } else if (axis.get() === "x" && stride > GUTTER) {
         //* where the track sits right now, measured in pages
-        const target = snapTarget(-offset.get() / stride, e.velocityX, count);
+        const target = snapTarget(-offset.get() / stride, e.velocityX, pageCount);
         offset.set(withSpring(-target * stride, { ...SNAP, velocity: e.velocityX }));
-        if (target !== index) scheduleOnRN(commitIndex, target);
+        if (target !== page) scheduleOnRN(commitPage, target);
       }
       axis.set(null);
     });
@@ -277,9 +306,12 @@ export default function ViewNote({
   //* only the neighbours are mounted, so a thousand-note gallery still costs
   //* three cards — and both of the ones you can swipe to are already there,
   //* which is what makes the drag show real content
-  const first = Math.max(0, index - 1);
-  const last = Math.min(count - 1, index + 1);
+  const first = Math.max(0, page - 1);
+  const last = Math.min(pageCount - 1, page + 1);
+  //* `last` can be the ad page, which isn't in `notes` — slice stops at the end
+  //* of the array anyway, and the ad renders on its own after the notes
   const windowed: NoteModel[] = notes.slice(first, last + 1);
+  const adMounted = last === count;
 
   // The gap the open strip sits in. Driven by `open` so the space grows with
   // the drag, and read by the cards too — they leave exactly this much room at
@@ -302,7 +334,12 @@ export default function ViewNote({
     notes,
     currentIndex: index,
     colors,
-    onSelect: onIndexChange,
+    //* a tile tap from the ad page has to leave it — even the last note's
+    //* tile, whose index the screen already has and would otherwise ignore
+    onSelect: (i: number) => {
+      onAdShowingChange?.(false);
+      onIndexChange(i);
+    },
     position: stripPos,
   };
 
@@ -319,7 +356,9 @@ export default function ViewNote({
           <Animated.View style={[styles.track, trackStyle]}>
             {windowed.map((note, i) => {
               const noteIndex = first + i;
-              const isCurrent = noteIndex === index;
+              //* against the page, not the index: on the ad page the last note
+              //* stops being current, so its video player is released
+              const isCurrent = noteIndex === page;
               return (
                 <View
                   key={note.id}
@@ -356,6 +395,17 @@ export default function ViewNote({
                 </View>
               );
             })}
+
+            {endAd != null && adMounted && (
+              <View style={[styles.slot, { left: count * stride, zIndex: onAd ? 1 : 0 }]}>
+                {/* The photo's box exactly — same width, height and place — so
+                    the ad arrives as one more page rather than a different
+                    kind of screen. The hint line under it stays empty. */}
+                <View style={[styles.adPage, { width: box.w, height: photoFull }]}>
+                  <EndAdCard ad={endAd} colors={colors} />
+                </View>
+              </View>
+            )}
           </Animated.View>
         </View>
       </GestureDetector>

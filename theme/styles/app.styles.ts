@@ -178,6 +178,10 @@ export const overflowMenuStyles = StyleSheet.create({
 
 //* components/AdBannerStrip.tsx
 export const AD_BORDER_WIDTH = 1;
+/** Height the bottom bar reserves for its banner, above the safe-area inset.
+ *  Banner requests are capped to it, so a creative can never outgrow the bar
+ *  and push the screen above it around. */
+export const AD_BAR_HEIGHT = 60;
 
 export const adBannerStripStyles = StyleSheet.create({
   ad: {
@@ -191,5 +195,11 @@ export const adBannerStripStyles = StyleSheet.create({
     height: 0,
     borderWidth: 0,
     opacity: 0,
+  },
+  //* pinned to a screen's bottom edge: full width, no radius, a hairline on top
+  bar: {
+    borderTopWidth: AD_BORDER_WIDTH,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

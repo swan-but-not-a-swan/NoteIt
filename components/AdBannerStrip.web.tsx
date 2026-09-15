@@ -5,6 +5,11 @@ import type { ThemeColors } from "@/theme/colors";
 // just this component. AdBannerStrip.tsx already renders nothing on web; this
 // keeps that behaviour without importing the SDK. Metro picks .web.tsx over
 // .tsx on web, so native builds are unaffected.
-export default function AdBannerStrip(_props: { colors: ThemeColors }) {
+export default function AdBannerStrip(_props: {
+  colors: ThemeColors;
+  variant?: "card" | "bar";
+  bottomInset?: number;
+  suppressed?: boolean;
+}) {
   return null;
 }
