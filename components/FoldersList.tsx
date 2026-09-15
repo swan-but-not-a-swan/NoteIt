@@ -1,11 +1,11 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Pressable, ScrollView, Text, View } from "react-native";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import Folder from "./Folder";
 import AdBannerStrip from "./AdBannerStrip";
 import { FolderModel } from "../models/FolderModel";
 import { FolderListItemModel } from "../models/FolderListItemModel";
+import { foldersListStyles as styles } from "@/theme/styles/folders.styles";
 
 type Props = {
   items: FolderListItemModel[];
@@ -31,7 +31,7 @@ export default function FolderList({
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {items.map(({ folder, count }, i) => (
+      {items.map(({ folder, count }) => (
         <View key={folder.id} style={styles.item}>
           <Folder
             folder={folder}
@@ -40,7 +40,6 @@ export default function FolderList({
             onOpen={() => onOpenFolder(folder.id)}
             onEdit={() => onEditFolder(folder)}
           />
-          {showAdBanner && i === 1 && <AdBannerStrip colors={colors} />}
         </View>
       ))}
 
@@ -53,6 +52,20 @@ export default function FolderList({
       </Pressable>
 
       {/*
+        Fixed position, below the list rather than woven into it. This used to
+        sit inside the map at `i === 1`, which meant it only mounted once a
+        second folder existed — so a new install, which is every user at some
+        point, never requested an ad at all and never gathered consent. The
+        placement quietly disabled the app's only revenue path for exactly the
+        people most likely to be using it.
+
+        Below "New folder" also keeps the ad out of the way of the list's own
+        rhythm: it reads as a footer rather than as something impersonating a
+        folder, which is the failure mode of in-feed ads.
+      */}
+      {showAdBanner && <AdBannerStrip colors={colors} />}
+
+      {/*
         TODO (business logic): pull-up-past-the-bottom-of-the-list also
         triggers onNewFolder in the web reference (usePullUpToAdd). That's a
         gesture-handler + reanimated interaction, not a styling concern, so
@@ -62,32 +75,3 @@ export default function FolderList({
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 18,
-    paddingBottom: 18,
-    gap: 10,
-  },
-  item: {
-    gap: 10,
-  },
-  newFolder: {
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 4,
-  },
-  newFolderLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
-  },
-});

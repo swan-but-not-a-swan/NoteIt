@@ -1,10 +1,12 @@
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+//! Manually reviewed since 15/09/2026
+
+import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { CropperContent } from "./ThumbnailCropper";
+import { newFolderStyles as styles } from "@/theme/styles/folders.styles";
 
 type Props = {
   visible: boolean;
@@ -14,17 +16,12 @@ type Props = {
   color: string;
   onColorChange: (color: string) => void;
   swatches: string[];
-  /** Custom cover photo URI (already persisted — see the folder-thumbnails
-   *  storage pattern), or null/undefined to fall back to the folder icon. */
   thumbnailUri?: string | null;
-  /** Launch the image picker; this component doesn't touch
-   *  expo-image-picker itself, only what happens after a photo comes back. */
   onPickThumbnail: () => void;
-  /** Omit to hide the "Remove photo" action entirely (e.g. while nothing's picked). */
   onRemoveThumbnail?: () => void;
   cropSourceUri?: string | null;
   onCropCancel: () => void;
-  onCropConfirm: (croppedUri: string) => void;
+  onCropConfirm: (croppedUri: string) => Promise<void>;
   onDelete?: () => void;
   error?: string;
   colors: ThemeColors;
@@ -59,7 +56,6 @@ export default function NewFolder({
         <CropperContent
           key={cropSourceUri}
           sourceUri={cropSourceUri}
-          colors={colors}
           onCancel={onCropCancel}
           onConfirm={onCropConfirm}
         />
@@ -178,123 +174,3 @@ export default function NewFolder({
     </Modal>
   );
 }
-
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  card: {
-    width: "100%",
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 20,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-  title: {
-    fontFamily: fonts.frauncesSemiBold,
-    fontSize: 18,
-  },
-  deleteButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    // marginBottom is set inline — depends on whether the "Remove photo" row is showing.
-  },
-  preview: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    overflow: "hidden",
-  },
-  previewImage: {
-    width: "100%",
-    height: "100%",
-  },
-  previewBadge: {
-    position: "absolute",
-    right: -2,
-    bottom: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  removeThumbnail: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    alignSelf: "flex-start",
-    marginBottom: 18,
-  },
-  removeThumbnailLabel: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12,
-  },
-  input: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    fontFamily: fonts.interRegular,
-    fontSize: 14,
-  },
-  label: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  swatches: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  swatch: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 2.5,
-  },
-  error: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-    marginBottom: 14,
-  },
-  buttons: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  button: {
-    flex: 1,
-    borderRadius: 10,
-    paddingVertical: 11,
-    alignItems: "center",
-  },
-  buttonLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
-  },
-});

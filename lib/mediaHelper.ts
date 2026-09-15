@@ -1,39 +1,14 @@
-import { Directory, File, Paths } from "expo-file-system";
+//! Manually reviewed since 14/09/2026
+
+import { Directory, File } from "expo-file-system";
 import { Platform } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Crypto from "expo-crypto";
-import * as VideoThumbnails from 'expo-video-thumbnails';
+import * as VideoThumbnails from "expo-video-thumbnails";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
-export function deleteThumbnailFile(uri: string) {
-    const file = new File(uri);
-    if (file.exists) {
-        file.delete(); //* throws if missing, hence the exists check — this makes it idempotent
-    }
-}
-
-export async function thumbnailFileValidatorAsync():Promise<string|undefined>
-{
-    if (Platform.OS === "web") 
-    {
-        //*expo file system doesn't work on web, so error is shown if thumbnail is picked on web.
-        return "Photo thumbnails aren't supported in the web preview — test this on a device or simulator.";
-    }
-    
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-        return "Allow photo library access to set a thumbnail.";
-    }
-    return undefined;
-}
-
-export async function getThumbnailFileUri(destDir: Directory, croppedUri: string): Promise<string>
-{
-    destDir.create({ intermediates: true, idempotent: true });
-    const dest = new File(destDir, `${Crypto.randomUUID()}.jpg`);
-    await new File(croppedUri).copy(dest); // file written before...
-    return dest.uri;
-}
+//* Width a grid/filmstrip tile is ever rendered at.
+const THUMBNAIL_WIDTH = 400;
 
 const MEDIA_EXTENSIONS: Record<"image" | "video", { allowed: string[]; fallback: string }> = {
     image: { allowed: ["jpg", "jpeg", "png", "heic", "heif", "webp", "gif"], fallback: "jpg" },
@@ -60,8 +35,28 @@ export type SourceMedia = {
     mimeType?: string | null;
 };
 
-export function extensionFrom(source: SourceMedia, mediaType: "image" | "video"): string
-{
+//! Manually reviewed since 14/09/2026
+export async function moveAndGetImageUri(destDir: Directory, sourceUri: string): Promise<string> {
+    destDir.create({ intermediates: true, idempotent: true });
+    const dest = new File(destDir, `${Crypto.randomUUID()}.jpg`);
+    await new File(sourceUri).move(dest); //* move file from cache into app storage
+    return dest.uri;
+}
+
+//! Manually reviewed since 14/09/2026
+export function deleteFileIfExists(uri: string) {
+    try {
+        const file = new File(uri);
+        if (file.exists) {
+            file.delete();
+        }
+    } catch (error) {
+        console.error("Error deleting file:", uri, error);
+    }
+}
+
+//! Manually reviewed since 14/09/2026
+export function extensionFrom(source: SourceMedia, mediaType: "image" | "video"): string {
     const { allowed, fallback } = MEDIA_EXTENSIONS[mediaType];
 
     //* what the picker reported
@@ -78,50 +73,54 @@ export function extensionFrom(source: SourceMedia, mediaType: "image" | "video")
     return fallback;
 }
 
-export async function getNoteMediaFileUri(
-    destDir: Directory, source: SourceMedia, mediaType: "image" | "video"): Promise<string>
-{
+//! Manually reviewed since 14/09/2026
+export async function copyAndGetMediaFileUri(destDir: Directory, source: SourceMedia, mediaType: "image" | "video"): Promise<string> {
     destDir.create({ intermediates: true, idempotent: true });
     const extension = extensionFrom(source, mediaType); //* get the extension of the media file
     const dest = new File(destDir, `${Crypto.randomUUID()}.${extension}`);
-    await new File(source.uri).copy(dest); //* creates a copy of the media file in the app storage
+    await new File(source.uri).copy(dest); //* creates a copy of the media file from gallery to the app storage
     return dest.uri;
 }
 
-// Width a grid/filmstrip tile is ever rendered at, with headroom for the
-// densest screens — a tile is roughly a third of the screen, so this is
-// generous rather than tight.
-const THUMBNAIL_WIDTH = 400;
+//! Manually reviewed since 14/09/2026
+export async function thumbnailFileValidatorAsync(): Promise<string | undefined> {
+    if (Platform.OS === "web")
+        return "Photo thumbnails aren't supported in the web preview — test this on a device or simulator.";
 
-// Shrinks a photo down to tile size so the gallery isn't decoding a full
-// camera-resolution image per cell. Height is omitted so the aspect ratio is
-// preserved. Like getThumbnailFromVideo, the result is written to the *cache*
-// directory (saveAsync's own documentation), so the caller has to copy it
-// into app storage with getThumbnailFileUri.
-export async function getThumbnailFromImageAsync(source : string) : Promise<string>
-{
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+        return "Allow photo library access to set a thumbnail.";
+    }
+    return undefined;
+}
+
+//! Manually reviewed since 14/09/2026
+export async function getThumbnailFromImageAsync(source: string): Promise<string> {
     const rendered = await ImageManipulator.manipulate(source).resize({ width: THUMBNAIL_WIDTH }).renderAsync();
     const { uri } = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
     return uri;
 }
 
-// Grabs a still from a video. The file this produces lands in the *cache*
-// directory on both platforms (see the module's native source), so a caller
-// that needs it to outlive an OS cache sweep has to copy it into app storage
-// with getThumbnailFileUri.
-export async function getThumbnailFromVideo(source : string) : Promise<string>
-{
-    //* `time` is in milliseconds, so 0 is the first frame. Nudge it a few
-    //* hundred ms if a recording turns out to start on a black frame.
-    //* `quality` keeps the file small — this is only ever shown as a tile.
-    //
-    //* Deliberately not expo-video's player.generateThumbnailsAsync(): that
-    //* returns a VideoThumbnail, an in-memory native image handle with no
-    //* uri, and there's no supported way to write one to disk — expo-image's
-    //* writeToCacheAsync() only accepts an ImageRef, which a VideoThumbnail
-    //* is not. NoteModel.thumbnailUri is a persisted string, so it needs a
-    //* real file. generateThumbnailsAsync is the right call only for frames
-    //* that live and die within a session, e.g. a scrub strip.
-    const {uri} =  await VideoThumbnails.getThumbnailAsync(source, { time: 0, quality: 0.7 });
-    return uri;
+//! Manually reviewed since 14/09/2026
+export async function getThumbnailFromVideoAsync(source: string): Promise<string> {
+    const { uri } = await VideoThumbnails.getThumbnailAsync(source, { time: 0, quality: 0.7 });
+    try {
+        return await getThumbnailFromImageAsync(uri); //* resize the thumbnail to a smaller size
+    } finally {
+        deleteFileIfExists(uri); //* the full-size frame is only an intermediate
+    }
+}
+
+//* A tile-sized thumbnail for a note's media, moved into `destDir` — or null if
+//* one couldn't be made (an unsupported video codec, for instance). Both
+//* generators write to the cache directory, which the OS may clear, hence the move.
+export async function createThumbnailAsync(destDir: Directory, mediaUri: string, mediaType: "image" | "video"): Promise<string | null> {
+    try {
+        const generatedUri = mediaType === "video"
+            ? await getThumbnailFromVideoAsync(mediaUri)
+            : await getThumbnailFromImageAsync(mediaUri);
+        return await moveAndGetImageUri(destDir, generatedUri);
+    } catch {
+        return null;
+    }
 }

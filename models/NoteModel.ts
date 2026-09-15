@@ -4,7 +4,7 @@ export type NoteModel = {
     id: string;
     mediaUri: string;
     mediaType: NoteMediaType;
-    thumbnailUri: string | null;
+    thumbnailUri: string;
     note: string;
     date: string;
     tagIds: string[];

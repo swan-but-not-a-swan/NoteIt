@@ -1,4 +1,5 @@
 import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -15,14 +16,25 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
+import { ICON_FONTS } from "@/lib/iconFont";
+import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
+import { EntitlementsProvider } from "@/lib/EntitlementsContext";
+import { LibraryProvider, useLibrary } from "@/lib/LibraryContext";
 
 SplashScreen.preventAutoHideAsync();
 
-export default function RootLayout() {
+// Split out of RootLayout because useTheme() has to run *below* the provider
+// — a component can't consume a context it renders itself. Everything that
+// depends on the resolved theme (the status bar style, the startup gate)
+// lives here.
+function AppShell() {
+  const { mode, ready: themeReady } = useTheme();
+  const { ready: libraryReady } = useLibrary();
+
   // theme/fonts.ts references these family names everywhere (Folder,
-  // FoldersList, NewFolder, TopBar, PoweredByFooter, the splash) but until
-  // now nothing ever actually loaded them — every one of those screens has
-  // been silently falling back to the system font.
+  // FoldersList, NewFolder, TopBar, the splash) but until now nothing ever
+  // actually loaded them — every one of those screens has been silently
+  // falling back to the system font.
   const [fontsLoaded] = useFonts({
     Fraunces_500Medium,
     Fraunces_600SemiBold,
@@ -31,17 +43,30 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    //* empty on native — the icon font is compiled in there. Only the web
+    //* build has anything to load.
+    ...ICON_FONTS,
   });
 
+  // Wait for the saved theme as well as the fonts. Reading it is one
+  // AsyncStorage hit and finishes long before the fonts do, so this costs
+  // nothing in practice — but hiding the splash first would let the first
+  // screen paint dark and then snap to light.
+  //
+  // The library too: the first screen would otherwise paint "Nothing here
+  // yet" and then fill in. Its read starts alongside the fonts (the provider
+  // sits outside this shell), so it only adds time if it outlasts them.
+  const startupReady = fontsLoaded && themeReady && libraryReady;
+
   useEffect(() => {
-    // Keep the native splash up until the real fonts are ready, so there's
-    // no flash of system-font text before they swap in.
-    if (fontsLoaded) {
+    // Keep the native splash up until the real fonts and the saved theme are
+    // ready, so there's no flash of system-font text or of the wrong palette.
+    if (startupReady) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [startupReady]);
 
-  if (!fontsLoaded) {
+  if (!startupReady) {
     return null;
   }
 
@@ -54,6 +79,10 @@ export default function RootLayout() {
       {/* Required for useSafeAreaInsets() (used by TopBar to clear the
           status bar/notch) to resolve real device insets anywhere below this. */}
       <SafeAreaProvider>
+        {/* Inverted against the background, not tied to the OS setting: the
+            app picks its own theme, so a light-mode phone running the dark
+            theme still needs light status-bar glyphs. */}
+        <StatusBar style={mode === "light" ? "dark" : "light"} />
         {/* No explicit Stack.Screen for "(tabs)" — Expo Router auto-registers
             it as a route regardless (file-based routing doesn't require a
             declared Screen to exist), and the explicit entry only ever
@@ -67,5 +96,25 @@ export default function RootLayout() {
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      {/* Outside AppShell on purpose: AppShell renders null until the fonts
+          and saved theme resolve, so a provider nested inside it would not
+          mount — and so would not start configuring RevenueCat or reading
+          entitlements — until after that gate opens. Out here the
+          entitlement read overlaps the font load instead of queueing behind
+          it, which is free latency. */}
+      <EntitlementsProvider>
+        {/* Outside AppShell for the same reason: the one storage read of the
+            session starts now, overlapping the font load. */}
+        <LibraryProvider>
+          <AppShell />
+        </LibraryProvider>
+      </EntitlementsProvider>
+    </ThemeProvider>
   );
 }

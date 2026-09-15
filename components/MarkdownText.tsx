@@ -4,6 +4,10 @@ import { fonts } from "@/theme/fonts";
 type Props = {
   text: string;
   style?: StyleProp<TextStyle>;
+  /** Clamp to this many lines, ellipsising the rest. Omit for the whole note.
+   *  Only the outer Text takes it — RN applies the clamp to the block, and the
+   *  bold/italic spans inside are part of that same block. */
+  numberOfLines?: number;
 };
 
 type Segment = {
@@ -35,11 +39,11 @@ function parseInlineMarkdown(text: string): Segment[] {
 // Renders **bold** and *italic*/_italic_ spans inline within a block of
 // picture-note text. Read-only — this is for displaying a saved note, not
 // for editing one (the write side just sees the raw markdown as plain text).
-export default function MarkdownText({ text, style }: Props) {
+export default function MarkdownText({ text, style, numberOfLines }: Props) {
   const segments = parseInlineMarkdown(text);
 
   return (
-    <Text style={style}>
+    <Text style={style} numberOfLines={numberOfLines}>
       {segments.map((segment, index) => {
         if (segment.text.length === 0) return null;
         // Nested <Text> inherits fontFamily/size/color from the outer style

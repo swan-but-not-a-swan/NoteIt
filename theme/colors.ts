@@ -43,23 +43,44 @@ export const DARK_THEME: ThemeColors = {
 };
 
 // "Daylight Contact Sheet" — light theme, same token roles.
+//
+// The neutrals are iOS's own light-mode system colours rather than a lightened
+// version of the dark theme: a near-white grouped background with white cards
+// on top of it, cool greys, and a hairline you can actually see. That is what
+// makes it read as bright — the previous warm cream (#F5EFE3) was a *tinted*
+// light theme, which looks dim next to anything genuinely white.
+//
+// The amber and teal stay, but both go deeper than their dark-theme values.
+// That is not a drift from the brand, it is the same adaptation iOS makes
+// (systemBlue is #007AFF on light and #0A84FF on dark): a colour that carries
+// a dark background is too pale to carry text on a white one. The dark
+// theme's #B87F42 scores 3.06:1 as text here — it cannot be used as-is.
+//
+// Every value below is contrast-checked against the pairs the app actually
+// renders, including the tinted chips built with hexToRgba(), where the label
+// sits on a 12–18% wash of the *same* accent. That last rule is the strictest
+// one and is what pins the accent this deep.
 export const LIGHT_THEME: ThemeColors = {
-  bg: "#F5EFE3",
-  surface: "#FFFFFF",
-  surfaceHi: "#F0E6D2",
-  paper: "#F3EAD9",
-  paperShadow: "#E4D6BD",
-  ink: "#382C21",
-  tealOnPaper: "#3C5F59",
-  textPrimary: "#2B2318",
-  accent: "#8A5F34",
-  accentSolid: "#B87F42",
-  onAccent: "#241D16",
-  teal: "#3C5F59",
-  stone: "#635A4D",
-  stoneDim: "#756B5A",
-  line: "rgba(43,35,24,0.10)",
-  error: "#A8402E",
+  bg: "#F2F2F7", // iOS systemGroupedBackground
+  surface: "#FFFFFF", // iOS secondarySystemGroupedBackground — cards, rows, fields
+  surfaceHi: "#E5E5EA", // iOS systemGray5 — ad slot, disabled fills
+  paper: "#FFFFFF",
+  paperShadow: "#E5E5EA",
+  ink: "#1C1C1E",
+  tealOnPaper: "#2C605A",
+  textPrimary: "#1C1C1E", // iOS label
+  //* one amber for both text and fills. Splitting them (a pale fill with dark
+  //* text, a dark accent for labels) is what the old pair did, and it left the
+  //* accent-tinted chips below AA because the label and its own wash were too
+  //* close in luminance.
+  accent: "#8B4E0B",
+  accentSolid: "#8B4E0B",
+  onAccent: "#FFFFFF", // white on the fill, the way an iOS filled button reads
+  teal: "#2C605A",
+  stone: "#55555A", // secondary label
+  stoneDim: "#6E6E73", // tertiary label — the lightest grey still clearing 4.5:1
+  line: "#D1D1D6", // iOS systemGray4 / separator
+  error: "#D70015", // iOS systemRed, accessible variant
 };
 
 export function themeFor(mode: ThemeMode): ThemeColors {

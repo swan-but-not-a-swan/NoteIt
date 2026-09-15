@@ -1,40 +1,28 @@
+//! Manually Reviewed since 14/09/2026
 import { StyleSheet, View } from "react-native";
 import { Image } from "expo-image";
-import { Feather } from "@react-native-vector-icons/feather";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { NoteModel } from "../models/NoteModel";
 
 type Props = {
   note: NoteModel;
   borderRadius?: number;
-  /** Small centered play icon over a video tile. Default true. */
   showPlayBadge?: boolean;
+  preferFullMedia?: boolean;
 };
 
-// Renders note.thumbnailUri — a still image written once when the note is
-// saved, so a grid never touches a video player.
-//
-// Two earlier attempts to preview video here failed on device and should not
-// be retried:
-//   1. A paused <VideoView> per tile — paints nothing on iOS/Android (a
-//      player only draws once playback starts); it only looked right on web.
-//   2. player.generateThumbnailsAsync() per tile — crashed the app natively,
-//      and a JS try/catch can't catch that.
-// Both also spun up one native player per video tile, which a scrolling grid
-// should never do.
-//
-// Fallbacks cover notes saved before thumbnailUri existed: a photo can still
-// show its full-size media, a video gets the placeholder tile.
-export default function MediaThumb({ note, borderRadius = 0, showPlayBadge = true }: Props) {
+export default function MediaThumb({
+  note,
+  borderRadius = 0,
+  showPlayBadge = true,
+  preferFullMedia = false,
+}: Props) {
   const isVideo = note.mediaType === "video";
-  const previewUri = note.thumbnailUri ?? (isVideo ? null : note.mediaUri);
+  const previewUri = preferFullMedia && !isVideo ? note.mediaUri : note.thumbnailUri;
 
   return (
     <View style={[styles.wrap, { borderRadius }]}>
-      {previewUri != null ? (
-        <Image source={{ uri: previewUri }} style={styles.media} />
-      ) : (
-        <View style={styles.videoTile} />
-      )}
+      <Image source={{ uri: previewUri }} style={styles.media} />
       {isVideo && showPlayBadge && (
         <View style={styles.badge}>
           <View style={styles.playCircle}>
@@ -51,15 +39,11 @@ const styles = StyleSheet.create({
     width: "100%",
     height: "100%",
     overflow: "hidden",
+    backgroundColor: "#1A1714",
   },
   media: {
     width: "100%",
     height: "100%",
-  },
-  videoTile: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#1A1714",
   },
   badge: {
     pointerEvents: "none",
@@ -80,8 +64,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   playIcon: {
-    // nudge the glyph's optical center — Feather's "play" triangle sits
-    // slightly left of its box, this re-centers it inside the round badge
     marginLeft: 2,
   },
 });

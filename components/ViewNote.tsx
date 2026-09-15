@@ -1,19 +1,12 @@
-import { useEffect, useState } from "react";
-import {
-  Modal,
-  Platform,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from "react-native";
-import { Feather } from "@react-native-vector-icons/feather";
+import { useCallback, useEffect, useState } from "react";
+import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { Feather } from "@react-native-vector-icons/feather/static";
 import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import * as Haptics from "expo-haptics";
 import Animated, {
+  Extrapolation,
+  interpolate,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -21,322 +14,251 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useVideoPlayer, VideoView } from "expo-video";
+import type { NativeAd } from "react-native-google-mobile-ads";
 import type { ThemeColors } from "@/theme/colors";
-import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/lib/color";
 import { formatDayDate, formatShortDate } from "@/lib/date";
+import { appendSnippet, rubberBand, snapTarget } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
+import { SnippetModel } from "../models/SnippetModel";
+import EndAdCard from "./EndAd";
+import FilmStrip, { filmStripMetrics } from "./FilmStrip";
 import MarkdownText from "./MarkdownText";
-import TopBar from "./TopBar";
-import FilmStrip from "./FilmStrip";
+import MediaThumb from "./MediaThumb";
+import { viewNoteStyles as styles } from "@/theme/styles/note.styles";
 
-const CARD_H = 400;
-const DRAG_THRESHOLD = 55;
-// Horizontal padding on the body — the card fills what's left, so this is
-// also what a full-width swipe measures. Kept as a constant because the pan
-// handler needs the same number the stylesheet uses.
-const BODY_PADDING_H = 22;
+/** Dead space between two pages, so the photo arriving is visibly a separate
+ *  one rather than the same photo sliding. iOS Photos uses the same trick. */
+const GUTTER = 16;
+
+/** One line of note plus its padding — what shows under the photo while the
+ *  photo is the thing you're looking at. */
+const HINT_H = 46;
+
+/** Inactive tile size for the strip while the note is open. The active tile
+ *  comes out 8 larger — 96 — which is exactly what the standalone thumbnail
+ *  used to be, because the strip is doing that job now. */
+const NOTE_TILE = 88;
+
+/** Where the open strip's active tile lands. The photo condenses onto exactly
+ *  these numbers, so the hand-off from photo to tile is invisible. */
+const TILE = filmStripMetrics(NOTE_TILE);
+
+const OPEN_MS = 300;
+/** The strip's own fade. Short and independent of the drag: the gap opens with
+ *  your finger, but the strip arriving is an event, not something you scrub. */
+const STRIP_FADE_MS = 140;
+
+/** The last stretch of the condense, over which the photo hands off to the
+ *  strip's own tile. Same image, same place, so the crossfade is invisible and
+ *  what you see is one continuous movement. */
+const HANDOFF_FROM = 0.75;
+/** Drag this far, or throw the finger this fast, and the note commits. */
+const OPEN_DISTANCE = 55;
+const OPEN_VELOCITY = 500; // px/s
+
+/** The sideways snap. Slightly overdamped (zeta ~1.07), so it decelerates into
+ *  place without the bounce a springier config would add — and it takes the
+ *  release velocity, so a hard flick lands faster than a slow drag. */
+const SNAP = { damping: 30, stiffness: 220, mass: 0.9 };
 
 type Props = {
-  visible: boolean;
-  colors: ThemeColors;
-  /** Folder name, or "Gallery" — whatever scope `notes` was drawn from. */
-  title: string;
-  /** The scoped list to swipe/navigate within (a folder's notes, or all of them). */
+  /** Everything swipeable from here — the folder's notes, or the whole gallery. */
   notes: NoteModel[];
-  /** Which note to open on. */
-  startId: string | null;
-  /** All stored tags, to resolve a note's tagIds into display titles. */
-  tags: TagModel[];
-  onClose: () => void;
-  /** Long-pressing "Show note" starts a brand new picture-note. Optional:
-   *  the folder screen has no AddNote modal of its own, so it omits this
-   *  and the long-press is simply inert there. */
-  onAddNote?: () => void;
-};
-
-// Full-screen swipeable viewer — ported from the web reference's Viewer +
-// PhotoCard: swipe up/down to flip between the photo and its note (styled
-// like a paper journal page), swipe left/right to move between notes, plus
-// a filmstrip and prev/next/toggle controls for the same actions without a
-// gesture. Read-only — editing/deleting a note is business logic Swan wires
-// up himself, same boundary as everywhere else in this app.
-export default function ViewNote({
-  visible,
-  colors,
-  title,
-  notes,
-  startId,
-  tags,
-  onClose,
-  onAddNote,
-}: Props) {
-  const insets = useSafeAreaInsets();
-  const [index, setIndex] = useState(0);
-  const [noteOpen, setNoteOpen] = useState(false);
-  const [enterDir, setEnterDir] = useState<"next" | "prev" | null>(null);
-
-  // Where the filmstrip sits, in tile units. It lives up here rather than
-  // inside FilmStrip because the pan gesture that drives it mid-swipe is
-  // down in NoteCard, and this is their nearest common parent.
-  const stripPos = useSharedValue(0);
-
-  // Reset per viewing session, without an effect. Both parents keep this
-  // component mounted whether or not it's visible, so there's no mount
-  // boundary to hang a fresh useState initializer off the way AddNote's date
-  // picker has. Doing it in an effect meant React committed one frame still
-  // showing the previously-viewed note before correcting itself. Adjusting
-  // state during render is React's sanctioned escape hatch for exactly this:
-  // it re-runs the component immediately, before anything is painted, so the
-  // stale frame never reaches the screen.
-  const session = visible ? startId : null;
-  const [prevSession, setPrevSession] = useState(session);
-  if (session !== prevSession) {
-    setPrevSession(session);
-    if (visible) {
-      const i = notes.findIndex((n) => n.id === startId);
-      setIndex(i >= 0 ? i : 0);
-      setNoteOpen(false);
-      setEnterDir(null);
-    }
-  }
-
-  useEffect(() => {
-    if (visible && notes.length === 0) {
-      onClose();
-    }
-  }, [visible, notes.length]);
-
-  // Realigns the strip when the index changes from something that isn't a
-  // swipe — a filmstrip tap or the prev/next buttons. A swipe already drove
-  // stripPos to this same target from inside the gesture, so re-running it
-  // here just retargets an animation that's already heading there.
-  useEffect(() => {
-    stripPos.set(withTiming(index, { duration: 280 }));
-  }, [index]);
-
-  const startNewNote = () => {
-    if (onAddNote == null) return;
-    // Web has no haptics engine — expo-haptics warns rather than no-ops
-    // there, so don't call it at all.
-    if (Platform.OS !== "web") {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {
-        // a device with no taptic engine — the modal still opens
-      });
-    }
-    onAddNote();
-  };
-
-  const go = (dir: number) => {
-    setIndex((i) => {
-      const next = i + dir;
-      if (next < 0 || next >= notes.length) return i;
-      setNoteOpen(false);
-      setEnterDir(dir > 0 ? "next" : "prev");
-      return next;
-    });
-  };
-
-  const jumpTo = (i: number) => {
-    if (i === index) return;
-    setEnterDir(i > index ? "next" : "prev");
-    setNoteOpen(false);
-    setIndex(i);
-  };
-
-  const note = notes[index];
-
-  const handleShare = async () => {
-    if (note == null || Platform.OS === "web") return;
-    const noteTags = note.tagIds
-      .map((id) => tags.find((t) => t.id === id))
-      .filter((t): t is TagModel => t != null);
-    const shareText = [
-      note.note,
-      noteTags.length > 0 ? noteTags.map((t) => `#${t.title}`).join(" ") : null,
-      note.date.length > 0 ? formatDayDate(note.date) : null,
-    ]
-      .filter((s): s is string => s != null && s.length > 0)
-      .join("\n\n");
-
-    try {
-      await Share.share({ title, message: shareText });
-    } catch {
-      // user dismissed the share sheet — no-op
-    }
-  };
-
-  return (
-    <Modal visible={visible && note != null} animationType="slide" onRequestClose={onClose}>
-      {note != null && (
-        <View style={[styles.screen, { backgroundColor: colors.bg }]}>
-          <TopBar
-            title={title}
-            colors={colors}
-            onBack={onClose}
-            right={
-              <View style={styles.headerRight}>
-                <Text style={[styles.counter, { color: colors.stoneDim }]}>
-                  {index + 1} / {notes.length}
-                </Text>
-                <Pressable
-                  onPress={handleShare}
-                  hitSlop={8}
-                  accessibilityLabel="Share this picture-note"
-                  style={[styles.shareButton, { backgroundColor: colors.surface }]}
-                >
-                  <Feather name="share" size={16} color={colors.textPrimary} />
-                </Pressable>
-              </View>
-            }
-          />
-
-          <View style={[styles.body, { paddingBottom: insets.bottom }]}>
-            <NoteCard
-              key={note.id}
-              note={note}
-              tags={tags}
-              colors={colors}
-              noteOpen={noteOpen}
-              onToggleNote={setNoteOpen}
-              onSwipeLeft={() => go(1)}
-              onSwipeRight={() => go(-1)}
-              enterDir={enterDir}
-              index={index}
-              count={notes.length}
-              stripPos={stripPos}
-            />
-
-            <FilmStrip
-              notes={notes}
-              currentIndex={index}
-              colors={colors}
-              onSelect={jumpTo}
-              position={stripPos}
-            />
-
-            <View style={styles.navRow}>
-              <Pressable
-                onPress={() => go(-1)}
-                disabled={index === 0}
-                style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === 0 ? 0.4 : 1 }]}
-              >
-                <Feather name="chevron-left" size={18} color={index === 0 ? colors.stoneDim : colors.textPrimary} />
-              </Pressable>
-
-              <Pressable
-                onPress={() => setNoteOpen((v) => !v)}
-                onLongPress={startNewNote}
-                accessibilityHint={
-                  onAddNote != null ? "Press and hold to start a new picture-note" : undefined
-                }
-                style={[styles.toggleBtn, { backgroundColor: noteOpen ? colors.accent : colors.surface }]}
-              >
-                <Feather name="file-text" size={16} color={colors.textPrimary} />
-                <Text style={[styles.toggleLabel, { color: colors.textPrimary }]}>
-                  {noteOpen ? "Show photo" : "Show note"}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => go(1)}
-                disabled={index === notes.length - 1}
-                style={[styles.navBtn, { backgroundColor: colors.surface, opacity: index === notes.length - 1 ? 0.4 : 1 }]}
-              >
-                <Feather
-                  name="chevron-right"
-                  size={18}
-                  color={index === notes.length - 1 ? colors.stoneDim : colors.textPrimary}
-                />
-              </Pressable>
-            </View>
-
-            {/* TODO (business logic): a real ad renders here once RevenueCat
-                is wired up — this just reserves its footprint so the layout
-                doesn't shift when that lands. */}
-            <View style={[styles.adSlot, { backgroundColor: colors.surfaceHi, borderColor: colors.line }]} />
-          </View>
-        </View>
-      )}
-    </Modal>
-  );
-}
-
-type NoteCardProps = {
-  note: NoteModel;
+  /** Which of them is showing. */
+  index: number;
+  onIndexChange: (index: number) => void;
   tags: TagModel[];
   colors: ThemeColors;
   noteOpen: boolean;
   onToggleNote: (open: boolean) => void;
-  onSwipeLeft: () => void;
-  onSwipeRight: () => void;
-  enterDir: "next" | "prev" | null;
-  /** This card's position in the list, and how many there are. The pan
-   *  handler needs both to work out which tile the strip should land on
-   *  without running off either end. */
-  index: number;
-  count: number;
-  /** Filmstrip position in tile units, driven live from the pan gesture. */
-  stripPos: SharedValue<number>;
+  /** True while the current note's text is being edited in place. */
+  editing: boolean;
+  /** The in-progress text. Owned by the screen, because the header's save
+   *  button lives up there and has to be able to write it. */
+  draft: string;
+  onDraftChange: (text: string) => void;
+  /** Saved snippets, offered as chips under the field while editing. Pass an
+   *  empty array (or omit) to hide the row. */
+  snippets?: SnippetModel[];
+  /** A loaded ad to show as one more page after the last note, or null for
+   *  none (Plus, not loaded yet, or no fill). It never gets a filmstrip tile:
+   *  the strip navigates notes, and the ad isn't one. */
+  endAd?: NativeAd | null;
+  /** True while that ad page is the one on screen. Owned by the screen, like
+   *  `noteOpen`, because the header buttons it hides live up there. */
+  adShowing?: boolean;
+  onAdShowingChange?: (showing: boolean) => void;
 };
 
-function NoteCard({
-  note,
+// The picture-note viewer: a full-bleed photo with the first line of its note
+// underneath, paging sideways to its neighbours, and collapsing to a thumbnail
+// when you pull the note open.
+//
+// It fills whatever box the screen gives it rather than reserving a fixed
+// height. That is what lets the photo be as large as the device allows, and it
+// is why there is no exported card height any more — the screen decides how
+// much room there is, and this measures it.
+//
+// The note's text can be edited in place — the read-only text swaps for a
+// TextInput and nothing else moves. The screen owns the draft and the two
+// commit buttons, because those live in the header; this only renders the
+// field. Deleting is entirely the screen's job: it has the storage call and
+// somewhere to navigate afterwards.
+//
+// Free users get one more page after the last note: an ad, in the same box the
+// photo takes. It is a page of the pager only — the filmstrip, the index and
+// the note gestures all still end at the last note.
+export default function ViewNote({
+  notes,
+  index,
+  onIndexChange,
   tags,
   colors,
   noteOpen,
   onToggleNote,
-  onSwipeLeft,
-  onSwipeRight,
-  enterDir,
-  index,
-  count,
-  stripPos,
-}: NoteCardProps) {
-  const videoPlayer = useVideoPlayer(note.mediaType === "video" ? note.mediaUri : null);
-  // The card fills the body minus its padding. Dragging one card-width moves
-  // the filmstrip exactly one tile, which is what makes the two feel locked
-  // together rather than merely correlated.
-  const { width: windowWidth } = useWindowDimensions();
-  const cardWidth = windowWidth - BODY_PADDING_H * 2;
+  editing,
+  draft,
+  onDraftChange,
+  snippets,
+  endAd = null,
+  adShowing = false,
+  onAdShowingChange,
+}: Props) {
+  // Width seeds from the window because the pager is full-bleed — there is no
+  // padding between it and the screen edge for the two to disagree about. The
+  // measurement still wins once it lands; this only keeps the first frame from
+  // rendering a zero-width photo.
+  const { width: windowW } = useWindowDimensions();
+  const [box, setBox] = useState({ w: windowW, h: 0 });
 
-  // Every shared value below is read and written through .get()/.set()
-  // rather than .value. React Compiler treats a shared value as an external
-  // mutable store, so assigning to .value reads to it as mutating something
-  // it isn't allowed to — strictly it rejects only the ones an effect has
-  // already touched (here that was just stackY, written in the noteOpen sync
-  // and again in the pan handlers), but Reanimated added get/set as the
-  // sanctioned accessors for exactly this, and applying them everywhere
-  // keeps the file consistent instead of leaving one odd one out. Identical
-  // behaviour either way; these are still the same mutable boxes.
+  const stride = box.w + GUTTER;
+  const count = notes.length;
+  //* the ad, when there is one, is page `count` — one past the last note. The
+  //* pager counts it; everything that means "a note" still stops at `count`
+  const pageCount = endAd != null ? count + 1 : count;
+  const onAd = endAd != null && adShowing;
+  //* where the track rests: the ad page while it is showing, the note otherwise
+  const page = onAd ? count : index;
+  const photoFull = Math.max(0, box.h - HINT_H);
+  //* the photo closes all the way now, so a drag maps 1:1 onto its height
+  const travel = Math.max(1, photoFull);
 
-  // vertical: 0 = photo panel showing, -CARD_H = note panel showing
-  const stackY = useSharedValue(noteOpen ? -CARD_H : 0);
-  // horizontal: live drag-to-navigate offset, always springs back to 0
-  const cardX = useSharedValue(0);
-  const noteOpenSV = useSharedValue(noteOpen);
+  // Every shared value below is read and written through .get()/.set() rather
+  // than .value. React Compiler treats a shared value as an external mutable
+  // store, so assigning to .value reads to it as mutating something it isn't
+  // allowed to; Reanimated added get/set as the sanctioned accessors for
+  // exactly this. Identical behaviour — still the same mutable boxes.
+
+  /** Track position in px. At rest it is always -index * stride. */
+  const offset = useSharedValue(0);
+
+  /** Where the strip sits, in tile units. Internal now that the strip is a
+   *  child rather than a sibling — it was a prop only because the pager and
+   *  the strip sat next to each other and had to share it via the screen. */
+  const stripPos = useSharedValue(0);
+  const dragFrom = useSharedValue(0);
   const axis = useSharedValue<"x" | "y" | null>(null);
 
-  // slide-in-from-the-side entrance when this card first mounts for a
-  // newly-navigated-to note (mirrors the reference's per-card `key`-driven
-  // remount + CSS entrance animation).
-  const enterX = useSharedValue(enterDir === "next" ? 70 : enterDir === "prev" ? -70 : 0);
-  const enterOpacity = useSharedValue(enterDir != null ? 0 : 1);
+  /** 0 = photo, 1 = note. Normalised rather than px so a rotation can't strand
+   *  it at a height that no longer exists. */
+  const open = useSharedValue(noteOpen ? 1 : 0);
+  const noteOpenSV = useSharedValue(noteOpen);
+
+  // The last page this pager put itself on. A swipe animates the track and
+  // *then* reports the new index, so without this the effect below would
+  // restart that same spring from wherever it had got to — killing the release
+  // velocity a hard flick was carrying, one frame in.
+  //
+  // A shared value rather than a ref, and written on the JS thread in
+  // commitPage rather than inside the gesture: both sides of the comparison
+  // then happen in JS, in commit order, with no cross-thread propagation to
+  // race. (react-hooks/refs also rejects a ref read from anything handed out
+  // during render, which is what a gesture callback is.)
+  const settled = useSharedValue(-1);
+
+  const commitPage = useCallback(
+    (next: number) => {
+      settled.set(next);
+      onAdShowingChange?.(next === count);
+      //* the ad page has no note index, so the screen's stays on the last note
+      if (next < count) onIndexChange(next);
+    },
+    [count, onAdShowingChange, onIndexChange, settled],
+  );
+
   useEffect(() => {
-    enterX.set(withTiming(0, { duration: 340 }));
-    enterOpacity.set(withTiming(1, { duration: 340 }));
-  }, []);
+    if (stride <= GUTTER) return; // not measured yet
+    if (settled.get() === page) return; // the gesture already animated there
+    //* first positioning jumps: opening note #7 from the gallery should start
+    //* on it, not scroll there from the beginning of the list
+    const first = settled.get() === -1;
+    settled.set(page);
+    offset.set(first ? -page * stride : withSpring(-page * stride, SNAP));
+  }, [page, stride, offset, settled]);
 
   useEffect(() => {
     noteOpenSV.set(noteOpen);
-    stackY.set(withTiming(noteOpen ? -CARD_H : 0, { duration: 280 }));
-  }, [noteOpen]);
+    open.set(withTiming(noteOpen ? 1 : 0, { duration: OPEN_MS }));
+  }, [noteOpen, noteOpenSV, open]);
+
+  //* driven off noteOpen rather than `open`, so the strip fades in at its own
+  //* pace the moment the note commits — tying it to the drag made it arrive
+  //* at whatever opacity the finger happened to stop at
+  const stripFade = useSharedValue(noteOpen ? 1 : 0);
+  useEffect(() => {
+    stripFade.set(withTiming(noteOpen ? 1 : 0, { duration: STRIP_FADE_MS }));
+  }, [noteOpen, stripFade]);
+
+  // The small strip has to outlive `noteOpen` to be able to fade at all — an
+  // unmount is instant. So the fade drives the unmount rather than the other
+  // way round, and an interrupted fade (reopened mid-flight) never unmounts.
+  const [smallStripMounted, setSmallStripMounted] = useState(!noteOpen);
+  const smallStripFade = useSharedValue(noteOpen ? 0 : 1);
+
+  //* adjusted during render rather than in the effect below: "the note is shut,
+  //* so the small strip is on screen" is derivable from noteOpen, and deriving
+  //* it here means it is already true on the frame that closes the note. Going
+  //* through an effect would setState after commit — a cascading render, and
+  //* one frame of missing strip
+  if (!noteOpen && !smallStripMounted) setSmallStripMounted(true);
+
+  useEffect(() => {
+    if (!noteOpen) {
+      smallStripFade.set(withTiming(1, { duration: STRIP_FADE_MS }));
+      return;
+    }
+    smallStripFade.set(
+      withTiming(0, { duration: STRIP_FADE_MS }, (finished) => {
+        "worklet";
+        if (finished === true) scheduleOnRN(setSmallStripMounted, false);
+      }),
+    );
+  }, [noteOpen, smallStripFade]);
+
+  const smallStripStyle = useAnimatedStyle(() => ({ opacity: smallStripFade.get() }));
+
+  //* one source of truth for both: the strip is just the track measured in
+  //* pages, so it follows the finger and the snap for free
+  useAnimatedReaction(
+    () => offset.get(),
+    (value) => {
+      //* held at the last note while the ad slides in, so the strip never
+      //* scrolls towards a tile that doesn't exist
+      if (stride > GUTTER) stripPos.set(Math.min(count - 1, -value / stride));
+    },
+  );
 
   const panGesture = Gesture.Pan()
+    // Both axes go away while editing, and both for the same reason: a
+    // sideways swipe would page to a different note with a half-written draft
+    // still in hand, and a downward one would close the note you are typing
+    // into. Committing or cancelling is the only way out.
+    .enabled(!editing)
     .onStart(() => {
       axis.set(null);
+      dragFrom.set(offset.get());
     })
     .onUpdate((e) => {
       if (axis.get() === null) {
@@ -344,252 +266,395 @@ function NoteCard({
           axis.set(Math.abs(e.translationX) > Math.abs(e.translationY) ? "x" : "y");
         }
       }
+
       if (axis.get() === "y") {
-        const base = noteOpenSV.get() ? -CARD_H : 0;
-        stackY.set(Math.min(40, Math.max(-CARD_H, base + e.translationY)));
-      } else if (axis.get() === "x" && !noteOpenSV.get()) {
-        cardX.set(e.translationX);
-        stripPos.set(index - e.translationX / cardWidth);
+        //* the ad page has no note to pull open
+        if (onAd) return;
+        //* up opens it: the note is below the photo, so lifting the finger
+        //* lifts the note into view and pushes the photo out of the way.
+        //* translationY is negative upward, hence the subtraction.
+        const base = noteOpenSV.get() ? 1 : 0;
+        open.set(Math.min(1, Math.max(0, base - e.translationY / travel)));
+        return;
+      }
+
+      if (axis.get() === "x" && !noteOpenSV.get() && stride > GUTTER) {
+        const raw = dragFrom.get() + e.translationX;
+        offset.set(rubberBand(raw, -(pageCount - 1) * stride));
       }
     })
     .onEnd((e) => {
-      if (axis.get() === "y") {
+      if (axis.get() === "y" && !onAd) {
         let shouldOpen = noteOpenSV.get();
-        if (e.translationY < -DRAG_THRESHOLD) shouldOpen = true;
-        else if (e.translationY > DRAG_THRESHOLD) shouldOpen = false;
-        stackY.set(withTiming(shouldOpen ? -CARD_H : 0, { duration: 280 }));
+        if (e.translationY < -OPEN_DISTANCE || e.velocityY < -OPEN_VELOCITY) shouldOpen = true;
+        else if (e.translationY > OPEN_DISTANCE || e.velocityY > OPEN_VELOCITY) shouldOpen = false;
+        open.set(withTiming(shouldOpen ? 1 : 0, { duration: OPEN_MS }));
         scheduleOnRN(onToggleNote, shouldOpen);
-      } else if (axis.get() === "x") {
-        // Resolve where the strip lands here rather than letting go() clamp
-        // it afterwards: at the first or last note the strip would otherwise
-        // animate to a tile that doesn't exist and snap back.
-        let target = index;
-        if (Math.abs(e.translationX) > DRAG_THRESHOLD) {
-          if (e.translationX < 0 && index < count - 1) target = index + 1;
-          else if (e.translationX > 0 && index > 0) target = index - 1;
-        }
-        if (target !== index) {
-          scheduleOnRN(target > index ? onSwipeLeft : onSwipeRight);
-        }
-        stripPos.set(withTiming(target, { duration: 280 }));
-        cardX.set(withSpring(0));
+      } else if (axis.get() === "x" && stride > GUTTER) {
+        //* where the track sits right now, measured in pages
+        const target = snapTarget(-offset.get() / stride, e.velocityX, pageCount);
+        offset.set(withSpring(-target * stride, { ...SNAP, velocity: e.velocityX }));
+        if (target !== page) scheduleOnRN(commitPage, target);
       }
       axis.set(null);
     });
 
-  const windowStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: cardX.get() + enterX.get() }, { rotate: `${cardX.get() / 45}deg` }],
-    opacity: enterOpacity.get() * (1 - Math.min(0.45, Math.abs(cardX.get()) / 420)),
+  const trackStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.get() }],
   }));
 
-  const stackStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: stackY.get() }],
+  //* only the neighbours are mounted, so a thousand-note gallery still costs
+  //* three cards — and both of the ones you can swipe to are already there,
+  //* which is what makes the drag show real content
+  const first = Math.max(0, page - 1);
+  const last = Math.min(pageCount - 1, page + 1);
+  //* `last` can be the ad page, which isn't in `notes` — slice stops at the end
+  //* of the array anyway, and the ad renders on its own after the notes
+  const windowed: NoteModel[] = notes.slice(first, last + 1);
+  const adMounted = last === count;
+
+  // The gap the open strip sits in. Driven by `open` so the space grows with
+  // the drag, and read by the cards too — they leave exactly this much room at
+  // the top of the note so the text starts below the strip.
+  const stripLayerStyle = useAnimatedStyle(() => ({
+    //* the gap tracks the finger 1:1, the strip inside it does not
+    height: interpolate(open.get(), [0, 1], [0, TILE.height]),
+    // Two things gate this. `stripFade` is the quick fade in on commit, and
+    // the `open` term keeps the strip off the screen while the photo is still
+    // big — without it the tiles paint over the photo as it enlarges, which
+    // reads as the strip sitting on top of the thing it is supposed to be
+    // handing back to.
+    opacity:
+      stripFade.get() * interpolate(open.get(), [HANDOFF_FROM, 1], [0, 1], Extrapolation.CLAMP),
+  }));
+
+  // Two instances rather than one that resizes: they overlap for the length of
+  // a fade, and a single strip would visibly jump tile size mid-crossfade.
+  const stripProps = {
+    notes,
+    currentIndex: index,
+    colors,
+    //* a tile tap from the ad page has to leave it — even the last note's
+    //* tile, whose index the screen already has and would otherwise ignore
+    onSelect: (i: number) => {
+      onAdShowingChange?.(false);
+      onIndexChange(i);
+    },
+    position: stripPos,
+  };
+
+  return (
+    <View style={styles.root}>
+      <GestureDetector gesture={panGesture}>
+        <View
+          style={styles.viewport}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            setBox({ w: Math.max(1, width), h: Math.max(0, height) });
+          }}
+        >
+          <Animated.View style={[styles.track, trackStyle]}>
+            {windowed.map((note, i) => {
+              const noteIndex = first + i;
+              //* against the page, not the index: on the ad page the last note
+              //* stops being current, so its video player is released
+              const isCurrent = noteIndex === page;
+              return (
+                <View
+                  key={note.id}
+                  style={[
+                    styles.slot,
+                    {
+                      left: noteIndex * stride,
+                      //* the current page paints above its neighbours, which
+                      //* only matters before the first measurement: until
+                      //* `stride` is real every slot sits at left 0, and
+                      //* without this the page stacked last is the one you see
+                      zIndex: isCurrent ? 1 : 0,
+                    },
+                  ]}
+                >
+                  <NoteCard
+                    note={note}
+                    tags={tags}
+                    colors={colors}
+                    isCurrent={isCurrent}
+                    noteOpen={noteOpen}
+                    open={open}
+                    cardW={box.w}
+                    photoFull={photoFull}
+                    measured={box.h > 0}
+                    //* only the page you are on becomes editable — the
+                    //* neighbours stay read-only renders of their own text,
+                    //* so the draft can never leak onto the wrong note
+                    editing={editing && isCurrent}
+                    draft={draft}
+                    onDraftChange={onDraftChange}
+                    snippets={snippets}
+                  />
+                </View>
+              );
+            })}
+
+            {endAd != null && adMounted && (
+              <View style={[styles.slot, { left: count * stride, zIndex: onAd ? 1 : 0 }]}>
+                {/* The photo's box exactly — same width, height and place — so
+                    the ad arrives as one more page rather than a different
+                    kind of screen. The hint line under it stays empty. */}
+                <View style={[styles.adPage, { width: box.w, height: photoFull }]}>
+                  <EndAdCard ad={endAd} colors={colors} />
+                </View>
+              </View>
+            )}
+          </Animated.View>
+        </View>
+      </GestureDetector>
+
+      {/* A layer over the pager rather than a child of the page. The strip is
+          a navigator for the whole list — pinning it inside a page would slide
+          it sideways every time it was used, and unmount it mid-transition
+          just as the tap it is servicing lands. Each card reserves the same
+          height at the top of its note, so the text starts below this. */}
+      <Animated.View
+        style={[styles.stripLayer, stripLayerStyle]}
+        //* inert while editing for the same reason the swipe is: a tile tap
+        //* is just another way to page away from an unsaved draft
+        pointerEvents={noteOpen && !editing ? "auto" : "none"}
+      >
+        {noteOpen && <FilmStrip {...stripProps} tileSize={NOTE_TILE} />}
+      </Animated.View>
+
+      {/* picture mode keeps it where it has always been, under the hint */}
+      {smallStripMounted && (
+        <Animated.View style={smallStripStyle} pointerEvents={noteOpen ? "none" : "auto"}>
+          <FilmStrip {...stripProps} />
+        </Animated.View>
+      )}
+    </View>
+  );
+}
+
+type CardProps = {
+  note: NoteModel;
+  tags: TagModel[];
+  colors: ThemeColors;
+  isCurrent: boolean;
+  noteOpen: boolean;
+  /** 0 = photo, 1 = note. Shared, so every mounted page collapses together. */
+  open: SharedValue<number>;
+  cardW: number;
+  photoFull: number;
+  /** False until onLayout lands, when the animated sizes would all be zero. */
+  measured: boolean;
+  /** Already narrowed to this card by the parent — true only on the page
+   *  actually being edited. */
+  editing: boolean;
+  draft: string;
+  onDraftChange: (text: string) => void;
+  snippets?: SnippetModel[];
+};
+
+// One picture-note: the photo, and the note underneath it. At rest the note is
+// a single line and the photo has the rest of the screen; open, the photo has
+// closed entirely and the strip stands where it was.
+function NoteCard({
+  note,
+  tags,
+  colors,
+  isCurrent,
+  noteOpen,
+  open,
+  cardW,
+  photoFull,
+  measured,
+  editing,
+  draft,
+  onDraftChange,
+  snippets,
+}: CardProps) {
+  //* a null source keeps the hook call unconditional while spending nothing:
+  //* three mounted pages must not mean three native players, and a neighbour
+  //* shows its still until you actually land on it
+  const videoPlayer = useVideoPlayer(
+    isCurrent && note.mediaType === "video" ? note.mediaUri : null,
+  );
+
+  // The photo condenses onto the strip's active tile: same size, same place,
+  // then hands off to the real tile over the last quarter. Opening enlarges it
+  // back out of the tile by running all of this in reverse.
+  //
+  // An overlay rather than a box in the column, and that is load-bearing: the
+  // note's position now comes from the spacer alone, so a photo animation that
+  // stalls can leave the photo wrong but can never leave a hole above the text.
+  const photoStyle = useAnimatedStyle(() => {
+    const p = open.get();
+    return {
+      width: interpolate(p, [0, 1], [cardW, TILE.activeSize]),
+      height: interpolate(p, [0, 1], [photoFull, TILE.activeSize]),
+      left: interpolate(p, [0, 1], [0, (cardW - TILE.activeSize) / 2]),
+      top: interpolate(p, [0, 1], [0, TILE.padTop]),
+      borderRadius: interpolate(p, [0, 1], [0, TILE.radius]),
+      opacity: interpolate(p, [HANDOFF_FROM, 1], [1, 0], Extrapolation.CLAMP),
+    };
+  });
+
+  //* the pill is legible over a full-bleed photo and absurd over a 96pt tile
+  const pillStyle = useAnimatedStyle(() => ({ opacity: 1 - open.get() }));
+
+  // What actually places the note. At rest it is the photo's full height, so
+  // the hint line sits under the photo; open, it is the strip's height, so the
+  // text sits under the strip.
+  const spacerStyle = useAnimatedStyle(() => ({
+    height: interpolate(open.get(), [0, 1], [photoFull, TILE.height]),
   }));
 
   const noteTags = note.tagIds
     .map((id) => tags.find((t) => t.id === id))
     .filter((t): t is TagModel => t != null);
 
-  return (
-    <GestureDetector gesture={panGesture}>
-      <Animated.View style={[styles.window, windowStyle]}>
-        <Animated.View style={[styles.stack, stackStyle]}>
-          <View style={[styles.panel, { height: CARD_H }]}>
-            {note.mediaType === "video" ? (
-              <VideoView style={styles.media} player={videoPlayer} nativeControls contentFit="cover" />
-            ) : (
-              <Image source={{ uri: note.mediaUri }} style={styles.media} />
-            )}
-            {note.date.length > 0 && (
-              <View style={styles.datePill}>
-                <Text style={styles.datePillLabel}>{formatShortDate(note.date)}</Text>
-              </View>
-            )}
-            <View style={styles.hintOverlay}>
-              <Text style={styles.hintLabel}>Swipe up to read the note · swipe sideways for more</Text>
-            </View>
-          </View>
+  const body = note.note.trim();
 
-          <View style={[styles.panel, styles.notePanel, { height: CARD_H, backgroundColor: colors.paper }]}>
-            <View style={styles.noteHeader}>
-              <Text style={styles.noteLabel}>Note</Text>
-              {note.date.length > 0 && (
-                <Text style={[styles.noteDate, { color: colors.stoneDim }]}>{formatDayDate(note.date)}</Text>
-              )}
-            </View>
-            {note.note.trim().length > 0 ? (
-              <MarkdownText text={note.note} style={[styles.noteText, { color: colors.ink }]} />
-            ) : (
-              <Text style={[styles.noteText, { color: colors.ink }]}>No note yet.</Text>
-            )}
-            {noteTags.length > 0 && (
-              <View style={styles.tagsRow}>
-                {noteTags.map((tag) => (
-                  <View
-                    key={tag.id}
-                    style={[styles.tagPill, { backgroundColor: hexToRgba(colors.teal, 0.14) }]}
+  return (
+    <View style={styles.card}>
+      <ScrollView
+        style={styles.noteArea}
+        contentContainerStyle={styles.noteContent}
+        //* only scrollable once there is something to scroll. While it is a
+        //* one-line hint this stays off, so the pan underneath keeps the whole
+        //* surface and an upward drag anywhere opens the note.
+        scrollEnabled={noteOpen}
+        showsVerticalScrollIndicator={false}
+        //* the field is near the bottom of the screen and the keyboard covers
+        //* it. iOS can inset the scroll view for the keyboard by itself;
+        //* Android needs android:windowSoftInputMode=adjustResize, which is
+        //* Expo's default.
+        automaticallyAdjustKeyboardInsets
+        //* without this the first tap while the keyboard is up is swallowed
+        //* dismissing it, so committing takes two taps
+        keyboardShouldPersistTaps="handled"
+      >
+        <Animated.View style={spacerStyle} />
+
+        {noteOpen && note.date.length > 0 && (
+          <Text style={[styles.noteDate, { color: colors.stoneDim }]}>
+            {formatDayDate(note.date)}
+          </Text>
+        )}
+
+        {editing ? (
+          <>
+            {/* Raw text, not MarkdownText: you edit the source, and the
+                formatting renders again the moment you commit. Same font and
+                size as the rendered note, so committing doesn't reflow the
+                text you just typed. */}
+            <TextInput
+              value={draft}
+              onChangeText={onDraftChange}
+              multiline
+              autoFocus
+              scrollEnabled={false}
+              placeholder="Write a note..."
+              placeholderTextColor={colors.stoneDim}
+              //* the surrounding ScrollView handles growth; a field that
+              //* scrolls internally would trap the gesture and hide its own
+              //* overflow inside a box the note area is already big enough for
+              style={[
+                styles.noteText,
+                styles.noteInput,
+                {
+                  color: colors.textPrimary,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.accent,
+                },
+              ]}
+            />
+
+            {/* The same chip row AddNote offers, so a snippet is reachable
+                whether you are writing a note or coming back to fix one.
+                Taps land because the note ScrollView sets
+                keyboardShouldPersistTaps — otherwise the first tap would be
+                swallowed dismissing the keyboard. */}
+            {snippets != null && snippets.length > 0 && (
+              <View style={styles.snippets}>
+                {snippets.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => onDraftChange(appendSnippet(draft, s.text))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Insert snippet ${s.name}`}
+                    style={[
+                      styles.snippetChip,
+                      { backgroundColor: colors.surface, borderColor: colors.line },
+                    ]}
                   >
-                    <Text style={[styles.tagLabel, { color: colors.tealOnPaper }]}>#{tag.title}</Text>
-                  </View>
+                    <Feather name="star" size={11} color={colors.accent} />
+                    <Text
+                      style={[styles.snippetLabel, { color: colors.stone }]}
+                      numberOfLines={1}
+                    >
+                      {s.name}
+                    </Text>
+                  </Pressable>
                 ))}
               </View>
             )}
+          </>
+        ) : body.length > 0 ? (
+          <MarkdownText
+            text={body}
+            //* one line while it is a hint, so a long note ellipsises instead
+            //* of being sliced mid-word by the container's edge
+            numberOfLines={noteOpen ? undefined : 1}
+            style={[
+              noteOpen ? styles.noteText : styles.hintText,
+              { color: colors.textPrimary },
+            ]}
+          />
+        ) : (
+          <Text
+            numberOfLines={1}
+            style={[noteOpen ? styles.noteText : styles.hintText, { color: colors.stoneDim }]}
+          >
+            No note yet.
+          </Text>
+        )}
+
+        {noteOpen && noteTags.length > 0 && (
+          <View style={styles.tagsRow}>
+            {noteTags.map((tag) => (
+              <View
+                key={tag.id}
+                style={[styles.tagPill, { backgroundColor: hexToRgba(colors.teal, 0.16) }]}
+              >
+                <Text style={[styles.tagLabel, { color: colors.teal }]}>#{tag.title}</Text>
+              </View>
+            ))}
           </View>
-        </Animated.View>
+        )}
+      </ScrollView>
+
+      {/* after the note so it paints over it, and inert once it is a tile —
+          the strip above owns those taps */}
+      <Animated.View
+        style={[styles.photo, measured ? photoStyle : styles.photoFill]}
+        pointerEvents={noteOpen ? "none" : "auto"}
+      >
+        {note.mediaType === "video" ? (
+          isCurrent ? (
+            <VideoView style={styles.media} player={videoPlayer} nativeControls contentFit="cover" />
+          ) : (
+            <MediaThumb note={note} />
+          )
+        ) : (
+          <Image source={{ uri: note.mediaUri }} style={styles.media} contentFit="cover" />
+        )}
+
+        {note.date.length > 0 && (
+          <Animated.View style={[styles.datePill, pillStyle]}>
+            <Text style={styles.datePillLabel}>{formatShortDate(note.date)}</Text>
+          </Animated.View>
+        )}
       </Animated.View>
-    </GestureDetector>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  headerRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  counter: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12,
-  },
-  shareButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  body: {
-    flex: 1,
-    justifyContent: "flex-start",
-    paddingHorizontal: 22,
-    paddingTop: 18,
-  },
-  window: {
-    width: "100%",
-    height: CARD_H,
-    borderRadius: 16,
-    overflow: "hidden",
-  },
-  stack: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: CARD_H * 2,
-  },
-  panel: {
-    width: "100%",
-    overflow: "hidden",
-  },
-  media: {
-    width: "100%",
-    height: "100%",
-  },
-  datePill: {
-    pointerEvents: "none",
-    position: "absolute",
-    top: 12,
-    left: 12,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  datePillLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11,
-    color: "#fff",
-  },
-  hintOverlay: {
-    pointerEvents: "none",
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingTop: 26,
-    paddingBottom: 14,
-    paddingHorizontal: 16,
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-  hintLabel: {
-    fontFamily: fonts.interRegular,
-    fontSize: 11.5,
-    color: "rgba(255,255,255,0.85)",
-  },
-  notePanel: {
-    padding: 22,
-  },
-  noteHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 14,
-  },
-  noteLabel: {
-    fontFamily: fonts.interBold,
-    fontSize: 10.5,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: "#998E7B",
-  },
-  noteDate: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12,
-  },
-  noteText: {
-    fontFamily: fonts.frauncesMedium,
-    fontSize: 19,
-    lineHeight: 29,
-  },
-  tagsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 16,
-  },
-  tagPill: {
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  tagLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
-  },
-  navRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 16,
-    marginTop: 22,
-  },
-  adSlot: {
-    height: 64,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginTop: "auto",
-    marginBottom: 18,
-  },
-  navBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  toggleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    height: 42,
-    borderRadius: 21,
-    paddingHorizontal: 18,
-  },
-  toggleLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 12.5,
-  },
-});
