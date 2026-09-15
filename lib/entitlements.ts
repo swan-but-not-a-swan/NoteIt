@@ -18,6 +18,15 @@ export const PRO_ENTITLEMENT = "noteit_pro";
 // which applies it again because its note ids come from a link anyone can edit.
 export const FREE_COMPARE_LIMIT = 4;
 
+// Whether Plus is on sale in this build. Off for the first App Store release,
+// because a subscription needs Apple's Paid Apps agreement, which isn't active
+// yet. While it is off nobody can hold Plus: RevenueCat is never configured,
+// ads and the compare limit apply to everyone, and every way into the paywall
+// is hidden — Apple rejects a purchase button that can't complete a purchase.
+// Flip it once the subscription exists in App Store Connect. Typed as boolean
+// so TypeScript doesn't treat the branches behind it as unreachable.
+export const PLUS_ON_SALE: boolean = false;
+
 // Purchases.configure() is not idempotent — calling it twice re-initialises
 // the SDK and is a documented source of odd behaviour. React StrictMode and
 // Fast Refresh both re-run effects, so the guard is not optional.

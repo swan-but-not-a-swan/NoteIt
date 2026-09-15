@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CustomerInfo } from "react-native-purchases";
 import {
+  PLUS_ON_SALE,
   PRO_ENTITLEMENT,
   fetchCustomerInfo,
   restorePurchases,
@@ -75,7 +76,11 @@ const EntitlementsContext = createContext<EntitlementsContextValue | null>(null)
 
 export function EntitlementsProvider({ children }: { children: ReactNode }) {
   // null until the first read lands. See `hasPlus` above for why that matters.
-  const [snapshot, setSnapshot] = useState<PlusSnapshot | null>(null);
+  // With Plus off sale there is nothing to read: the answer is known up front,
+  // and knowing it is what lets ads show at all, since they wait for `false`.
+  const [snapshot, setSnapshot] = useState<PlusSnapshot | null>(
+    PLUS_ON_SALE ? null : { hasPlus: false, details: null },
+  );
 
   // One effect owns both halves of the story, because neither works alone:
   // the initial fetch gives a value but goes stale the moment anything is
@@ -83,6 +88,8 @@ export function EntitlementsProvider({ children }: { children: ReactNode }) {
   // state. Splitting them across two effects would also mean two configure()
   // paths racing on startup.
   useEffect(() => {
+    // A build that sells nothing never configures RevenueCat.
+    if (!PLUS_ON_SALE) return;
     let cancelled = false;
 
     fetchCustomerInfo()

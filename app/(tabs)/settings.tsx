@@ -11,6 +11,7 @@ import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
 import { useLibrary } from "@/lib/LibraryContext";
 import { useEntitlements } from "@/lib/EntitlementsContext";
+import { PLUS_ON_SALE } from "@/lib/entitlements";
 import { settingsScreenStyles as styles } from "@/theme/styles/settings.styles";
 
 type ThemeOption = {
@@ -250,7 +251,9 @@ export default function Settings() {
                 //* is the gesture people reach for
                 keyboardDismissMode="on-drag"
             >
-                <PlusRow colors={colors} />
+                {/* Hidden while Plus isn't sold: a row that opens a paywall
+                    with nothing to buy is what App Review rejects. */}
+                {PLUS_ON_SALE && <PlusRow colors={colors} />}
                 <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Appearance</Text>
                     <AppearanceToggle colors={colors} mode={mode} onSelect={setMode} />

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "noteit",
+    "name": "NoteIt",
     "slug": "noteit",
     "owner": "reacttut",
     "version": "1.0.0",
@@ -9,8 +9,11 @@
     "scheme": "noteit",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.smktechnologies.noteit"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.smktechnologies.noteit",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -51,10 +54,21 @@
       "expo-status-bar",
       "expo-web-browser",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "NoteIt opens your photo library so you can choose the photo or video for a picture-note, or a thumbnail for a folder.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "skAdNetworkItems": [
+            "cstr6suwn9.skadnetwork"
+          ]
         }
       ],
       [

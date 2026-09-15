@@ -3,7 +3,7 @@ import { Alert, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { useEntitlements } from "@/lib/EntitlementsContext";
-import { FREE_COMPARE_LIMIT } from "@/lib/entitlements";
+import { FREE_COMPARE_LIMIT, PLUS_ON_SALE } from "@/lib/entitlements";
 import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
 import GalleryGrid from "./GalleryGrid";
@@ -62,6 +62,15 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
       return;
     }
     if (hasPlus !== true && compareIds.length >= FREE_COMPARE_LIMIT) { //* free users have a limit of notes to compare
+      //* nothing to upgrade to in a build that doesn't sell Plus, so the
+      //* limit is just a limit — say how to make room instead
+      if (!PLUS_ON_SALE) {
+        Alert.alert(
+          `Up to ${FREE_COMPARE_LIMIT} notes`,
+          "Take a note out of your selection to add this one.",
+        );
+        return;
+      }
       openPaywall().then((outcome) => {
         if (outcome === "granted") addCompareId(note.id);
         //* the paywall couldn't be shown (offline, or no store configured) —

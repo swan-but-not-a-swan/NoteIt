@@ -21,7 +21,8 @@
     },
     "production": {
       "bun": "1.4.0",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "environment": "production"
     }
   },
   "submit": {
