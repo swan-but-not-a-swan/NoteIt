@@ -11,8 +11,7 @@ import {
 import { Feather } from "@react-native-vector-icons/feather/static";
 import Animated, { SlideInUp } from "react-native-reanimated";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
-import { hexToRgba } from "@/lib/color";
+import { hexToRgba, LIGHT_THEME, type ThemeColors } from "@/theme/colors";
 import { formatDayDate, todayISO } from "@/lib/date";
 import { isEmptyQuery, withRange, type NoteQuery } from "@/lib/noteHelper";
 import { TagModel } from "../models/NoteModel";

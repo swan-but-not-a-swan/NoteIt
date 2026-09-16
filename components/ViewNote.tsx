@@ -16,8 +16,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import { useVideoPlayer, VideoView } from "expo-video";
 import type { NativeAd } from "react-native-google-mobile-ads";
-import type { ThemeColors } from "@/theme/colors";
-import { hexToRgba } from "@/lib/color";
+import { hexToRgba, type ThemeColors } from "@/theme/colors";
 import { formatDayDate, formatShortDate } from "@/lib/date";
 import { appendSnippet, rubberBand, snapTarget } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
