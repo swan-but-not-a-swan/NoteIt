@@ -216,6 +216,10 @@ export default function Home() {
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images"],
+            //* same reason as AddNote's picker: this one opens over NewFolder's
+            //* modal, and iOS's default page-sheet presentation loses the result
+            //* when the picker sits on top of another modal
+            presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
         });
         if (result.canceled) return;
 
