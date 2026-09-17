@@ -8,9 +8,8 @@ import {
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { type ThemeColors } from "@/theme/colors";
+import { hexToRgba, type ThemeColors } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import { hexToRgba } from "@/lib/color";
 import { formatShortDate } from "@/lib/date";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { FREE_COMPARE_LIMIT } from "@/lib/entitlements";

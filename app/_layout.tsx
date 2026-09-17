@@ -16,7 +16,7 @@ import {
   Inter_600SemiBold,
   Inter_700Bold,
 } from "@expo-google-fonts/inter";
-import { ICON_FONTS } from "@/lib/iconFont";
+import { ICON_FONTS } from "@/theme/iconFont";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
 import { EntitlementsProvider } from "@/lib/EntitlementsContext";
 import { LibraryProvider, useLibrary } from "@/lib/LibraryContext";

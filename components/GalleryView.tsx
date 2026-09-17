@@ -1,4 +1,6 @@
-import { useState } from "react";
+//! Manually reviewed since 16/09/2026
+
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
@@ -13,85 +15,83 @@ import { galleryViewStyles as styles } from "@/theme/styles/gallery.styles";
 
 type Props = {
   notes: NoteModel[];
-  /** Every tag in storage — search matches tags by title. */
   tags: TagModel[];
   colors: ThemeColors;
   onOpenNote: (note: NoteModel) => void;
-  /** Called with the picked note ids, in the order they were picked. */
   onCompare: (ids: string[]) => void;
 };
 
-// The Gallery tab: search and filters, the grid, and picking notes to compare.
-//
-// Owns the search and compare state itself, so the screen only hands it data
-// and decides where navigation goes. Home unmounts this when you switch to
-// Folders, which clears both — a half-made compare selection shouldn't survive
-// leaving the grid it was made in.
 export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare }: Props) {
   const { hasPlus, openPaywall } = useEntitlements();
 
-  //* derived rather than stored: filtering a loaded array is cheap enough to
-  //* redo per keystroke, and there's no filtered copy to fall out of sync
   const [query, setQuery] = useState<NoteQuery>(EMPTY_QUERY);
   const [searchOpen, setSearchOpen] = useState(false);
-  const visibleNotes = filterNotes(notes, query, tags);
 
-  //* picks deliberately survive a filter change, so you can pick one note,
-  //* search for another and pick that too — the count includes both
+  const visibleNotes = useMemo(() => filterNotes(notes, query, tags), [notes, query, tags]);
+
+  //* picks survive a filter change, notes can be picked after filtering
   const [compareMode, setCompareMode] = useState(false);
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const canCompare = compareIds.length >= 2; //* two is the minimum that is a comparison at all
 
-  const leaveCompareMode = () => {
+  //* the handlers below are memoised so the grid, which is wrapped in memo(),
+  //* only re-renders when the selection it draws actually changes
+  const leaveCompareMode = useCallback(() => {
     setCompareMode(false);
     setCompareIds([]);
-  };
+  }, []);
 
-  const toggleCompareMode = () => {
+  const toggleCompareMode = useCallback(() => {
     if (compareMode) leaveCompareMode();
     else setCompareMode(true);
-  };
+  }, [compareMode, leaveCompareMode]);
 
-  const addCompareId = (id: string) => {
+  const addCompareId = useCallback((id: string) => {
     setCompareIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
-  };
+  }, []);
 
-  const toggleCompareNote = (note: NoteModel) => {
-    if (compareIds.includes(note.id)) { //* removes the note to compare if pressed again
-      setCompareIds((ids) => ids.filter((id) => id !== note.id));
-      return;
-    }
-    if (hasPlus !== true && compareIds.length >= FREE_COMPARE_LIMIT) { //* free users have a limit of notes to compare
-      //* nothing to upgrade to in a build that doesn't sell Plus, so the
-      //* limit is just a limit — say how to make room instead
-      if (!PLUS_ON_SALE) {
-        Alert.alert(
-          `Up to ${FREE_COMPARE_LIMIT} notes`,
-          "Take a note out of your selection to add this one.",
-        );
+  const toggleCompareNote = useCallback(
+    (note: NoteModel) => {
+      if (compareIds.includes(note.id)) 
+      { //* removes the note to compare if pressed again
+        setCompareIds((ids) => ids.filter((id) => id !== note.id));
         return;
       }
-      openPaywall().then((outcome) => {
-        if (outcome === "granted") addCompareId(note.id);
-        //* the paywall couldn't be shown (offline, or no store configured) —
-        //* say so rather than leave the tap doing nothing
-        else if (outcome === "unavailable") {
+      if (hasPlus !== true && compareIds.length >= FREE_COMPARE_LIMIT) 
+      {
+        if (!PLUS_ON_SALE) 
+        {
           Alert.alert(
-            "NoteIt Plus isn't available right now",
-            `Free accounts can compare up to ${FREE_COMPARE_LIMIT} notes. Check your connection and try again.`,
+            `Up to ${FREE_COMPARE_LIMIT} notes`,
+            "Take a note out of your selection to add this one.",
           );
+          return;
         }
-      });
-      return;
-    }
-    addCompareId(note.id);
-  };
+        openPaywall().then((outcome) => {
+          if (outcome === "granted") addCompareId(note.id);
+          else if (outcome === "unavailable") 
+          {
+            Alert.alert(
+              "NoteIt Plus isn't available right now",
+              `Free accounts can compare up to ${FREE_COMPARE_LIMIT} notes. Check your connection and try again.`,
+            );
+          }
+        });
+        return;
+      }
+      addCompareId(note.id);
+    },
+    [compareIds, hasPlus, openPaywall, addCompareId],
+  );
 
-  const startCompare = () => {
+  const startCompare = useCallback(() => {
     const ids = compareIds;
     leaveCompareMode();
     onCompare(ids);
-  };
+  }, [compareIds, leaveCompareMode, onCompare]);
+
+  const openSearch = useCallback(() => setSearchOpen(true), []);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
 
   return (
     <View style={styles.container}>
@@ -101,7 +101,7 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         onQueryChange={setQuery}
         tags={tags}
         resultCount={visibleNotes.length}
-        onOpenSearch={() => setSearchOpen(true)}
+        onOpenSearch={openSearch}
         compareMode={compareMode}
         onToggleCompare={toggleCompareMode}
       />
@@ -149,7 +149,7 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         onQueryChange={setQuery}
         tags={tags}
         resultCount={visibleNotes.length}
-        onClose={() => setSearchOpen(false)}
+        onClose={closeSearch}
       />
     </View>
   );

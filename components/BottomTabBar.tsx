@@ -9,8 +9,7 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
-import type { ThemeColors } from "@/theme/colors";
-import { hexToRgba } from "@/lib/color";
+import { hexToRgba, type ThemeColors } from "@/theme/colors";
 import { bottomTabBarStyles as styles } from "@/theme/styles/app.styles";
 
 export type MainTab = "folders" | "gallery";

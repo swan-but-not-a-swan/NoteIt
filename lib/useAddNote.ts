@@ -84,6 +84,11 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images", "videos"],
+            //* full screen, not iOS's default page sheet: this picker opens from
+            //* inside the AddNote <Modal>, and a page-sheet picker over a modal
+            //* can resolve as cancelled — or never resolve at all — so the pick
+            //* is silently lost. Only shows on a device; the emulator is fine.
+            presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
         });
         if (result.canceled) return;
 

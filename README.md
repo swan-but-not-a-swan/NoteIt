@@ -451,12 +451,12 @@ lib/                      Logic kept out of components so it can be read and tes
   purchases.ts            Which SDK key applies, and when
   paywall.ts              Paywall and Customer Center presentation
   ads.ts                  Ad unit selection, consent, SDK init
-  date.ts, color.ts       Small pure helpers
+  date.ts                 Small pure helpers
   useNavigateOnce.ts      Stops a double-tap pushing the same route twice
 
 models/                   The four stored shapes: Note, Folder, Tag, Snippet
 persistence/FileStorage.ts  Every read and write to AsyncStorage
-theme/                    Colour tokens, font names, theme context
+theme/                    Colour tokens + hexToRgba, font names, icon fonts, theme context, styles/
 ```
 
 Path alias: `@/` maps to the project root, so `@/lib/date` and `@/components/TopBar` work from anywhere.

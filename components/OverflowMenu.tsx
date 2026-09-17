@@ -9,7 +9,6 @@ export type OverflowMenuItem = {
   label: string;
   icon: FeatherIconName;
   onPress: () => void;
-  /** Tints the row red. For anything that destroys data. */
   destructive?: boolean;
 };
 
@@ -19,32 +18,22 @@ type Props = {
   accessibilityLabel?: string;
 };
 
-// The header's "…" button and the menu it drops.
-//
-// Self-contained: it owns the trigger, the open state and the popover, so a
-// screen adding one writes a list of items and nothing else. That matters
-// because two screens need the same menu — the viewer and a folder's grid —
-// and the alternative was each of them carrying its own visible/anchor state.
 export default function OverflowMenu({ colors, items, accessibilityLabel = "More options" }: Props) {
   const trigger = useRef<View>(null);
   const { width: screenW } = useWindowDimensions();
-  //* non-null means open; it also carries where to draw
   const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
 
   const open = () => {
-    // Measured at press time rather than remembered from layout: the header's
-    // height moves with the safe-area inset, so a menu anchored once lands in
-    // the wrong place after a rotation or on a different device.
     trigger.current?.measureInWindow((x, y, w, h) => {
       setAnchor({ top: y + h + 6, right: Math.max(8, screenW - (x + w)) });
     });
   };
 
   const runItem = (item: OverflowMenuItem) => {
-    //* closed before the action runs: every item here opens a modal of its
-    //* own, and iOS refuses to present one while another is still dismissing
     setAnchor(null);
-    item.onPress();
+    //* the menu's own modal is still dismissing this frame, and iOS drops a
+    //* present() issued during a dismiss — hand off once it's gone
+    requestAnimationFrame(() => item.onPress());
   };
 
   return (

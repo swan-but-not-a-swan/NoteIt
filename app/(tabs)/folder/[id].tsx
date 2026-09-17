@@ -1,3 +1,5 @@
+//! Manually reviewed since 16/09/2026
+
 import { View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
@@ -17,12 +19,10 @@ export default function FolderNotes() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
 
-    //* nothing to load: the store already holds everything, and stays current
-    //* when the viewer edits or deletes, so coming back here costs no reads
     const { folders, notes, tags, snippets, refreshNotesAndTagsAsync } = useLibrary();
 
-    const folder = folders.find((f) => f.id === id) ?? null; 
-    const folderNotes = notes.filter((note) => note.folderId === id);
+    const folder = folders.find((f) => f.id === id) ?? null; //* get the folder
+    const folderNotes = notes.filter((note) => note.folderId === id); //* get notes from the folder
 
     const navigateOnce = useNavigateOnce();
 

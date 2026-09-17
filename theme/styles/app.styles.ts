@@ -2,8 +2,7 @@
 //* each component imports its export as `styles`; theme colours stay inline there
 
 import { StyleSheet } from "react-native";
-import { hexToRgba } from "@/lib/color";
-import { DARK_THEME } from "@/theme/colors";
+import { DARK_THEME, hexToRgba } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import { common } from "@/theme/styles/common.styles";
 

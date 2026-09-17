@@ -1,7 +1,6 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import type { ThemeColors } from "@/theme/colors";
-import { hexToRgba } from "@/lib/color";
+import { hexToRgba, type ThemeColors } from "@/theme/colors";
 import {
   DATE_PRESETS,
   describeQuery,

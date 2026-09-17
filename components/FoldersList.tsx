@@ -1,3 +1,5 @@
+//! Manually reviewed since 16/09/2026
+
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
@@ -13,7 +15,6 @@ type Props = {
   onOpenFolder: (id: string) => void;
   onEditFolder: (folder: FolderModel) => void;
   onNewFolder: () => void;
-  /** Set false to hide the sponsored strip (e.g. no ads for now). Default true. */
   showAdBanner?: boolean;
 };
 
@@ -51,27 +52,7 @@ export default function FolderList({
         <Text style={[styles.newFolderLabel, { color: colors.stone }]}>New folder</Text>
       </Pressable>
 
-      {/*
-        Fixed position, below the list rather than woven into it. This used to
-        sit inside the map at `i === 1`, which meant it only mounted once a
-        second folder existed — so a new install, which is every user at some
-        point, never requested an ad at all and never gathered consent. The
-        placement quietly disabled the app's only revenue path for exactly the
-        people most likely to be using it.
-
-        Below "New folder" also keeps the ad out of the way of the list's own
-        rhythm: it reads as a footer rather than as something impersonating a
-        folder, which is the failure mode of in-feed ads.
-      */}
       {showAdBanner && <AdBannerStrip colors={colors} />}
-
-      {/*
-        TODO (business logic): pull-up-past-the-bottom-of-the-list also
-        triggers onNewFolder in the web reference (usePullUpToAdd). That's a
-        gesture-handler + reanimated interaction, not a styling concern, so
-        it's left out of this pass — the "New folder" button above covers
-        the same action in the meantime.
-      */}
     </ScrollView>
   );
 }

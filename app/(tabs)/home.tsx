@@ -216,6 +216,7 @@ export default function Home() {
 
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ["images"],
+            presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
         });
         if (result.canceled) return;
 

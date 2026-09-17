@@ -9,8 +9,7 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import type { ThemeColors } from "@/theme/colors";
-import { hexToRgba } from "@/lib/color";
+import { hexToRgba, type ThemeColors } from "@/theme/colors";
 import { newSnippetStyles as styles } from "@/theme/styles/settings.styles";
 
 type Props = {
