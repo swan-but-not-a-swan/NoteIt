@@ -103,6 +103,20 @@ export const topBarStyles = StyleSheet.create({
   },
 });
 
+//* components/GlassPill.tsx
+export const glassPillStyles = StyleSheet.create({
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  label: common.semiBold13_5,
+});
+
 //* components/BottomTabBar.tsx
 export const bottomTabBarStyles = StyleSheet.create({
   row: {
@@ -121,6 +135,24 @@ export const bottomTabBarStyles = StyleSheet.create({
   tabLabel: {
     fontFamily: fonts.interSemiBold,
     fontSize: 11,
+    //* stretched so a long folder name truncates at the tab's edge instead of
+    //* sizing the text past it
+    alignSelf: "stretch",
+    textAlign: "center",
+  },
+  //* same footprint as the 20pt Feather icons it stands in for, plus the ring
+  folderThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  folderThumbImage: {
+    width: "100%",
+    height: "100%",
   },
   addSlot: {
     width: 76,

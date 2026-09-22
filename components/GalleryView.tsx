@@ -6,28 +6,54 @@ import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { FREE_COMPARE_LIMIT, PLUS_ON_SALE } from "@/lib/entitlements";
-import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteHelper";
+import { EMPTY_QUERY, filterNotes, isEmptyQuery } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
+import type { FolderModel } from "@/models/FolderModel";
+import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import GalleryGrid from "./GalleryGrid";
 import GalleryToolbar from "./GalleryToolbar";
+import GlassPill from "./GlassPill";
 import SearchNotesModal from "./SearchNotesModal";
 import { galleryViewStyles as styles } from "@/theme/styles/gallery.styles";
 
 type Props = {
   notes: NoteModel[];
   tags: TagModel[];
+  /** Every folder, for the search sheet's folder chips and the summary line. */
+  folders: FolderModel[];
+  /** The folder this gallery was opened for, or null for the gallery tab.
+   *  `notes` arrives already scoped to it; this only switches the mode. */
+  scopeFolderId: string | null;
   colors: ThemeColors;
   onOpenNote: (note: NoteModel) => void;
   onCompare: (ids: string[]) => void;
+  /** Leaves the folder for the whole gallery. Only shown while scoped. */
+  onShowAll?: () => void;
 };
 
-export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare }: Props) {
+export default function GalleryView({
+  notes,
+  tags,
+  folders,
+  scopeFolderId,
+  colors,
+  onOpenNote,
+  onCompare,
+  onShowAll,
+}: Props) {
   const { hasPlus, openPaywall } = useEntitlements();
 
   const [query, setQuery] = useState<NoteQuery>(EMPTY_QUERY);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const visibleNotes = useMemo(() => filterNotes(notes, query, tags), [notes, query, tags]);
+  //* inside a folder every filter narrows; on the gallery tab any one matching
+  //* is enough, and only there can the user pick folders to search
+  const combine: QueryCombine = scopeFolderId != null ? "and" : "or";
+
+  const visibleNotes = useMemo(
+    () => filterNotes(notes, query, tags, combine),
+    [notes, query, tags, combine],
+  );
 
   //* picks survive a filter change, notes can be picked after filtering
   const [compareMode, setCompareMode] = useState(false);
@@ -100,6 +126,8 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         query={query}
         onQueryChange={setQuery}
         tags={tags}
+        folders={folders}
+        combine={combine}
         resultCount={visibleNotes.length}
         onOpenSearch={openSearch}
         compareMode={compareMode}
@@ -114,6 +142,19 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         onToggleSelect={toggleCompareNote}
         onOpenNote={onOpenNote}
       />
+
+      {/* hidden while comparing: the compare bar owns the bottom edge then */}
+      {scopeFolderId != null && onShowAll != null && !compareMode && (
+        <View style={styles.showAllDock}>
+          <GlassPill
+            label="Gallery"
+            trailingIcon="arrow-right"
+            accessibilityLabel="Show every note in the gallery"
+            onPress={onShowAll}
+            colors={colors}
+          />
+        </View>
+      )}
 
       {compareMode && (
         <View style={[styles.compareBar, { backgroundColor: colors.bg, borderTopColor: colors.line }]}>
@@ -148,6 +189,8 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         query={query}
         onQueryChange={setQuery}
         tags={tags}
+        folders={folders}
+        showFolders={scopeFolderId == null}
         resultCount={visibleNotes.length}
         onClose={closeSearch}
       />

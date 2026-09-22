@@ -13,8 +13,11 @@ import Animated, { SlideInUp } from "react-native-reanimated";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { hexToRgba, LIGHT_THEME, type ThemeColors } from "@/theme/colors";
 import { formatDayDate, todayISO } from "@/lib/date";
-import { isEmptyQuery, withRange, type NoteQuery } from "@/lib/noteHelper";
+import { EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
+import { withRange } from "@/lib/dateHelper";
 import { TagModel } from "../models/NoteModel";
+import type { FolderModel } from "@/models/FolderModel";
+import { UNFILED, type NoteQuery } from "@/models/NoteQueryModel";
 import { searchNotesModalStyles as styles } from "@/theme/styles/gallery.styles";
 
 type Props = {
@@ -27,10 +30,17 @@ type Props = {
   /** How many notes the query currently matches, shown on the confirm button. */
   resultCount: number;
   onClose: () => void;
+  /** Every folder — what the user can filter by in gallery mode. */
+  folders?: FolderModel[];
+  /** Gallery mode: shows the folder chips, and filters combine with OR.
+   *  False inside a folder, where the folder is already the scope and the
+   *  filters combine with AND. One switch, because the spec ties them. */
+  showFolders?: boolean;
 };
 
-// The search sheet: free text, every available tag, and an explicit from/to
-// date range. Ported from the web reference's SearchOverlay.
+// The search sheet: free text, every available tag, an explicit from/to
+// date range and, in gallery mode, folders. Ported from the web reference's
+// SearchOverlay.
 //
 // A sheet rather than an always-visible field because the filters are a set,
 // not a single control — picking three tags and a fortnight is one decision,
@@ -44,6 +54,8 @@ export default function SearchNotesModal({
   tags,
   resultCount,
   onClose,
+  folders = [],
+  showFolders = false,
 }: Props) {
   //* web has no native date control; say so once here rather than silently
   //* doing nothing when a date field is tapped
@@ -56,6 +68,13 @@ export default function SearchNotesModal({
       ? query.tagIds.filter((id) => id !== tagId)
       : [...query.tagIds, tagId];
     onQueryChange({ ...query, tagIds: next });
+  };
+
+  const toggleFolder = (folderId: string) => {
+    const next = query.folderIds.includes(folderId)
+      ? query.folderIds.filter((id) => id !== folderId)
+      : [...query.folderIds, folderId];
+    onQueryChange({ ...query, folderIds: next });
   };
 
   const setFrom = (iso: string) => onQueryChange(withRange(query, iso, query.to));
@@ -83,6 +102,11 @@ export default function SearchNotesModal({
               <Feather name="x" size={15} color={colors.textPrimary} />
             </Pressable>
           </View>
+          {/* The same controls mean different things in the two modes, so
+              the sheet says which one is in force. */}
+          <Text style={[styles.hint, { color: colors.stoneDim }]}>
+            {showFolders ? "Showing notes that match any of these" : "Showing notes that match all of these"}
+          </Text>
 
           <ScrollView
             style={styles.scroll}
@@ -138,6 +162,35 @@ export default function SearchNotesModal({
               <Text style={[styles.emptyNote, { color: colors.stoneDim }]}>No tags added yet.</Text>
             )}
 
+            {showFolders && (
+              <>
+                <Text style={[styles.label, { color: colors.stoneDim }]}>Folders</Text>
+                <View style={styles.tagWrap}>
+                  {folders.map((folder) => (
+                    <FolderChip
+                      key={folder.id}
+                      label={folder.name}
+                      icon="folder"
+                      tint={folder.accent}
+                      active={query.folderIds.includes(folder.id)}
+                      colors={colors}
+                      onPress={() => toggleFolder(folder.id)}
+                    />
+                  ))}
+                  {/* notes saved as "No folder (Gallery only)" have no folder
+                      id to pick, so they get a chip of their own */}
+                  <FolderChip
+                    label="No folder"
+                    icon="inbox"
+                    tint={colors.accent}
+                    active={query.folderIds.includes(UNFILED)}
+                    colors={colors}
+                    onPress={() => toggleFolder(UNFILED)}
+                  />
+                </View>
+              </>
+            )}
+
             <Text style={[styles.label, { color: colors.stoneDim }]}>Date range</Text>
             <View style={styles.dateRow}>
               <DateField
@@ -162,7 +215,9 @@ export default function SearchNotesModal({
 
           <View style={styles.footer}>
             <Pressable
-              onPress={() => onQueryChange({ text: "", tagIds: [], from: "", to: "", preset: "any" })}
+              //* EMPTY_QUERY rather than a literal, so a field added to the
+              //* query later is cleared here without anyone remembering to
+              onPress={() => onQueryChange(EMPTY_QUERY)}
               disabled={!filtering}
               hitSlop={8}
             >
@@ -179,6 +234,43 @@ export default function SearchNotesModal({
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+type FolderChipProps = {
+  label: string;
+  icon: "folder" | "inbox";
+  /** The folder's own accent, so a chip reads as the folder it stands for
+   *  and can't be mistaken for a (teal) tag. */
+  tint: string;
+  active: boolean;
+  colors: ThemeColors;
+  onPress: () => void;
+};
+
+function FolderChip({ label, icon, tint, active, colors, onPress }: FolderChipProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={`Folder ${label}`}
+      style={[
+        styles.tagChip,
+        {
+          backgroundColor: active ? hexToRgba(tint, 0.18) : colors.surface,
+          borderColor: active ? tint : colors.line,
+        },
+      ]}
+    >
+      <Feather name={icon} size={12} color={active ? tint : colors.stone} />
+      <Text
+        style={[styles.tagLabel, styles.folderLabel, { color: active ? tint : colors.stone }]}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 

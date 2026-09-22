@@ -11,23 +11,35 @@ type Props = {
   title: string;
   colors: ThemeColors;
   onBack?: () => void;
+  /** A forward arrow in the same left slot, for a screen whose neighbour lies
+   *  ahead rather than behind — the folder list's way into the gallery.
+   *  Ignored when onBack is set. */
+  onForward?: () => void;
   right?: ReactNode; //* right hand side slot for a button or menu
   insetTop?: boolean;
 };
 
-export default function TopBar({ title, colors, onBack, right, insetTop = true }: Props) {
+export default function TopBar({ title, colors, onBack, onForward, right, insetTop = true }: Props) {
   const insets = useSafeAreaInsets();
+  //* one slot, one arrow: back wins if a screen somehow passes both
+  const onNav = onBack ?? onForward;
 
   return (
     <View style={[styles.row, { paddingTop: (insetTop ? insets.top : 0) + 10 }]}>
       <View style={styles.left}>
-        {onBack && (
+        {onNav != null && (
           <Pressable
-            onPress={onBack}
+            onPress={onNav}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={onBack != null ? "Back" : "Forward"}
             style={[styles.iconButton, { backgroundColor: colors.surface }]}
           >
-            <Feather name="arrow-left" size={17} color={colors.textPrimary} />
+            <Feather
+              name={onBack != null ? "arrow-left" : "arrow-right"}
+              size={17}
+              color={colors.textPrimary}
+            />
           </Pressable>
         )}
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>

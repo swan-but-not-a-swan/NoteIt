@@ -1,13 +1,10 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
-import {
-  DATE_PRESETS,
-  describeQuery,
-  isEmptyQuery,
-  withPreset,
-  type NoteQuery,
-} from "@/lib/noteHelper";
+import { describeQuery, EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
+import { DATE_PRESETS, withPreset } from "@/lib/dateHelper";
+import type { FolderModel } from "@/models/FolderModel";
+import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import { TagModel } from "../models/NoteModel";
 import { galleryToolbarStyles as styles } from "@/theme/styles/gallery.styles";
 
@@ -17,6 +14,10 @@ type Props = {
   onQueryChange: (query: NoteQuery) => void;
   /** Every tag in storage — needed only to name the ones in the summary line. */
   tags: TagModel[];
+  /** Every folder — likewise only to name picked folders in the summary line. */
+  folders: FolderModel[];
+  /** How the filters combine, so the summary line can say "or" when it means it. */
+  combine: QueryCombine;
   /** How many notes the current query matches, shown once a filter is active. */
   resultCount: number;
   onOpenSearch: () => void;
@@ -24,6 +25,7 @@ type Props = {
   compareMode: boolean;
   onToggleCompare: () => void;
 };
+
 
 // Search + filter strip above the gallery grid, ported from the web
 // reference's GalleryView toolbar.
@@ -37,13 +39,15 @@ export default function GalleryToolbar({
   query,
   onQueryChange,
   tags,
+  folders,
+  combine,
   resultCount,
   onOpenSearch,
   compareMode,
   onToggleCompare,
 }: Props) {
   const filtering = !isEmptyQuery(query);
-  const summary = describeQuery(query, tags);
+  const summary = describeQuery(query, tags, folders, combine);
 
   return (
     <View style={styles.wrap}>
@@ -137,9 +141,7 @@ export default function GalleryToolbar({
               {resultCount} {resultCount === 1 ? "match" : "matches"}
             </Text>
             <Pressable
-              onPress={() =>
-                onQueryChange({ text: "", tagIds: [], from: "", to: "", preset: "any" })
-              }
+              onPress={() => onQueryChange(EMPTY_QUERY)}
               hitSlop={8}
             >
               <Text style={[styles.clearLabel, { color: colors.accent }]}>Clear</Text>

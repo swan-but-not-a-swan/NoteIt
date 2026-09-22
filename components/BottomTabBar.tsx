@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
+import { Image } from "expo-image";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -10,6 +11,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import type { FolderModel } from "@/models/FolderModel";
 import { bottomTabBarStyles as styles } from "@/theme/styles/app.styles";
 
 export type MainTab = "folders" | "gallery";
@@ -19,6 +21,10 @@ type Props = {
   onSelectTab: (tab: MainTab) => void;
   onAdd: () => void;
   colors: ThemeColors;
+  /** The folder the gallery tab is scoped to, or null for the plain gallery.
+   *  While set, the tab stands for that folder: its name and cover replace
+   *  "Gallery" and the image icon, until the user goes back to the folders. */
+  galleryFolder?: FolderModel | null;
 };
 
 // How far up the bar needs to be swiped before releasing counts as
@@ -28,7 +34,7 @@ const SWIPE_TRIGGER_DISTANCE = 44;
 // Fully controlled, same as NewFolder/TopBar — this component only renders
 // what it's given and reports taps back up; the screen (or router) owns
 // which tab is actually active and what "add" does.
-export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors }: Props) {
+export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, galleryFolder = null }: Props) {
   const insets = useSafeAreaInsets();
   const [readyToRelease, setReadyToRelease] = useState(false);
 
@@ -122,7 +128,12 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors }: 
 
         <TabButton
           icon="image"
-          label="Gallery"
+          iconNode={
+            galleryFolder != null ? (
+              <FolderTabIcon folder={galleryFolder} active={activeTab === "gallery"} colors={colors} />
+            ) : undefined
+          }
+          label={galleryFolder != null ? galleryFolder.name : "Gallery"}
           active={activeTab === "gallery"}
           colors={colors}
           onPress={() => onSelectTab("gallery")}
@@ -134,18 +145,49 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors }: 
 
 type TabButtonProps = {
   icon: FeatherIconName;
+  /** Drawn instead of `icon` when given — the scoped folder's cover. */
+  iconNode?: ReactNode;
   label: string;
   active: boolean;
   colors: ThemeColors;
   onPress: () => void;
 };
 
-function TabButton({ icon, label, active, colors, onPress }: TabButtonProps) {
+function TabButton({ icon, iconNode, label, active, colors, onPress }: TabButtonProps) {
   const tint = active ? colors.accent : colors.stoneDim;
   return (
-    <Pressable onPress={onPress} hitSlop={8} style={styles.tab}>
-      <Feather name={icon} size={20} color={tint} />
-      <Text style={[styles.tabLabel, { color: tint }]}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      style={styles.tab}
+      accessibilityRole="tab"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+    >
+      {iconNode ?? <Feather name={icon} size={20} color={tint} />}
+      {/* one line: a folder name can be as long as the user likes */}
+      <Text style={[styles.tabLabel, { color: tint }]} numberOfLines={1}>
+        {label}
+      </Text>
     </Pressable>
+  );
+}
+
+// The scoped gallery tab's icon, drawn the way the folder list draws a folder:
+// its accent behind, the cover on top, or the folder glyph when it has none.
+function FolderTabIcon({ folder, active, colors }: { folder: FolderModel; active: boolean; colors: ThemeColors }) {
+  return (
+    <View
+      style={[
+        styles.folderThumb,
+        { backgroundColor: folder.accent, borderColor: active ? colors.accent : colors.line },
+      ]}
+    >
+      {folder.coverUri != null ? (
+        <Image source={{ uri: folder.coverUri }} style={styles.folderThumbImage} contentFit="cover" />
+      ) : (
+        <Feather name="folder" size={12} color="rgba(255,255,255,0.85)" />
+      )}
+    </View>
   );
 }

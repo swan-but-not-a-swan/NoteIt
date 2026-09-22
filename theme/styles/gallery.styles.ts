@@ -33,6 +33,17 @@ export const galleryViewStyles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   compareGoLabel: common.bold13_5,
+  //* floats the folder view's "Gallery" pill over the bottom of the grid, high
+  //* enough to clear the tab bar's add button, which rises 24pt above the bar.
+  //* Full width but touch-transparent, so the tiles either side stay pressable
+  showAllDock: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 40,
+    alignItems: "center",
+    pointerEvents: "box-none",
+  },
 });
 
 //* components/GalleryToolbar.tsx
@@ -191,6 +202,14 @@ export const searchNotesModalStyles = StyleSheet.create({
   },
   header: common.spacedRow14,
   title: common.dialogTitle,
+  //* sits between the title and the first field; the header row already
+  //* carries its own bottom margin, so this only pulls the gap back up
+  hint: {
+    fontFamily: fonts.interRegular,
+    fontSize: 12,
+    marginTop: -6,
+    marginBottom: 16,
+  },
   closeButton: common.iconButton36,
   scroll: { flexGrow: 0 },
   scrollContent: { paddingBottom: 4 },
@@ -236,6 +255,9 @@ export const searchNotesModalStyles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   tagLabel: common.semiBold12_5,
+  //* folder names are user-typed and can run long; capped so one chip can't
+  //* take a whole row and push the rest into a column
+  folderLabel: { maxWidth: 160 },
   emptyNote: {
     fontFamily: fonts.interRegular,
     fontSize: 12.5,
