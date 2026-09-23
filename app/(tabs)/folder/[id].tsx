@@ -1,4 +1,4 @@
-//! Manually reviewed since 16/09/2026
+
 
 import { View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";

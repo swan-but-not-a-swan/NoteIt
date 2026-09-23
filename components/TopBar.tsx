@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather/static";
+import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ThemeColors } from "@/theme/colors";
 import { topBarStyles as styles } from "@/theme/styles/app.styles";
@@ -11,36 +11,23 @@ type Props = {
   title: string;
   colors: ThemeColors;
   onBack?: () => void;
-  /** A forward arrow in the same left slot, for a screen whose neighbour lies
-   *  ahead rather than behind — the folder list's way into the gallery.
-   *  Ignored when onBack is set. */
-  onForward?: () => void;
   right?: ReactNode; //* right hand side slot for a button or menu
   insetTop?: boolean;
 };
 
-export default function TopBar({ title, colors, onBack, onForward, right, insetTop = true }: Props) {
+export default function TopBar({ title, colors, onBack, right, insetTop = true }: Props) {
   const insets = useSafeAreaInsets();
-  //* one slot, one arrow: back wins if a screen somehow passes both
-  const onNav = onBack ?? onForward;
 
   return (
     <View style={[styles.row, { paddingTop: (insetTop ? insets.top : 0) + 10 }]}>
       <View style={styles.left}>
-        {onNav != null && (
-          <Pressable
-            onPress={onNav}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={onBack != null ? "Back" : "Forward"}
-            style={[styles.iconButton, { backgroundColor: colors.surface }]}
-          >
-            <Feather
-              name={onBack != null ? "arrow-left" : "arrow-right"}
-              size={17}
-              color={colors.textPrimary}
-            />
-          </Pressable>
+        {onBack != null && (
+          <TopBarIconButton
+            icon="arrow-left"
+            accessibilityLabel="Back"
+            colors={colors}
+            onPress={onBack}
+          />
         )}
         <Text style={[styles.title, { color: colors.textPrimary }]} numberOfLines={1}>
           {title}
@@ -49,6 +36,35 @@ export default function TopBar({ title, colors, onBack, onForward, right, insetT
       {right}
     </View>
   );
+}
+
+type TopBarIconButtonProps = {
+  icon: FeatherIconName;
+  /** What the button does, for screen readers — "Back", "Gallery", … */
+  accessibilityLabel: string;
+  colors: ThemeColors;
+  onPress: () => void;
+};
+
+// The header's round icon button. Shared so a screen putting its own arrow in
+// the right-hand slot gets the same size and tint as the back arrow.
+export function TopBarIconButton({ icon, accessibilityLabel, colors, onPress }: TopBarIconButtonProps) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={[styles.iconButton, { backgroundColor: colors.surface }]}
+    >
+      <Feather name={icon} size={17} color={colors.textPrimary} />
+    </Pressable>
+  );
+}
+
+//* a row for the right-hand slot, for a screen with more than one button there
+export function TopBarActions({ children }: { children: ReactNode }) {
+  return <View style={styles.actions}>{children}</View>;
 }
 
 type SettingsButtonProps = {
@@ -61,6 +77,8 @@ export function SettingsButton({ colors, onPress }: SettingsButtonProps) {
     <Pressable
       onPress={onPress}
       hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Settings"
       style={[styles.iconButton, { backgroundColor: colors.surface }]}
     >
       <Feather name="settings" size={17} color={colors.textPrimary} />

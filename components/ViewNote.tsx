@@ -23,6 +23,7 @@ import { NoteModel, TagModel } from "../models/NoteModel";
 import { SnippetModel } from "../models/SnippetModel";
 import EndAdCard from "./EndAd";
 import FilmStrip, { filmStripMetrics } from "./FilmStrip";
+import FullscreenPhoto from "./FullscreenPhoto";
 import MarkdownText from "./MarkdownText";
 import MediaThumb from "./MediaThumb";
 import { viewNoteStyles as styles } from "@/theme/styles/note.styles";
@@ -131,6 +132,8 @@ export default function ViewNote({
   // rendering a zero-width photo.
   const { width: windowW } = useWindowDimensions();
   const [box, setBox] = useState({ w: windowW, h: 0 });
+  //* the photo shown full screen after a tap, or null
+  const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
 
   const stride = box.w + GUTTER;
   const count = notes.length;
@@ -362,6 +365,7 @@ export default function ViewNote({
                 <View
                   key={note.id}
                   style={[
+                    
                     styles.slot,
                     {
                       left: noteIndex * stride,
@@ -390,6 +394,14 @@ export default function ViewNote({
                     draft={draft}
                     onDraftChange={onDraftChange}
                     snippets={snippets}
+                    //* only the photo you are looking at, in picture mode: a
+                    //* neighbour is half off-screen, the open note has shrunk
+                    //* the photo to a tile, and editing owns every tap
+                    onOpenPhoto={
+                      isCurrent && !noteOpen && !editing && note.mediaType === "image"
+                        ? () => setFullscreenUri(note.mediaUri)
+                        : undefined
+                    }
                   />
                 </View>
               );
@@ -420,7 +432,7 @@ export default function ViewNote({
         //* is just another way to page away from an unsaved draft
         pointerEvents={noteOpen && !editing ? "auto" : "none"}
       >
-        {noteOpen && <FilmStrip {...stripProps} tileSize={NOTE_TILE} />}
+        {noteOpen && <FilmStrip {...stripProps} tileSize={NOTE_TILE} showSingle />}
       </Animated.View>
 
       {/* picture mode keeps it where it has always been, under the hint */}
@@ -429,6 +441,8 @@ export default function ViewNote({
           <FilmStrip {...stripProps} />
         </Animated.View>
       )}
+
+      <FullscreenPhoto uri={fullscreenUri} onClose={() => setFullscreenUri(null)} />
     </View>
   );
 }
@@ -451,6 +465,8 @@ type CardProps = {
   draft: string;
   onDraftChange: (text: string) => void;
   snippets?: SnippetModel[];
+  /** Shows the photo full screen. Unset where a tap shouldn't do that. */
+  onOpenPhoto?: () => void;
 };
 
 // One picture-note: the photo, and the note underneath it. At rest the note is
@@ -470,6 +486,7 @@ function NoteCard({
   draft,
   onDraftChange,
   snippets,
+  onOpenPhoto,
 }: CardProps) {
   //* a null source keeps the hook call unconditional while spending nothing:
   //* three mounted pages must not mean three native players, and a neighbour
@@ -645,7 +662,17 @@ function NoteCard({
             <MediaThumb note={note} />
           )
         ) : (
-          <Image source={{ uri: note.mediaUri }} style={styles.media} contentFit="cover" />
+          //* a plain Pressable is enough under the viewer's pan: it only fires
+          //* when the finger doesn't travel, and a swipe cancels it
+          <Pressable
+            style={styles.media}
+            onPress={onOpenPhoto}
+            disabled={onOpenPhoto == null}
+            accessibilityRole="imagebutton"
+            accessibilityLabel="Show the photo full screen"
+          >
+            <Image source={{ uri: note.mediaUri }} style={styles.media} contentFit="cover" />
+          </Pressable>
         )}
 
         {note.date.length > 0 && (

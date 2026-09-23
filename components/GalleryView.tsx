@@ -1,4 +1,3 @@
-//! Manually reviewed since 16/09/2026
 
 import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, Text, View } from "react-native";

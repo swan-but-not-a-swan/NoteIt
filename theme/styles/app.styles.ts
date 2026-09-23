@@ -95,6 +95,12 @@ export const topBarStyles = StyleSheet.create({
     flexShrink: 1,
   },
   iconButton: common.iconButton38,
+  //* the right-hand slot when it holds more than one button
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   title: {
     fontFamily: fonts.frauncesSemiBold,
     fontSize: 30,

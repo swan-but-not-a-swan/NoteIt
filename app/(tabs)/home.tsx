@@ -1,4 +1,4 @@
-//! Manually reviewed since 15/09/2026
+
 
 import { Alert, BackHandler, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -6,7 +6,7 @@ import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-na
 import { scheduleOnRN } from "react-native-worklets";
 import { FOLDER_SWATCHES } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import TopBar, { SettingsButton } from "@/components/TopBar";
+import TopBar, { SettingsButton, TopBarActions, TopBarIconButton } from "@/components/TopBar";
 import BottomTabBar, { MainTab } from "@/components/BottomTabBar";
 import FoldersList from "@/components/FoldersList";
 import GalleryView from "@/components/GalleryView";
@@ -342,16 +342,22 @@ export default function Home() {
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <TopBar
                 title={topBarTitle}
-                //* a scoped gallery is a folder you walked into, so it gets a way back out
-                onBack={scopeFolderId != null ? () => switchTab("folders") : undefined}
-                //* the folder list's mirror of that arrow: ahead of it lies the gallery
-                onForward={activeTab === "folders" ? () => switchTab("gallery") : undefined}
                 colors={colors}
                 right={
-                    <SettingsButton
-                        colors={colors}
-                        onPress={() => navigateOnce(() => router.push("/(tabs)/settings"))}
-                    />
+                    <TopBarActions>
+                        {/* the way to the tab you're not on, pointing the way the
+                            pages move: the gallery lies right of the folders */}
+                        <TopBarIconButton
+                            icon={activeTab === "folders" ? "arrow-right" : "arrow-left"}
+                            accessibilityLabel={activeTab === "folders" ? "Gallery" : "Folders"}
+                            colors={colors}
+                            onPress={() => switchTab(activeTab === "folders" ? "gallery" : "folders")}
+                        />
+                        <SettingsButton
+                            colors={colors}
+                            onPress={() => navigateOnce(() => router.push("/(tabs)/settings"))}
+                        />
+                    </TopBarActions>
                 }
             />
 

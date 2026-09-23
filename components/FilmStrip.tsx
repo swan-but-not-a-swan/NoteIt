@@ -25,6 +25,11 @@ type Props = {
    *  contact sheet under the photo, and the stand-in for the photo itself
    *  while the note is open — and they differ only by this. */
   tileSize?: number;
+  /** Draw the strip even when there is only one note. The contact sheet hides
+   *  itself then — a strip of one navigates nowhere — but the open strip is
+   *  the photo's stand-in: the photo condenses onto its tile and fades out,
+   *  so without that tile a one-note list is left with no picture at all. */
+  showSingle?: boolean;
 };
 
 const DEFAULT_TILE = 44;
@@ -85,6 +90,7 @@ export default function FilmStrip({
   onSelect,
   position,
   tileSize = DEFAULT_TILE,
+  showSingle = false,
 }: Props) {
   const inactiveSize = tileSize;
   const activeSize = tileSize + ACTIVE_BUMP;
@@ -116,7 +122,8 @@ export default function FilmStrip({
     },
   );
 
-  if (notes.length <= 1) return null;
+  const minTiles = showSingle ? 1 : 2;
+  if (notes.length < minTiles) return null;
 
   return (
     <Animated.ScrollView
