@@ -186,9 +186,27 @@ export const bottomTabBarStyles = StyleSheet.create({
   hintLabel: common.semiBold11_5,
 });
 
+//* the height shared by the buttons that sit in a bar together — the gallery
+//* compare bar's pair, and anything that lines up beside them
+export const BAR_BUTTON_HEIGHT = 42;
+
 //* components/OverflowMenu.tsx
 export const overflowMenuStyles = StyleSheet.create({
   trigger: common.iconButton38,
+  //* the labelled shape, for a trigger standing among labelled buttons rather
+  //* than among header icons. A fixed height, not padding: its neighbour in the
+  //* bar is a different font and icon size, and text-driven heights left the two
+  //* a pixel apart
+  labelledTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: BAR_BUTTON_HEIGHT,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+  },
+  triggerLabel: common.bold13_5,
   backdrop: {
     position: "absolute",
     top: 0,

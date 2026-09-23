@@ -16,16 +16,40 @@ type Props = {
   colors: ThemeColors;
   items: OverflowMenuItem[];
   accessibilityLabel?: string;
+  /** Text beside the dots. The trigger then takes the shape of a labelled
+   *  button rather than the round icon one. */
+  label?: string;
 };
 
-export default function OverflowMenu({ colors, items, accessibilityLabel = "More options" }: Props) {
+export default function OverflowMenu({
+  colors,
+  items,
+  accessibilityLabel = "More options",
+  label,
+}: Props) {
   const trigger = useRef<View>(null);
-  const { width: screenW } = useWindowDimensions();
-  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  //* where the card hangs from: `top`/`bottom` for the vertical edge it grows
+  //* away from, `left`/`right` for the horizontal one — one of each, never both
+  const [anchor, setAnchor] = useState<{
+    top?: number;
+    bottom?: number;
+    left?: number;
+    right?: number;
+  } | null>(null);
 
   const open = () => {
     trigger.current?.measureInWindow((x, y, w, h) => {
-      setAnchor({ top: y + h + 6, right: Math.max(8, screenW - (x + w)) });
+      //* the card grows away from the trigger, towards whichever side has the
+      //* room: a trigger low on the screen opens upward, and one on the left
+      //* lines its card up leftward — anchoring it right would push the card
+      //* off the screen and clip its labels
+      const opensUp = y + h / 2 > screenH / 2;
+      const opensLeft = x + w / 2 < screenW / 2;
+      setAnchor({
+        ...(opensUp ? { bottom: screenH - y + 6 } : { top: y + h + 6 }),
+        ...(opensLeft ? { left: Math.max(8, x) } : { right: Math.max(8, screenW - (x + w)) }),
+      });
     });
   };
 
@@ -44,9 +68,12 @@ export default function OverflowMenu({ colors, items, accessibilityLabel = "More
         hitSlop={8}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        style={[styles.trigger, { backgroundColor: colors.surface }]}
+        style={[label != null ? styles.labelledTrigger : styles.trigger, { backgroundColor: colors.surface }]}
       >
         <Feather name="more-horizontal" size={17} color={colors.textPrimary} />
+        {label != null && (
+          <Text style={[styles.triggerLabel, { color: colors.textPrimary }]}>{label}</Text>
+        )}
       </Pressable>
 
       <Modal
@@ -67,6 +94,8 @@ export default function OverflowMenu({ colors, items, accessibilityLabel = "More
               styles.card,
               {
                 top: anchor.top,
+                bottom: anchor.bottom,
+                left: anchor.left,
                 right: anchor.right,
                 backgroundColor: colors.surface,
                 borderColor: colors.line,

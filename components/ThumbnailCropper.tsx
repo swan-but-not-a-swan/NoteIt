@@ -1,11 +1,11 @@
 //! Manually reviewed since 14/09/2026
 
-import { useEffect, useState } from "react";
-import { Image as RNImage, Pressable, StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Image } from "expo-image";
+import { Image, useImage } from "expo-image";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { DARK_THEME } from "@/theme/colors";
@@ -30,26 +30,25 @@ export type CropperContentProps = {
 
 export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperContentProps) {
   const insets = useSafeAreaInsets();
-  const [natural, setNatural] = useState<{ width: number; height: number } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    RNImage.getSize(
-      sourceUri,
-      (width, height) => {
-        if (!cancelled) setNatural({ width, height });
-      },
-      () => {
-        //* without the real size the crop can't be mapped onto the photo, so confirming stays disabled
-        if (!cancelled) setError("Couldn't read that photo. Try a different one.");
-      }
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [sourceUri]);
+  // One decode for the whole screen. The reference carries the photo's size,
+  // and both images below render from it rather than from the uri, so the file
+  // is never read twice. This used to take three passes over a camera-sized
+  // photo — Image.getSize purely for the dimensions, then a load per image —
+  // and the pass that held everything up produced no pixels at all.
+  const image = useImage(sourceUri, {
+    //* without the real size the crop can't be mapped onto the photo, so confirming stays disabled
+    onError: () => setError("Couldn't read that photo. Try a different one."),
+  });
+
+  //* width and height are logical units; the file's own pixels — which is what
+  //* the crop below is measured in — are those multiplied by the scale
+  const natural =
+    image != null
+      ? { width: image.width * image.scale, height: image.height * image.scale }
+      : null;
 
   const aspect = natural != null ? natural.width / natural.height : 1;
   const baseWidth = aspect >= 1 ? CROP_SIZE * aspect : CROP_SIZE;
@@ -115,35 +114,24 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
     ],
   }));
 
-  const handleConfirmAsync = async () => {
+  const handleConfirm = () => {
     if (natural == null || saving) return;
     setSaving(true);
     setError(null);
-    try {
-      const k = natural.width / baseWidth; //* natural pixels per base point (uniform on both axes)
-      const pixelsPerPoint = k / scale.get();
-      const effectiveWidth = baseWidth * scale.get();
-      const effectiveHeight = baseHeight * scale.get();
-      const windowLeftRelativeToImage = effectiveWidth / 2 - CROP_SIZE / 2 - translateX.get();
-      const windowTopRelativeToImage = effectiveHeight / 2 - CROP_SIZE / 2 - translateY.get();
-
-      //* round the size first and clamp the origin against it, so origin + size
-      //* never lands a pixel past the edge (Android throws, iOS trims the square)
-      const size = Math.max(1, Math.min(Math.floor(CROP_SIZE * pixelsPerPoint), natural.width, natural.height));
-      const originX = Math.round(clamp(windowLeftRelativeToImage * pixelsPerPoint, 0, natural.width - size));
-      const originY = Math.round(clamp(windowTopRelativeToImage * pixelsPerPoint, 0, natural.height - size));
-
-      const rendered = await ImageManipulator.manipulate(sourceUri)
-        .crop({ originX, originY, width: size, height: size })
-        .resize({ width: Math.min(size, COVER_MAX_SIZE) })
-        .renderAsync();
-      const result = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
-      await onConfirm(result.uri);
-    } catch {
-      setError("Couldn't save that crop. Try again.");
-    } finally {
-      setSaving(false);
-    }
+    //* the shared values are read here, on the JS thread, so the crop below is
+    //* a plain function of numbers and knows nothing about this screen
+    confirmCropAsync({
+      sourceUri,
+      natural,
+      baseWidth,
+      baseHeight,
+      scale: scale.get(),
+      translateX: translateX.get(),
+      translateY: translateY.get(),
+      onConfirm,
+      onError: () => setError("Couldn't save that crop. Try again."),
+      onDone: () => setSaving(false),
+    });
   };
 
   const canConfirm = natural != null && !saving;
@@ -155,7 +143,7 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
           <Text style={[styles.topBarAction, { color: colors.textPrimary }]}>Cancel</Text>
         </Pressable>
         <Text style={[styles.topBarTitle, { color: colors.textPrimary }]}>Crop thumbnail</Text>
-        <Pressable onPress={handleConfirmAsync} hitSlop={8} disabled={!canConfirm}>
+        <Pressable onPress={handleConfirm} hitSlop={8} disabled={!canConfirm}>
           <Text style={[styles.topBarAction, { color: colors.accent, opacity: canConfirm ? 1 : 0.5 }]}>
             {saving ? "Saving…" : "Use Photo"}
           </Text>
@@ -172,7 +160,7 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
             }}
           >
             <View style={styles.centeredLayer}>
-              {natural != null && <AnimatedImage source={{ uri: sourceUri }} style={imageAnimatedStyle} />}
+              {image != null && <AnimatedImage source={image} style={imageAnimatedStyle} />}
             </View>
             <View style={styles.dim} />
 
@@ -182,7 +170,7 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
                 { width: CROP_SIZE, height: CROP_SIZE, borderRadius: CROP_RADIUS },
               ]}
             >
-              {natural != null && <AnimatedImage source={{ uri: sourceUri }} style={peepholeImageStyle} />}
+              {image != null && <AnimatedImage source={image} style={peepholeImageStyle} />}
             </View>
             <View
               style={[
@@ -206,6 +194,65 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
       </View>
     </View>
   );
+}
+
+/** What the crop needs from the screen. The shared values are already numbers
+ *  by the time they arrive, so nothing in here touches Reanimated. */
+type ConfirmCropParams = {
+  sourceUri: string;
+  natural: { width: number; height: number };
+  baseWidth: number;
+  baseHeight: number;
+  scale: number;
+  translateX: number;
+  translateY: number;
+  onConfirm: (croppedUri: string) => Promise<void>;
+  onError: () => void;
+  onDone: () => void;
+};
+
+// Outside the component deliberately. React Compiler can't lower a `try` that
+// has a `finally`, and one anywhere in a component's body makes it skip that
+// whole component — so CropperContent was going unoptimised for the sake of
+// these six lines. Out here it is ordinary module code the compiler doesn't
+// look at, and the error handling is unchanged.
+async function confirmCropAsync({
+  sourceUri,
+  natural,
+  baseWidth,
+  baseHeight,
+  scale,
+  translateX,
+  translateY,
+  onConfirm,
+  onError,
+  onDone,
+}: ConfirmCropParams) {
+  try {
+    const k = natural.width / baseWidth; //* natural pixels per base point (uniform on both axes)
+    const pixelsPerPoint = k / scale;
+    const effectiveWidth = baseWidth * scale;
+    const effectiveHeight = baseHeight * scale;
+    const windowLeftRelativeToImage = effectiveWidth / 2 - CROP_SIZE / 2 - translateX;
+    const windowTopRelativeToImage = effectiveHeight / 2 - CROP_SIZE / 2 - translateY;
+
+    //* round the size first and clamp the origin against it, so origin + size
+    //* never lands a pixel past the edge (Android throws, iOS trims the square)
+    const size = Math.max(1, Math.min(Math.floor(CROP_SIZE * pixelsPerPoint), natural.width, natural.height));
+    const originX = Math.round(clamp(windowLeftRelativeToImage * pixelsPerPoint, 0, natural.width - size));
+    const originY = Math.round(clamp(windowTopRelativeToImage * pixelsPerPoint, 0, natural.height - size));
+
+    const rendered = await ImageManipulator.manipulate(sourceUri)
+      .crop({ originX, originY, width: size, height: size })
+      .resize({ width: Math.min(size, COVER_MAX_SIZE) })
+      .renderAsync();
+    const result = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.7 });
+    await onConfirm(result.uri);
+  } catch {
+    onError();
+  } finally {
+    onDone();
+  }
 }
 
 function clamp(value: number, min: number, max: number) {

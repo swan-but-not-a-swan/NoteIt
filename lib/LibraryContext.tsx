@@ -31,6 +31,8 @@ type LibraryContextValue = {
   /** Inserts a note, or replaces the one with the same id. */
   saveNoteAsync: (note: NoteModel) => Promise<void>;
   deleteNotesAsync: (notes: NoteModel[]) => Promise<void>;
+  /** Files notes under another folder, or under none when folderId is null. */
+  moveNotesToFolderAsync: (notes: NoteModel[], folderId: string | null) => Promise<void>;
   saveSnippetsAsync: (snippets: SnippetModel[]) => Promise<void>;
   /** Re-reads notes and tags. Only for writes that bypass this store — today
    *  that is AddNote's save, which goes through noteHelper's own pipeline. */
@@ -121,6 +123,27 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     setNotes((current) => current.filter((note) => !ids.has(note.id)));
   }, []);
 
+  const moveNotesToFolderAsync = useCallback(
+    async (toMove: NoteModel[], folderId: string | null) => {
+      //* only the ones that would actually change, so re-picking the folder a
+      //* note is already in writes nothing
+      const moved = toMove
+        .filter((note) => note.folderId !== folderId)
+        .map((note) => ({ ...note, folderId }));
+      if (moved.length === 0) return;
+
+      //* one at a time rather than Promise.all: each write also reads and
+      //* rewrites the shared note-id list, and concurrent writes would race
+      for (const note of moved) {
+        await setNoteToStorageAsync(note);
+      }
+
+      const byId = new Map(moved.map((note) => [note.id, note]));
+      setNotes((current) => current.map((note) => byId.get(note.id) ?? note));
+    },
+    [],
+  );
+
   const saveSnippetsAsync = useCallback(async (next: SnippetModel[]) => {
     await setSnippetsToStorageAsync(next);
     setSnippets(next);
@@ -154,6 +177,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       deleteFolderAsync,
       saveNoteAsync,
       deleteNotesAsync,
+      moveNotesToFolderAsync,
       saveSnippetsAsync,
       refreshNotesAndTagsAsync,
       reloadAsync,
@@ -168,6 +192,7 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
       deleteFolderAsync,
       saveNoteAsync,
       deleteNotesAsync,
+      moveNotesToFolderAsync,
       saveSnippetsAsync,
       refreshNotesAndTagsAsync,
       reloadAsync,

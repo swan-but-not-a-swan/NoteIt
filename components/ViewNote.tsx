@@ -671,7 +671,20 @@ function NoteCard({
             accessibilityRole="imagebutton"
             accessibilityLabel="Show the photo full screen"
           >
-            <Image source={{ uri: note.mediaUri }} style={styles.media} contentFit="cover" />
+            <Image
+              source={{ uri: note.mediaUri }}
+              style={styles.media}
+              contentFit="cover"
+              //* the photo at its full resolution, but never held in memory:
+              //* three pages are mounted at once, and a camera-sized bitmap
+              //* apiece is megabytes the app has better uses for
+              cachePolicy="disk"
+              //* the note's own thumbnail while that decode runs. It is the
+              //* same picture at tile size, already on disk and usually still
+              //* in memory from the strip, so the card is never blank
+              placeholder={{ uri: note.thumbnailUri }}
+              placeholderContentFit="cover"
+            />
           </Pressable>
         )}
 

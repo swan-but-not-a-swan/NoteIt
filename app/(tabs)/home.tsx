@@ -11,6 +11,7 @@ import BottomTabBar, { MainTab } from "@/components/BottomTabBar";
 import FoldersList from "@/components/FoldersList";
 import GalleryView from "@/components/GalleryView";
 import NewFolder from "@/components/NewFolder";
+import MoveNotesModal from "@/components/MoveNotesModal";
 import AddNote from "@/components/AddNote";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "expo-router";
@@ -92,6 +93,8 @@ export default function Home() {
         snippets,
         saveFoldersAsync,
         deleteFolderAsync,
+        deleteNotesAsync,
+        moveNotesToFolderAsync,
         refreshNotesAndTagsAsync,
         reloadAsync,
     } = useLibrary();
@@ -332,6 +335,49 @@ export default function Home() {
         onSaved: refreshNotesAndTagsAsync,
     });
 
+    //* the notes waiting for a folder to be picked, with what to run once they
+    //* have moved — null when the picker is closed
+    const [pendingMove, setPendingMove] = useState<{
+        notes: NoteModel[];
+        onMoved: () => void;
+    } | null>(null);
+
+    const confirmDeleteNotes = (toDelete: NoteModel[]) => {
+        if (toDelete.length === 0) return;
+        Alert.alert(
+            toDelete.length === 1
+                ? "Delete this picture-note?"
+                : `Delete ${toDelete.length} picture-notes?`,
+            toDelete.length === 1
+                ? "Its photo or video goes too. This can't be undone."
+                : "Their photos and videos go too. This can't be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    //* the store drops them from memory as the write lands; a
+                    //* failure part-way leaves the two out of step, so resync
+                    onPress: () => {
+                        deleteNotesAsync(toDelete).catch(() => reloadAsync().catch(() => {}));
+                    },
+                },
+            ],
+        );
+    };
+
+    const moveNotesAsync = async (folderId: string | null) => {
+        const pending = pendingMove;
+        setPendingMove(null); //* the picker's work is done either way
+        if (pending == null) return;
+        try {
+            await moveNotesToFolderAsync(pending.notes, folderId);
+            pending.onMoved(); //* only once the move actually landed
+        } catch {
+            reloadAsync().catch(() => {});
+        }
+    };
+
     //* inside a folder's gallery, a new note defaults into that folder
     const openAddNote = () => addNote.open(scopeFolderId);
 
@@ -401,6 +447,8 @@ export default function Home() {
                                         router.push({ pathname: "/(tabs)/compare", params: { ids: ids.join(",") } })
                                     )
                                 }
+                                onDeleteNotes={confirmDeleteNotes}
+                                onMoveNotes={(notes, onMoved) => setPendingMove({ notes, onMoved })}
                                 onShowAll={() => {
                                     //* forward, like the pill's arrow: the folder opens out into everything
                                     setTabDir("forward");
@@ -427,6 +475,15 @@ export default function Home() {
                 colors={colors}
                 folders={folders}
                 {...addNote.props}
+            />
+
+            <MoveNotesModal
+                visible={pendingMove != null}
+                colors={colors}
+                folders={folders}
+                count={pendingMove?.notes.length ?? 0}
+                onCancel={() => setPendingMove(null)}
+                onSelectFolder={moveNotesAsync}
             />
 
             <NewFolder

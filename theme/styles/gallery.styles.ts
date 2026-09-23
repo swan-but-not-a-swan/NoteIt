@@ -4,6 +4,7 @@
 import { StyleSheet } from "react-native";
 import { fonts } from "@/theme/fonts";
 import { common } from "@/theme/styles/common.styles";
+import { BAR_BUTTON_HEIGHT } from "@/theme/styles/app.styles";
 
 //* components/GalleryView.tsx
 export const galleryViewStyles = StyleSheet.create({
@@ -16,20 +17,14 @@ export const galleryViewStyles = StyleSheet.create({
     paddingVertical: 12,
     borderTopWidth: 1,
   },
-  compareCancel: {
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 16,
-  },
-  compareCancelLabel: common.semiBold13,
   compareGo: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+    height: BAR_BUTTON_HEIGHT, //* the same height as the More button beside it
     borderRadius: 10,
-    paddingVertical: 11,
     paddingHorizontal: 16,
   },
   compareGoLabel: common.bold13_5,
@@ -84,7 +79,7 @@ export const galleryToolbarStyles = StyleSheet.create({
     fontFamily: fonts.interSemiBold,
     fontSize: 13.5,
   },
-  compareButton: {
+  selectButton: {
     width: 42,
     height: 42,
     borderRadius: 12,

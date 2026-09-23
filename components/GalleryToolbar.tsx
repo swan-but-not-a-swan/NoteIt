@@ -21,9 +21,9 @@ type Props = {
   /** How many notes the current query matches, shown once a filter is active. */
   resultCount: number;
   onOpenSearch: () => void;
-  /** Selecting notes to compare, rather than opening them. */
-  compareMode: boolean;
-  onToggleCompare: () => void;
+  /** Picking notes — to compare, delete or move them — rather than opening them. */
+  selectMode: boolean;
+  onToggleSelectMode: () => void;
 };
 
 
@@ -43,8 +43,8 @@ export default function GalleryToolbar({
   combine,
   resultCount,
   onOpenSearch,
-  compareMode,
-  onToggleCompare,
+  selectMode,
+  onToggleSelectMode,
 }: Props) {
   const filtering = !isEmptyQuery(query);
   const summary = describeQuery(query, tags, folders, combine);
@@ -73,19 +73,26 @@ export default function GalleryToolbar({
           </Text>
         </Pressable>
 
+        {/* the same button leaves the mode it entered: a cross reads as "stop
+            picking" where the columns icon would read as "compare now" */}
         <Pressable
-          onPress={onToggleCompare}
+          onPress={onToggleSelectMode}
           hitSlop={6}
-          accessibilityLabel={compareMode ? "Leave compare mode" : "Compare picture-notes"}
+          accessibilityRole="button"
+          accessibilityLabel={selectMode ? "Cancel" : "Select picture-notes"}
           style={[
-            styles.compareButton,
+            styles.selectButton,
             {
-              backgroundColor: compareMode ? hexToRgba(colors.accent, 0.12) : colors.surface,
-              borderColor: compareMode ? colors.accent : colors.line,
+              backgroundColor: selectMode ? hexToRgba(colors.accent, 0.12) : colors.surface,
+              borderColor: selectMode ? colors.accent : colors.line,
             },
           ]}
         >
-          <Feather name="columns" size={16} color={compareMode ? colors.accent : colors.stoneDim} />
+          <Feather
+            name={selectMode ? "x" : "columns"}
+            size={16}
+            color={selectMode ? colors.accent : colors.stoneDim}
+          />
         </Pressable>
       </View>
 
@@ -130,7 +137,7 @@ export default function GalleryToolbar({
         )}
       </ScrollView>
 
-      {compareMode ? (
+      {selectMode ? (
         <Text style={[styles.hint, { color: colors.stone }]}>
           Tap picture-notes to select up to 4 to compare side by side.
         </Text>

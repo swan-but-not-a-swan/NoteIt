@@ -36,7 +36,7 @@ export default function Folder({ folder, count, colors, onOpen, onEdit }: Props)
         style={[styles.thumb, { backgroundColor: folder.accent }]}
       >
         {folder.coverUri != null ? (
-          <Image source={{ uri: folder.coverUri }} style={styles.thumbImage} />
+          <Image source={{ uri: folder.coverUri }} style={styles.thumbImage} cachePolicy="memory-disk" />
         ) : (
           <Feather name="folder" size={22} color="rgba(255,255,255,0.85)" />
         )}

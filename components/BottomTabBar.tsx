@@ -184,7 +184,12 @@ function FolderTabIcon({ folder, active, colors }: { folder: FolderModel; active
       ]}
     >
       {folder.coverUri != null ? (
-        <Image source={{ uri: folder.coverUri }} style={styles.folderThumbImage} contentFit="cover" />
+        <Image
+          source={{ uri: folder.coverUri }}
+          style={styles.folderThumbImage}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
       ) : (
         <Feather name="folder" size={12} color="rgba(255,255,255,0.85)" />
       )}
