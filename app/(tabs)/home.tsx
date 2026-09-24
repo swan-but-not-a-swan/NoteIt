@@ -1,19 +1,21 @@
-//! Manually reviewed since 15/09/2026
 
-import { Alert, StyleSheet, View } from "react-native";
+
+import { Alert, BackHandler, StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { FOLDER_SWATCHES } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import TopBar, { SettingsButton } from "@/components/TopBar";
+import TopBar, { SettingsButton, TopBarActions, TopBarIconButton } from "@/components/TopBar";
 import BottomTabBar, { MainTab } from "@/components/BottomTabBar";
 import FoldersList from "@/components/FoldersList";
 import GalleryView from "@/components/GalleryView";
 import NewFolder from "@/components/NewFolder";
+import MoveNotesModal from "@/components/MoveNotesModal";
 import AddNote from "@/components/AddNote";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router/react-navigation";
 import { FolderListItemModel } from "@/models/FolderListItemModel";
 import { FolderModel } from "@/models/FolderModel";
 import * as Crypto from "expo-crypto";
@@ -91,12 +93,23 @@ export default function Home() {
         snippets,
         saveFoldersAsync,
         deleteFolderAsync,
+        deleteNotesAsync,
+        moveNotesToFolderAsync,
         refreshNotesAndTagsAsync,
         reloadAsync,
     } = useLibrary();
 
     const [activeTab, setActiveTab] = useState<MainTab>("folders");
     const [tabDir, setTabDir] = useState<"forward" | "backward" | null>(null);
+
+    //* the folder the gallery tab is scoped to, set by pressing a folder in the
+    //* list. null is the plain gallery: every note, and filters combine with OR
+    const [galleryFolderId, setGalleryFolderId] = useState<string | null>(null);
+    const galleryFolder = galleryFolderId != null ? folders.find((f) => f.id === galleryFolderId) ?? null : null;
+    //* derived rather than cleared in an effect: a folder deleted while its
+    //* gallery is open reads as no scope at all, not a nameless empty folder
+    const scopeFolderId = galleryFolder != null ? galleryFolder.id : null;
+    const galleryNotes = scopeFolderId != null ? notes.filter((note) => note.folderId === scopeFolderId) : notes;
 
     //* Navigation codes
 
@@ -105,9 +118,36 @@ export default function Home() {
         //* must stay pure. Leaving the gallery unmounts GalleryView, and that
         //* clears its search and compare state on its own
         if (tab === activeTab) return;
+        setGalleryFolderId(null); //* a folder scope never outlives the gallery tab
         setTabDir(tab === "gallery" ? "forward" : "backward");
         setActiveTab(tab);
     };
+
+    //* not through navigateOnce: nothing navigates here, and that latch only
+    //* resets when the screen regains focus — it would swallow the next real push
+    const openFolderInGallery = (folderId: string) => {
+        switchTab("gallery");
+        setGalleryFolderId(folderId); //* after switchTab, which clears it
+    };
+
+    //* Android's back button leaves a scoped gallery for the folder list rather
+    //* than leaving the app. Subscribed on focus, not on mount: with the viewer
+    //* pushed on top, home stays mounted, and a listener here would beat the
+    //* stack's own back handler and switch tabs instead of closing the viewer
+    useFocusEffect(
+        useCallback(() => {
+            if (scopeFolderId == null) return;
+            const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+                //* switchTab("folders") spelled out — scoped always means the gallery
+                //* tab — so this doesn't re-subscribe every time switchTab is rebuilt
+                setGalleryFolderId(null);
+                setTabDir("backward");
+                setActiveTab("folders");
+                return true;
+            });
+            return () => subscription.remove();
+        }, [scopeFolderId]),
+    );
 
     const tabSwipeAxis = useSharedValue<"x" | "y" | null>(null);
     const tabSwipeGesture = Gesture.Pan()
@@ -295,18 +335,75 @@ export default function Home() {
         onSaved: refreshNotesAndTagsAsync,
     });
 
-    const openAddNote = () => addNote.open();
+    //* the notes waiting for a folder to be picked, with what to run once they
+    //* have moved — null when the picker is closed
+    const [pendingMove, setPendingMove] = useState<{
+        notes: NoteModel[];
+        onMoved: () => void;
+    } | null>(null);
+
+    const confirmDeleteNotes = (toDelete: NoteModel[]) => {
+        if (toDelete.length === 0) return;
+        Alert.alert(
+            toDelete.length === 1
+                ? "Delete this picture-note?"
+                : `Delete ${toDelete.length} picture-notes?`,
+            toDelete.length === 1
+                ? "Its photo or video goes too. This can't be undone."
+                : "Their photos and videos go too. This can't be undone.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    //* the store drops them from memory as the write lands; a
+                    //* failure part-way leaves the two out of step, so resync
+                    onPress: () => {
+                        deleteNotesAsync(toDelete).catch(() => reloadAsync().catch(() => {}));
+                    },
+                },
+            ],
+        );
+    };
+
+    const moveNotesAsync = async (folderId: string | null) => {
+        const pending = pendingMove;
+        setPendingMove(null); //* the picker's work is done either way
+        if (pending == null) return;
+        try {
+            await moveNotesToFolderAsync(pending.notes, folderId);
+            pending.onMoved(); //* only once the move actually landed
+        } catch {
+            reloadAsync().catch(() => {});
+        }
+    };
+
+    //* inside a folder's gallery, a new note defaults into that folder
+    const openAddNote = () => addNote.open(scopeFolderId);
+
+    const topBarTitle =
+        activeTab === "folders" ? "Your folders" : galleryFolder != null ? galleryFolder.name : "Gallery";
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
             <TopBar
-                title={activeTab === "folders" ? "Your folders" : "Gallery"}
+                title={topBarTitle}
                 colors={colors}
                 right={
-                    <SettingsButton
-                        colors={colors}
-                        onPress={() => navigateOnce(() => router.push("/(tabs)/settings"))}
-                    />
+                    <TopBarActions>
+                        {/* the way to the tab you're not on, pointing the way the
+                            pages move: the gallery lies right of the folders */}
+                        <TopBarIconButton
+                            icon={activeTab === "folders" ? "arrow-right" : "arrow-left"}
+                            accessibilityLabel={activeTab === "folders" ? "Gallery" : "Folders"}
+                            colors={colors}
+                            onPress={() => switchTab(activeTab === "folders" ? "gallery" : "folders")}
+                        />
+                        <SettingsButton
+                            colors={colors}
+                            onPress={() => navigateOnce(() => router.push("/(tabs)/settings"))}
+                        />
+                    </TopBarActions>
                 }
             />
 
@@ -317,25 +414,32 @@ export default function Home() {
                             <FoldersList
                                 items={groupFoldersWithNotes(folders, notes)}
                                 colors={colors}
-                                onOpenFolder={(id) =>
-                                    navigateOnce(() =>
-                                        router.push({ pathname: "/(tabs)/folder/[id]", params: { id } })
-                                    )
-                                }
+                                onOpenFolder={openFolderInGallery}
                                 onEditFolder={onEditFolder}
                                 onNewFolder={openNewFolder}
                                 showAdBanner={hasPlus === false}
                             />
                         </SlideInPage>
                     ) : (
-                        <SlideInPage key="gallery" dir={tabDir}>
+                        //* keyed by scope, so changing it remounts the page: search and
+                        //* compare picks start clean for each folder instead of carrying
+                        //* over, and leaving a folder for the gallery replays the slide
+                        <SlideInPage key={`gallery:${scopeFolderId ?? "all"}`} dir={tabDir}>
                             <GalleryView
-                                notes={notes}
+                                notes={galleryNotes}
                                 tags={storedTags}
+                                folders={folders}
+                                scopeFolderId={scopeFolderId}
                                 colors={colors}
                                 onOpenNote={(note) =>
                                     navigateOnce(() =>
-                                        router.push({ pathname: "/(tabs)/note/[id]", params: { id: note.id } })
+                                        router.push({
+                                            pathname: "/(tabs)/note/[id]",
+                                            //* the viewer pages within the folder, matching the grid
+                                            params: scopeFolderId != null
+                                                ? { id: note.id, folderId: scopeFolderId }
+                                                : { id: note.id },
+                                        })
                                     )
                                 }
                                 onCompare={(ids) =>
@@ -343,6 +447,24 @@ export default function Home() {
                                         router.push({ pathname: "/(tabs)/compare", params: { ids: ids.join(",") } })
                                     )
                                 }
+                                onDeleteNotes={confirmDeleteNotes}
+                                //* the viewer opens the note and starts editing it
+                                onEditNote={(note) =>
+                                    navigateOnce(() =>
+                                        router.push({
+                                            pathname: "/(tabs)/note/[id]",
+                                            params: scopeFolderId != null
+                                                ? { id: note.id, folderId: scopeFolderId, edit: "1" }
+                                                : { id: note.id, edit: "1" },
+                                        })
+                                    )
+                                }
+                                onMoveNotes={(notes, onMoved) => setPendingMove({ notes, onMoved })}
+                                onShowAll={() => {
+                                    //* forward, like the pill's arrow: the folder opens out into everything
+                                    setTabDir("forward");
+                                    setGalleryFolderId(null);
+                                }}
                             />
                         </SlideInPage>
                     )}
@@ -352,6 +474,10 @@ export default function Home() {
             <BottomTabBar
                 activeTab={activeTab}
                 onSelectTab={switchTab}
+                //* while scoped, the gallery tab shows the folder; it goes back to
+                //* "Gallery" only by returning to the folders, where switchTab clears
+                //* the scope — so a folder deleted there can't leave a ghost tab
+                galleryFolder={galleryFolder}
                 onAdd={openAddNote}
                 colors={colors}
             />
@@ -360,6 +486,15 @@ export default function Home() {
                 colors={colors}
                 folders={folders}
                 {...addNote.props}
+            />
+
+            <MoveNotesModal
+                visible={pendingMove != null}
+                colors={colors}
+                folders={folders}
+                count={pendingMove?.notes.length ?? 0}
+                onCancel={() => setPendingMove(null)}
+                onSelectFolder={moveNotesAsync}
             />
 
             <NewFolder

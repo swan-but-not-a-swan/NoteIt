@@ -95,12 +95,32 @@ export const topBarStyles = StyleSheet.create({
     flexShrink: 1,
   },
   iconButton: common.iconButton38,
+  //* the right-hand slot when it holds more than one button
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   title: {
     fontFamily: fonts.frauncesSemiBold,
     fontSize: 30,
     fontWeight: "600",
     flexShrink: 1,
   },
+});
+
+//* components/GlassPill.tsx
+export const glassPillStyles = StyleSheet.create({
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  label: common.semiBold13_5,
 });
 
 //* components/BottomTabBar.tsx
@@ -121,6 +141,24 @@ export const bottomTabBarStyles = StyleSheet.create({
   tabLabel: {
     fontFamily: fonts.interSemiBold,
     fontSize: 11,
+    //* stretched so a long folder name truncates at the tab's edge instead of
+    //* sizing the text past it
+    alignSelf: "stretch",
+    textAlign: "center",
+  },
+  //* same footprint as the 20pt Feather icons it stands in for, plus the ring
+  folderThumb: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  folderThumbImage: {
+    width: "100%",
+    height: "100%",
   },
   addSlot: {
     width: 76,
@@ -148,9 +186,27 @@ export const bottomTabBarStyles = StyleSheet.create({
   hintLabel: common.semiBold11_5,
 });
 
+//* the height shared by the buttons that sit in a bar together — the gallery
+//* compare bar's pair, and anything that lines up beside them
+export const BAR_BUTTON_HEIGHT = 42;
+
 //* components/OverflowMenu.tsx
 export const overflowMenuStyles = StyleSheet.create({
   trigger: common.iconButton38,
+  //* the labelled shape, for a trigger standing among labelled buttons rather
+  //* than among header icons. A fixed height, not padding: its neighbour in the
+  //* bar is a different font and icon size, and text-driven heights left the two
+  //* a pixel apart
+  labelledTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    height: BAR_BUTTON_HEIGHT,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+  },
+  triggerLabel: common.bold13_5,
   backdrop: {
     position: "absolute",
     top: 0,

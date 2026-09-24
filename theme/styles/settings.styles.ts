@@ -193,3 +193,52 @@ export const newSnippetStyles = StyleSheet.create({
   button: common.dialogButton,
   buttonLabel: common.semiBold13_5,
 });
+
+//* components/SendFeedback.tsx
+export const sendFeedbackStyles = StyleSheet.create({
+  backdrop: common.dialogBackdrop,
+  card: common.dialogCard,
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  title: {
+    fontFamily: fonts.frauncesSemiBold,
+    fontSize: 18,
+    flexShrink: 1,
+  },
+  body: {
+    fontFamily: fonts.interRegular,
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 14,
+  },
+  //* the address itself, set apart so it reads as the thing being offered
+  addressRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    marginBottom: 18,
+  },
+  address: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 13,
+    flexShrink: 1,
+  },
+  buttons: common.row10,
+  button: common.dialogButton,
+  buttonLabel: common.semiBold13_5,
+  //* the primary button carries an icon, so it needs a row of its own
+  buttonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+});

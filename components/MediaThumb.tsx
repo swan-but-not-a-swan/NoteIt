@@ -18,11 +18,20 @@ export default function MediaThumb({
   preferFullMedia = false,
 }: Props) {
   const isVideo = note.mediaType === "video";
-  const previewUri = preferFullMedia && !isVideo ? note.mediaUri : note.thumbnailUri;
+  const showsFullMedia = preferFullMedia && !isVideo;
+  const previewUri = showsFullMedia ? note.mediaUri : note.thumbnailUri;
 
   return (
     <View style={[styles.wrap, { borderRadius }]}>
-      <Image source={{ uri: previewUri }} style={styles.media} />
+      <Image
+        source={{ uri: previewUri }}
+        style={styles.media}
+        //* tile-sized thumbnails are small enough to hold decoded in memory,
+        //* so a grid or strip that comes back doesn't decode them again.
+        //* Compare's full-resolution variant stays disk-only: a handful of
+        //* camera-sized bitmaps in the cache would dwarf everything else.
+        cachePolicy={showsFullMedia ? "disk" : "memory-disk"}
+      />
       {isVideo && showPlayBadge && (
         <View style={styles.badge}>
           <View style={styles.playCircle}>

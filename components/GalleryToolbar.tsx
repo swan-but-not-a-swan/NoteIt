@@ -1,13 +1,10 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
-import {
-  DATE_PRESETS,
-  describeQuery,
-  isEmptyQuery,
-  withPreset,
-  type NoteQuery,
-} from "@/lib/noteHelper";
+import { describeQuery, EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
+import { DATE_PRESETS, withPreset } from "@/lib/dateHelper";
+import type { FolderModel } from "@/models/FolderModel";
+import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import { TagModel } from "../models/NoteModel";
 import { galleryToolbarStyles as styles } from "@/theme/styles/gallery.styles";
 
@@ -17,13 +14,18 @@ type Props = {
   onQueryChange: (query: NoteQuery) => void;
   /** Every tag in storage — needed only to name the ones in the summary line. */
   tags: TagModel[];
+  /** Every folder — likewise only to name picked folders in the summary line. */
+  folders: FolderModel[];
+  /** How the filters combine, so the summary line can say "or" when it means it. */
+  combine: QueryCombine;
   /** How many notes the current query matches, shown once a filter is active. */
   resultCount: number;
   onOpenSearch: () => void;
-  /** Selecting notes to compare, rather than opening them. */
-  compareMode: boolean;
-  onToggleCompare: () => void;
+  /** Picking notes — to compare, delete or move them — rather than opening them. */
+  selectMode: boolean;
+  onToggleSelectMode: () => void;
 };
+
 
 // Search + filter strip above the gallery grid, ported from the web
 // reference's GalleryView toolbar.
@@ -37,13 +39,15 @@ export default function GalleryToolbar({
   query,
   onQueryChange,
   tags,
+  folders,
+  combine,
   resultCount,
   onOpenSearch,
-  compareMode,
-  onToggleCompare,
+  selectMode,
+  onToggleSelectMode,
 }: Props) {
   const filtering = !isEmptyQuery(query);
-  const summary = describeQuery(query, tags);
+  const summary = describeQuery(query, tags, folders, combine);
 
   return (
     <View style={styles.wrap}>
@@ -69,19 +73,26 @@ export default function GalleryToolbar({
           </Text>
         </Pressable>
 
+        {/* the same button leaves the mode it entered: a cross reads as "stop
+            picking" where the columns icon would read as "compare now" */}
         <Pressable
-          onPress={onToggleCompare}
+          onPress={onToggleSelectMode}
           hitSlop={6}
-          accessibilityLabel={compareMode ? "Leave compare mode" : "Compare picture-notes"}
+          accessibilityRole="button"
+          accessibilityLabel={selectMode ? "Cancel" : "Select picture-notes"}
           style={[
-            styles.compareButton,
+            styles.selectButton,
             {
-              backgroundColor: compareMode ? hexToRgba(colors.accent, 0.12) : colors.surface,
-              borderColor: compareMode ? colors.accent : colors.line,
+              backgroundColor: selectMode ? hexToRgba(colors.accent, 0.12) : colors.surface,
+              borderColor: selectMode ? colors.accent : colors.line,
             },
           ]}
         >
-          <Feather name="columns" size={16} color={compareMode ? colors.accent : colors.stoneDim} />
+          <Feather
+            name={selectMode ? "x" : "columns"}
+            size={16}
+            color={selectMode ? colors.accent : colors.stoneDim}
+          />
         </Pressable>
       </View>
 
@@ -126,7 +137,7 @@ export default function GalleryToolbar({
         )}
       </ScrollView>
 
-      {compareMode ? (
+      {selectMode ? (
         <Text style={[styles.hint, { color: colors.stone }]}>
           Tap picture-notes to select up to 4 to compare side by side.
         </Text>
@@ -137,9 +148,7 @@ export default function GalleryToolbar({
               {resultCount} {resultCount === 1 ? "match" : "matches"}
             </Text>
             <Pressable
-              onPress={() =>
-                onQueryChange({ text: "", tagIds: [], from: "", to: "", preset: "any" })
-              }
+              onPress={() => onQueryChange(EMPTY_QUERY)}
               hitSlop={8}
             >
               <Text style={[styles.clearLabel, { color: colors.accent }]}>Clear</Text>

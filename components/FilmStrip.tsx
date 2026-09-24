@@ -25,6 +25,11 @@ type Props = {
    *  contact sheet under the photo, and the stand-in for the photo itself
    *  while the note is open — and they differ only by this. */
   tileSize?: number;
+  /** Draw the strip even when there is only one note. The contact sheet hides
+   *  itself then — a strip of one navigates nowhere — but the open strip is
+   *  the photo's stand-in: the photo condenses onto its tile and fades out,
+   *  so without that tile a one-note list is left with no picture at all. */
+  showSingle?: boolean;
 };
 
 const DEFAULT_TILE = 44;
@@ -85,6 +90,7 @@ export default function FilmStrip({
   onSelect,
   position,
   tileSize = DEFAULT_TILE,
+  showSingle = false,
 }: Props) {
   const inactiveSize = tileSize;
   const activeSize = tileSize + ACTIVE_BUMP;
@@ -104,9 +110,18 @@ export default function FilmStrip({
   const [viewportWidth, setViewportWidth] = useState(windowWidth);
   const viewport = useSharedValue(windowWidth);
 
+  const minTiles = showSingle ? 1 : 2;
+  const rendered = notes.length >= minTiles;
+
   useAnimatedReaction(
     () => position.get(),
     (pos) => {
+      //* the hook has to run whether or not there is a strip to scroll, since
+      //* the early return below is a render decision and hooks can't follow
+      //* it. Scrolling a ScrollView that was never rendered warns on every
+      //* frame the pager moves, so the reaction stops here instead.
+      if (!rendered) return;
+
       const width = viewport.get();
       // Tile `pos` begins at sidePadding + pos * STRIDE, and its centre is
       // half an active tile beyond that. Putting that centre in the middle of
@@ -116,7 +131,7 @@ export default function FilmStrip({
     },
   );
 
-  if (notes.length <= 1) return null;
+  if (!rendered) return null;
 
   return (
     <Animated.ScrollView

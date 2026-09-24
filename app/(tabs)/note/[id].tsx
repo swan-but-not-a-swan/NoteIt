@@ -37,7 +37,11 @@ export default function ViewNotes() {
     const router = useRouter();
     //* `id` is the note to open on; `folderId` scopes the list you can swipe
     //* through, so the same screen serves a folder and the whole gallery
-    const { id, folderId } = useLocalSearchParams<{ id: string; folderId?: string }>();
+    const { id, folderId, edit } = useLocalSearchParams<{
+        id: string;
+        folderId?: string;
+        edit?: string;
+    }>();
 
     const {
         folders,
@@ -102,6 +106,18 @@ export default function ViewNotes() {
     };
 
     // --- editing -----------------------------------------------------------
+
+    //* opened from the gallery's held-tile menu, which asks for editing rather
+    //* than just viewing. Adjusted during render rather than in an effect: the
+    //* note arrives from the store a render later than the param does, and this
+    //* way the viewer's first painted frame is already the editing one
+    const [editRequested, setEditRequested] = useState(edit === "1");
+    if (editRequested && note != null) {
+        setEditRequested(false);
+        setDraft(note.note);
+        setNoteOpen(true);
+        setEditing(true);
+    }
 
     const beginEdit = () => {
         if (note == null) return;

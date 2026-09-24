@@ -1,63 +1,102 @@
-//! Manually reviewed since 16/09/2026
 
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { FREE_COMPARE_LIMIT, PLUS_ON_SALE } from "@/lib/entitlements";
-import { EMPTY_QUERY, filterNotes, isEmptyQuery, type NoteQuery } from "@/lib/noteHelper";
+import { EMPTY_QUERY, filterNotes, isEmptyQuery } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
+import type { FolderModel } from "@/models/FolderModel";
+import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import GalleryGrid from "./GalleryGrid";
 import GalleryToolbar from "./GalleryToolbar";
+import OverflowMenu, { anchorFor, OverflowMenuCard, type MenuAnchor } from "./OverflowMenu";
+import * as Haptics from "expo-haptics";
+import GlassPill from "./GlassPill";
 import SearchNotesModal from "./SearchNotesModal";
 import { galleryViewStyles as styles } from "@/theme/styles/gallery.styles";
 
 type Props = {
   notes: NoteModel[];
   tags: TagModel[];
+  /** Every folder, for the search sheet's folder chips and the summary line. */
+  folders: FolderModel[];
+  /** The folder this gallery was opened for, or null for the gallery tab.
+   *  `notes` arrives already scoped to it; this only switches the mode. */
+  scopeFolderId: string | null;
   colors: ThemeColors;
   onOpenNote: (note: NoteModel) => void;
   onCompare: (ids: string[]) => void;
+  /** Leaves the folder for the whole gallery. Only shown while scoped. */
+  onShowAll?: () => void;
+  /** Deletes the picked notes, from the More menu while selecting. */
+  onDeleteNotes?: (notes: NoteModel[]) => void;
+  /** Opens one note straight into editing — the held tile's menu. */
+  onEditNote?: (note: NoteModel) => void;
+  /** Moves the picked notes into another folder. Called with a callback to
+   *  run once they have actually moved — picking a folder can be cancelled,
+   *  and a cancelled move should leave the selection as it was. */
+  onMoveNotes?: (notes: NoteModel[], onMoved: () => void) => void;
 };
 
-export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare }: Props) {
+export default function GalleryView({
+  notes,
+  tags,
+  folders,
+  scopeFolderId,
+  colors,
+  onOpenNote,
+  onCompare,
+  onShowAll,
+  onDeleteNotes,
+  onMoveNotes,
+  onEditNote,
+}: Props) {
   const { hasPlus, openPaywall } = useEntitlements();
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
   const [query, setQuery] = useState<NoteQuery>(EMPTY_QUERY);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const visibleNotes = useMemo(() => filterNotes(notes, query, tags), [notes, query, tags]);
+  //* inside a folder every filter narrows; on the gallery tab any one matching
+  //* is enough, and only there can the user pick folders to search
+  const combine: QueryCombine = scopeFolderId != null ? "and" : "or";
+
+  const visibleNotes = useMemo(
+    () => filterNotes(notes, query, tags, combine),
+    [notes, query, tags, combine],
+  );
 
   //* picks survive a filter change, notes can be picked after filtering
-  const [compareMode, setCompareMode] = useState(false);
-  const [compareIds, setCompareIds] = useState<string[]>([]);
-  const canCompare = compareIds.length >= 2; //* two is the minimum that is a comparison at all
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const canCompare = selectedIds.length >= 2; //* two is the minimum that is a comparison at all
 
   //* the handlers below are memoised so the grid, which is wrapped in memo(),
   //* only re-renders when the selection it draws actually changes
-  const leaveCompareMode = useCallback(() => {
-    setCompareMode(false);
-    setCompareIds([]);
+  const leaveSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds([]);
   }, []);
 
-  const toggleCompareMode = useCallback(() => {
-    if (compareMode) leaveCompareMode();
-    else setCompareMode(true);
-  }, [compareMode, leaveCompareMode]);
+  const toggleSelectMode = useCallback(() => {
+    if (selectMode) leaveSelectMode();
+    else setSelectMode(true);
+  }, [selectMode, leaveSelectMode]);
 
-  const addCompareId = useCallback((id: string) => {
-    setCompareIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
+  const addSelectedId = useCallback((id: string) => {
+    setSelectedIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
   }, []);
 
-  const toggleCompareNote = useCallback(
+  const toggleNoteSelected = useCallback(
     (note: NoteModel) => {
-      if (compareIds.includes(note.id)) 
+      if (selectedIds.includes(note.id)) 
       { //* removes the note to compare if pressed again
-        setCompareIds((ids) => ids.filter((id) => id !== note.id));
+        setSelectedIds((ids) => ids.filter((id) => id !== note.id));
         return;
       }
-      if (hasPlus !== true && compareIds.length >= FREE_COMPARE_LIMIT) 
+      if (hasPlus !== true && selectedIds.length >= FREE_COMPARE_LIMIT) 
       {
         if (!PLUS_ON_SALE) 
         {
@@ -68,7 +107,7 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
           return;
         }
         openPaywall().then((outcome) => {
-          if (outcome === "granted") addCompareId(note.id);
+          if (outcome === "granted") addSelectedId(note.id);
           else if (outcome === "unavailable") 
           {
             Alert.alert(
@@ -79,16 +118,44 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         });
         return;
       }
-      addCompareId(note.id);
+      addSelectedId(note.id);
     },
-    [compareIds, hasPlus, openPaywall, addCompareId],
+    [selectedIds, hasPlus, openPaywall, addSelectedId],
   );
 
   const startCompare = useCallback(() => {
-    const ids = compareIds;
-    leaveCompareMode();
+    const ids = selectedIds;
+    leaveSelectMode();
     onCompare(ids);
-  }, [compareIds, leaveCompareMode, onCompare]);
+  }, [selectedIds, leaveSelectMode, onCompare]);
+
+  //* the picked notes themselves, for the actions that work on them
+  const selectedNotes = useMemo(
+    () => notes.filter((note) => selectedIds.includes(note.id)),
+    [notes, selectedIds],
+  );
+
+  //* adjusted during render rather than in an effect: every picked note has
+  //* left this list — deleted, or moved to a folder this gallery isn't showing
+  //* — so there is nothing left to act on and the mode has served its purpose
+  if (selectMode && selectedIds.length > 0 && selectedNotes.length === 0) {
+    setSelectMode(false);
+    setSelectedIds([]);
+  }
+
+  //* the note whose tile is being held, and where to put its menu
+  const [held, setHeld] = useState<{ note: NoteModel; anchor: MenuAnchor } | null>(null);
+
+  const onLongPressNote = useCallback(
+    (note: NoteModel, point: { x: number; y: number }) => {
+      //* the press is held, not tapped, so the phone says so before anything
+      //* appears — the menu is the answer to a question already felt
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      //* a point, not a tile: the menu belongs where the finger is
+      setHeld({ note, anchor: anchorFor(point.x, point.y, 0, 0, screenW, screenH) });
+    },
+    [screenW, screenH],
+  );
 
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
@@ -100,47 +167,114 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         query={query}
         onQueryChange={setQuery}
         tags={tags}
+        folders={folders}
+        combine={combine}
         resultCount={visibleNotes.length}
         onOpenSearch={openSearch}
-        compareMode={compareMode}
-        onToggleCompare={toggleCompareMode}
+        selectMode={selectMode}
+        onToggleSelectMode={toggleSelectMode}
       />
       <GalleryGrid
         notes={visibleNotes}
         colors={colors}
         filtered={!isEmptyQuery(query)}
-        selectionMode={compareMode}
-        selectedIds={compareIds}
-        onToggleSelect={toggleCompareNote}
+        selectionMode={selectMode}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleNoteSelected}
         onOpenNote={onOpenNote}
+        onLongPressNote={onLongPressNote}
       />
 
-      {compareMode && (
+      {/* hidden while comparing: the compare bar owns the bottom edge then */}
+      {scopeFolderId != null && onShowAll != null && !selectMode && (
+        <View style={styles.showAllDock}>
+          <GlassPill
+            label="Gallery"
+            trailingIcon="arrow-right"
+            accessibilityLabel="Show every note in the gallery"
+            onPress={onShowAll}
+            colors={colors}
+          />
+        </View>
+      )}
+
+      {selectMode && (
         <View style={[styles.compareBar, { backgroundColor: colors.bg, borderTopColor: colors.line }]}>
-          <Pressable
-            onPress={leaveCompareMode}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel comparing"
-            style={[styles.compareCancel, { backgroundColor: colors.surface }]}
-          >
-            <Text style={[styles.compareCancelLabel, { color: colors.textPrimary }]}>Cancel</Text>
-          </Pressable>
+          {/* what to do with the notes just picked. Leaving the mode is the
+              cross in the toolbar, so this row is only about acting on them */}
+          <OverflowMenu
+            colors={colors}
+            label="More"
+            accessibilityLabel="More"
+            items={[
+              {
+                key: "move",
+                label: "Move",
+                icon: "folder",
+                //* the picked notes have been dealt with, so the mode ends —
+                //* even where they stay on screen, as in the whole gallery
+                onPress: () => onMoveNotes?.(selectedNotes, leaveSelectMode),
+              },
+              {
+                key: "delete",
+                label: "Delete",
+                icon: "trash-2",
+                onPress: () => onDeleteNotes?.(selectedNotes),
+                destructive: true,
+              },
+            ]}
+          />
           <Pressable
             onPress={startCompare}
             disabled={!canCompare}
             accessibilityRole="button"
-            accessibilityLabel={`Compare ${compareIds.length} notes`}
+            accessibilityLabel={`Compare ${selectedIds.length} notes`}
             accessibilityState={{ disabled: !canCompare }}
             accessibilityHint={canCompare ? undefined : "Pick at least two notes"}
             style={[styles.compareGo, { backgroundColor: canCompare ? colors.accent : colors.surfaceHi }]}
           >
             <Feather name="columns" size={15} color={canCompare ? colors.onAccent : colors.stoneDim} />
             <Text style={[styles.compareGoLabel, { color: canCompare ? colors.onAccent : colors.stoneDim }]}>
-              Compare{compareIds.length > 0 ? ` (${compareIds.length})` : ""}
+              Compare{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}
             </Text>
           </Pressable>
         </View>
       )}
+
+      {/* the held tile's own menu: one note, and the three things worth doing
+          to it without opening it first */}
+      <OverflowMenuCard
+        colors={colors}
+        anchor={held?.anchor ?? null}
+        onClose={() => setHeld(null)}
+        items={[
+          {
+            key: "edit",
+            label: "Edit note",
+            icon: "edit-2",
+            onPress: () => {
+              if (held != null) onEditNote?.(held.note);
+            },
+          },
+          {
+            key: "move",
+            label: "Move",
+            icon: "folder",
+            onPress: () => {
+              if (held != null) onMoveNotes?.([held.note], () => {});
+            },
+          },
+          {
+            key: "delete",
+            label: "Delete",
+            icon: "trash-2",
+            onPress: () => {
+              if (held != null) onDeleteNotes?.([held.note]);
+            },
+            destructive: true,
+          },
+        ]}
+      />
 
       <SearchNotesModal
         visible={searchOpen}
@@ -148,6 +282,8 @@ export default function GalleryView({ notes, tags, colors, onOpenNote, onCompare
         query={query}
         onQueryChange={setQuery}
         tags={tags}
+        folders={folders}
+        showFolders={scopeFolderId == null}
         resultCount={visibleNotes.length}
         onClose={closeSearch}
       />

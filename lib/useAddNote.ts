@@ -1,10 +1,10 @@
 //! Manually reviewed since 15/09/2026
 
 import { useState } from "react";
-import { Platform } from "react-native";
+import { ActionSheetIOS, Alert, Platform } from "react-native";
 import { DateTimePickerAndroid, DateTimePickerChangeEvent } from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
-import { toLocalISODate, todayISO } from "@/lib/date";
+import { exifCaptureDate, toLocalISODate, todayISO } from "@/lib/date";
 import { appendSnippet, saveNoteDraftAsync } from "@/lib/noteHelper";
 import { NoteMediaType, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
@@ -14,6 +14,8 @@ type Options = {
     snippets: SnippetModel[];
     onSaved: () => void | Promise<void>;
 };
+
+type MediaSource = "camera" | "library";
 
 export function useAddNote({ storedTags, snippets, onSaved }: Options) {
     const [visible, setVisible] = useState(false);
@@ -70,26 +72,65 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
         setNoteText((current) => appendSnippet(current, text));
     };
 
-    const pickNoteMediaAsync = async () => {
+    //* asks where the media comes from before opening anything: iOS's action
+    //* sheet, and Android's dialog, since Android has no action sheet of its own
+    const chooseNoteMediaSource = () => {
         if (Platform.OS === "web") {
             setNoteError("Photo/video preview isn't supported in the web preview — test this on a device or simulator.");
             return;
         }
 
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-            setNoteError("Allow photo library access to add a photo or video.");
+        if (Platform.OS === "ios") {
+            ActionSheetIOS.showActionSheetWithOptions(
+                { options: ["Cancel", "Take Photo", "Choose from Library"], cancelButtonIndex: 0 },
+                (buttonIndex) => {
+                    if (buttonIndex === 1) pickNoteMediaAsync("camera");
+                    else if (buttonIndex === 2) pickNoteMediaAsync("library");
+                },
+            );
             return;
         }
 
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ["images", "videos"],
-            //* full screen, not iOS's default page sheet: this picker opens from
-            //* inside the AddNote <Modal>, and a page-sheet picker over a modal
-            //* can resolve as cancelled — or never resolve at all — so the pick
-            //* is silently lost. Only shows on a device; the emulator is fine.
-            presentationStyle: ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN,
-        });
+        Alert.alert(
+            "Add photo or video",
+            undefined,
+            [
+                { text: "Cancel", style: "cancel" },
+                { text: "Take photo", onPress: () => pickNoteMediaAsync("camera") },
+                { text: "Choose from library", onPress: () => pickNoteMediaAsync("library") },
+            ],
+            { cancelable: true },
+        );
+    };
+
+    const pickNoteMediaAsync = async (source: MediaSource) => {
+        const permission =
+            source === "camera"
+                ? await ImagePicker.requestCameraPermissionsAsync()
+                : await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+            setNoteError(
+                source === "camera"
+                    ? "Allow camera access to take a photo."
+                    : "Allow photo library access to add a photo or video.",
+            );
+            return;
+        }
+
+        //* full screen, not iOS's default page sheet: this picker opens from
+        //* inside the AddNote <Modal>, and a page-sheet picker over a modal
+        //* can resolve as cancelled — or never resolve at all — so the pick
+        //* is silently lost. Only shows on a device; the emulator is fine.
+        const presentationStyle = ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN;
+        //* the camera takes photos only: recording video would also need the
+        //* microphone permission, which the app doesn't ask for
+        //* exif carries the day the photo was taken, which the date below is
+        //* preselected from. It is read for images only — a video comes back
+        //* without any of it
+        const result =
+            source === "camera"
+                ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], presentationStyle, exif: true })
+                : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], presentationStyle, exif: true });
         if (result.canceled) return;
 
         const asset = result.assets[0];
@@ -100,6 +141,13 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
         );
         setNoteMediaMimeType(asset.mimeType ?? null);
         setNoteError(undefined);
+
+        //* the photo's own day, offered as the default — the date stays a free
+        //* choice and this only fills it in. Nothing is written when the file
+        //* has no date to read, so a day already chosen is never overwritten
+        //* by a guess. Videos carry no exif and keep whatever date is set.
+        const captured = exifCaptureDate(asset.exif);
+        if (captured != null) setNoteDate(captured);
     };
 
     const removeNoteMedia = () => {
@@ -166,7 +214,7 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
             visible,
             mediaUri: noteMediaUri,
             mediaType: noteMediaType,
-            onPickMedia: pickNoteMediaAsync,
+            onPickMedia: chooseNoteMediaSource,
             onRemoveMedia: removeNoteMedia,
             note: noteText,
             onNoteChange: setNoteText,

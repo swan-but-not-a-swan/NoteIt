@@ -3,7 +3,7 @@
     "name": "NoteIt",
     "slug": "noteit",
     "owner": "reacttut",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "noteit",
@@ -57,7 +57,7 @@
         "expo-image-picker",
         {
           "photosPermission": "NoteIt opens your photo library so you can choose the photo or video for a picture-note, or a thumbnail for a folder.",
-          "cameraPermission": false,
+          "cameraPermission": "NoteIt opens your camera so you can take the photo for a picture-note.",
           "microphonePermission": false
         }
       ],

@@ -5,8 +5,9 @@ import { useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
-import TopBar from "@/components/TopBar";
+import TopBar, { TopBarIconButton } from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
+import SendFeedback from "@/components/SendFeedback";
 import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
 import { useLibrary } from "@/lib/LibraryContext";
@@ -137,6 +138,7 @@ export default function Settings() {
     //* the same form either way — only where the result lands differs.
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formError, setFormError] = useState<string | undefined>(undefined);
+    const [feedbackOpen, setFeedbackOpen] = useState(false);
 
     const canAddSnippet = newSnippetName.trim().length > 0;
 
@@ -241,7 +243,19 @@ export default function Settings() {
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
-            <TopBar title="Settings" colors={colors} onBack={() => router.back()} />
+            <TopBar
+                title="Settings"
+                colors={colors}
+                onBack={() => router.back()}
+                right={
+                    <TopBarIconButton
+                        icon="bell"
+                        accessibilityLabel="Send feedback"
+                        colors={colors}
+                        onPress={() => setFeedbackOpen(true)}
+                    />
+                }
+            />
 
             <ScrollView
                 contentContainerStyle={styles.content}
@@ -347,6 +361,12 @@ export default function Settings() {
                     </View>
                 </View>
             </ScrollView>
+
+            <SendFeedback
+                visible={feedbackOpen}
+                colors={colors}
+                onClose={() => setFeedbackOpen(false)}
+            />
 
             <NewSnippet
                 visible={pendingName != null}

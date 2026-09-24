@@ -387,3 +387,41 @@ export const addNoteStyles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+//* components/FullscreenPhoto.tsx — black whatever the theme: it's a photo
+//* viewer, and any tint around the letterboxing would read as part of the photo
+export const fullscreenPhotoStyles = StyleSheet.create({
+  root: common.fill,
+  backdrop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#000000",
+  },
+  photo: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  image: common.fullSize,
+  closeWrap: {
+    position: "absolute",
+    right: 16,
+  },
+  closeButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    //* dark glass with a light rim, so the white cross reads over a bright
+    //* photo as well as a dark one
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+  },
+});

@@ -142,3 +142,41 @@ export const newFolderStyles = StyleSheet.create({
 export const folderScreenStyles = StyleSheet.create({
   container: common.fill,
 });
+
+//* components/MoveNotesModal.tsx
+export const moveNotesModalStyles = StyleSheet.create({
+  backdrop: common.dialogBackdrop,
+  card: common.dialogCard,
+  titleRow: common.spacedRow16,
+  title: common.dialogTitle,
+  closeButton: common.iconButton30,
+  //* the dialog is centred, so the list is capped rather than filling: a long
+  //* folder list scrolls inside it and the title stays on screen
+  list: {
+    maxHeight: 360,
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+  },
+  thumb: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  thumbImage: common.fullSize,
+  rowLabel: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: fonts.interSemiBold,
+    fontSize: 14,
+  },
+});

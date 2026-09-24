@@ -1,51 +1,21 @@
 // Picture-note helpers, in four parts:
-//   1. Filtering — the gallery's search query, date presets and summary line.
+//   1. Filtering — the gallery's search query, and summary line.
 //   2. Pager — the two arithmetic rules behind swiping between notes.
 //   3. Snippets — how a snippet joins the text already in a note.
 //   4. Saving — writing a new note's files and storage entries.
-//
-// Parts 1–3 are pure: no storage, no React. Part 4 holds the save pipeline for
-// a new note, outside useAddNote, so the hook itself has no try/catch; the
-// file steps it calls live in mediaHelper. Because part 4 imports storage and
-// file-system modules, a test that imports anything from this file has to mock
-// those, even to test the pure parts.
 
 import * as Crypto from "expo-crypto";
 import { Directory, Paths } from "expo-file-system";
-import { formatShortDate, toLocalISODate } from "@/lib/date";
+import { formatShortDate } from "@/lib/date";
 import { copyAndGetMediaFileUri, createThumbnailAsync, deleteFileIfExists } from "@/lib/mediaHelper";
 import { NoteMediaType, NoteModel, TagModel } from "@/models/NoteModel";
+import type { FolderModel } from "@/models/FolderModel";
+import { UNFILED, type NoteQuery, type QueryCombine } from "@/models/NoteQueryModel";
 import { setNoteToStorageAsync, setTagsToStorageAsync } from "@/persistence/FileStorage";
 
 // ── 1. Filtering ────────────────────────────────────────────────────────────
 
-/** Date windows offered as pills in the gallery toolbar. `custom` is never a
- *  pill — it's what the query reports once an explicit from/to range has been
- *  picked in the search modal, so none of the four pills highlights. */
-export type DatePreset = "any" | "today" | "week" | "month" | "custom";
-
-export const DATE_PRESETS: { id: Exclude<DatePreset, "custom">; label: string }[] = [
-    { id: "any", label: "Any time" },
-    { id: "today", label: "Today" },
-    { id: "week", label: "7 days" },
-    { id: "month", label: "30 days" },
-];
-
-export type NoteQuery = {
-    /** Free text, matched against the note body and its tag titles. */
-    text: string;
-    /** Tag ids that must ALL be present. Empty means "don't filter by tag". */
-    tagIds: string[];
-    /** Inclusive ISO "yyyy-mm-dd" bounds. "" means that end is open. */
-    from: string;
-    to: string;
-    /** Which pill to light up. Presentational only — filtering reads from/to,
-     *  so there is exactly one date filter to reason about rather than a pill
-     *  and a range that can disagree. */
-    preset: DatePreset;
-};
-
-export const EMPTY_QUERY: NoteQuery = { text: "", tagIds: [], from: "", to: "", preset: "any" };
+export const EMPTY_QUERY: NoteQuery = { text: "", tagIds: [], from: "", to: "", preset: "any", folderIds: [] };
 
 /** True when nothing is being filtered — lets a caller skip the work and show
  *  the unfiltered list, and lets the UI decide whether to offer a "clear". */
@@ -54,42 +24,18 @@ export function isEmptyQuery(q: NoteQuery): boolean {
         q.text.trim().length === 0 &&
         q.tagIds.length === 0 &&
         q.from.length === 0 &&
-        q.to.length === 0
+        q.to.length === 0 &&
+        q.folderIds.length === 0
     );
 }
 
-/** ISO "yyyy-mm-dd" for `daysAgo` days before today, in local time. */
-function isoDaysAgo(daysAgo: number): string {
-    const d = new Date();
-    //* stepped back from noon rather than midnight, so a clock change on the
-    //* way can't tip it into a neighbouring calendar day
-    d.setHours(12, 0, 0, 0);
-    d.setDate(d.getDate() - daysAgo);
-    return toLocalISODate(d);
-}
-
-/** Applies a preset pill, rewriting the from/to range it stands for. */
-export function withPreset(query: NoteQuery, preset: Exclude<DatePreset, "custom">): NoteQuery {
-    if (preset === "any") return { ...query, from: "", to: "", preset: "any" };
-    if (preset === "today") {
-        //* pinned at both ends: "Today" means today, not today onwards
-        const today = isoDaysAgo(0);
-        return { ...query, from: today, to: today, preset };
-    }
-    const days = preset === "week" ? 6 : 29;
-    //* `to` stays open rather than pinned to today — a note dated in the
-    //* future (the date field is free) shouldn't vanish from "7 days"
-    return { ...query, from: isoDaysAgo(days), to: "", preset };
-}
-
-/** Applies a hand-picked range, which by definition matches no pill. */
-export function withRange(query: NoteQuery, from: string, to: string): NoteQuery {
-    const cleared = from.length === 0 && to.length === 0;
-    return { ...query, from, to, preset: cleared ? "any" : "custom" };
-}
-
 /**
- * Filters notes by text, tags and a date range.
+ * Filters notes by text, tags, a date range and folders.
+ *
+ * `combine` decides how the filters that are set combine: "and" needs every
+ * one to match (inside a folder), "or" needs any one (the gallery tab). A
+ * filter that isn't set takes no part either way — it can't narrow an "and"
+ * or satisfy an "or".
  *
  * Pure and synchronous: it takes the already-loaded list rather than reading
  * storage, so it can run on every keystroke without touching AsyncStorage.
@@ -102,52 +48,85 @@ export function filterNotes(
     notes: NoteModel[],
     query: NoteQuery,
     allTags: TagModel[],
+    combine: QueryCombine = "and",
 ): NoteModel[] {
+    //* also what keeps "or" from returning nothing: with no filter set, no
+    //* filter could say yes
     if (isEmptyQuery(query)) return notes;
 
     const text = query.text.trim().toLowerCase();
     const titleById = new Map(allTags.map((t) => [t.id, t.title.toLowerCase()]));
 
+    const byText = text.length > 0;
+    const byTags = query.tagIds.length > 0;
+    const byDate = query.from.length > 0 || query.to.length > 0;
+    const byFolder = query.folderIds.length > 0;
+
     return notes.filter((note) => {
-        //* note.date is a plain "yyyy-mm-dd" string, and that format sorts
-        //* lexicographically the same way it sorts chronologically — so both
-        //* bounds are string comparisons, with no parsing per note
-        if (query.from.length > 0 && (note.date.length === 0 || note.date < query.from)) return false;
-        if (query.to.length > 0 && (note.date.length === 0 || note.date > query.to)) return false;
+        const results: boolean[] = [];
 
-        //* every selected tag must be present, so stacking tags narrows rather
-        //* than widens — "beach AND sunset", not "beach OR sunset"
-        if (query.tagIds.length > 0 && !query.tagIds.every((id) => note.tagIds.includes(id))) {
-            return false;
-        }
-
-        if (text.length > 0) {
+        if (byText) {
             const inBody = note.note.toLowerCase().includes(text);
             const inTags = note.tagIds.some((id) => titleById.get(id)?.includes(text) === true);
-            if (!inBody && !inTags) return false;
+            results.push(inBody || inTags);
         }
 
-        return true;
+        if (byTags) {
+            //* inside a folder every picked tag must be present, so stacking tags
+            //* narrows ("beach and sunset"); in the gallery any one of them will do
+            results.push(
+                combine === "and"
+                    ? query.tagIds.every((id) => note.tagIds.includes(id))
+                    : query.tagIds.some((id) => note.tagIds.includes(id)),
+            );
+        }
+
+        if (byDate) {
+            //* one range, so both of its ends apply even under "or". note.date is
+            //* a plain "yyyy-mm-dd" string, and that format sorts lexicographically
+            //* the same way it sorts chronologically — so both bounds are string
+            //* comparisons, with no parsing per note
+            const dated = note.date.length > 0;
+            const afterFrom = query.from.length === 0 || (dated && note.date >= query.from);
+            const beforeTo = query.to.length === 0 || (dated && note.date <= query.to);
+            results.push(afterFrom && beforeTo);
+        }
+
+        if (byFolder) {
+            //* a note in no folder answers to the UNFILED chip
+            results.push(query.folderIds.includes(note.folderId ?? UNFILED));
+        }
+
+        return combine === "and" ? results.every(Boolean) : results.some(Boolean);
     });
 }
 
 /** One-line summary of what's filtered, for the collapsed search button.
- *  Empty string when nothing is. */
-export function describeQuery(query: NoteQuery, allTags: TagModel[]): string {
+ *  Empty string when nothing is. Under "or" every picked tag and folder is a
+ *  term of its own, so the line reads the way the filter behaves. */
+export function describeQuery(
+    query: NoteQuery,
+    allTags: TagModel[],
+    allFolders: FolderModel[],
+    combine: QueryCombine = "and",
+): string {
     const parts: string[] = [];
 
     const text = query.text.trim();
     if (text.length > 0) parts.push(`"${text}"`);
 
-    if (query.tagIds.length > 0) {
-        parts.push(
-            query.tagIds
-                .map((id) => allTags.find((t) => t.id === id))
-                .filter((t): t is TagModel => t != null)
-                .map((t) => `#${t.title}`)
-                .join(" "),
-        );
-    }
+    const tagTitles = query.tagIds
+        .map((id) => allTags.find((t) => t.id === id))
+        .filter((t): t is TagModel => t != null)
+        .map((t) => `#${t.title}`);
+    //* "#beach #sunset" reads as both, which is only true under "and"
+    if (combine === "or") parts.push(...tagTitles);
+    else if (tagTitles.length > 0) parts.push(tagTitles.join(" "));
+
+    const folderNames = query.folderIds
+        .map((id) => (id === UNFILED ? "No folder" : allFolders.find((f) => f.id === id)?.name))
+        .filter((name): name is string => name != null);
+    parts.push(...folderNames);
 
     if (query.from.length > 0 && query.from === query.to) {
         //* a single day, e.g. the "Today" preset — "15 Sep", not "15 Sep → 15 Sep"
@@ -158,7 +137,7 @@ export function describeQuery(query: NoteQuery, allTags: TagModel[]): string {
         parts.push(`${from} → ${to}`);
     }
 
-    return parts.join("  ·  ");
+    return parts.join(combine === "or" ? "  or  " : "  ·  ");
 }
 
 // ── 2. Pager ────────────────────────────────────────────────────────────────
