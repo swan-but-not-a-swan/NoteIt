@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ActionSheetIOS, Alert, Platform } from "react-native";
 import { DateTimePickerAndroid, DateTimePickerChangeEvent } from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
-import { toLocalISODate, todayISO } from "@/lib/date";
+import { exifCaptureDate, toLocalISODate, todayISO } from "@/lib/date";
 import { appendSnippet, saveNoteDraftAsync } from "@/lib/noteHelper";
 import { NoteMediaType, TagModel } from "@/models/NoteModel";
 import { SnippetModel } from "@/models/SnippetModel";
@@ -124,10 +124,13 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
         const presentationStyle = ImagePicker.UIImagePickerPresentationStyle.FULL_SCREEN;
         //* the camera takes photos only: recording video would also need the
         //* microphone permission, which the app doesn't ask for
+        //* exif carries the day the photo was taken, which the date below is
+        //* preselected from. It is read for images only — a video comes back
+        //* without any of it
         const result =
             source === "camera"
-                ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], presentationStyle })
-                : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], presentationStyle });
+                ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], presentationStyle, exif: true })
+                : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images", "videos"], presentationStyle, exif: true });
         if (result.canceled) return;
 
         const asset = result.assets[0];
@@ -138,6 +141,13 @@ export function useAddNote({ storedTags, snippets, onSaved }: Options) {
         );
         setNoteMediaMimeType(asset.mimeType ?? null);
         setNoteError(undefined);
+
+        //* the photo's own day, offered as the default — the date stays a free
+        //* choice and this only fills it in. Nothing is written when the file
+        //* has no date to read, so a day already chosen is never overwritten
+        //* by a guess. Videos carry no exif and keep whatever date is set.
+        const captured = exifCaptureDate(asset.exif);
+        if (captured != null) setNoteDate(captured);
     };
 
     const removeNoteMedia = () => {

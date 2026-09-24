@@ -21,6 +21,8 @@ type Props = {
   selectedIds?: string[];
   onToggleSelect?: (note: NoteModel) => void;
   filtered?: boolean;
+  /** A held tile, with the point held — what a context menu opens at. */
+  onLongPressNote?: (note: NoteModel, point: { x: number; y: number }) => void;
 };
 
 const COLUMNS = 3;
@@ -38,6 +40,7 @@ function GalleryGrid({
   selectedIds = NO_IDS,
   onToggleSelect,
   filtered = false,
+  onLongPressNote,
 }: Props) {
 
   const { width } = useWindowDimensions();
@@ -46,8 +49,8 @@ function GalleryGrid({
   //* held stable for the same reason as NO_IDS above — a fresh object or
   //* function here tells FlatList the tiles changed, on every render
   const extraData = useMemo(
-    () => ({ selectionMode, selectedIds, tileSize }),
-    [selectionMode, selectedIds, tileSize],
+    () => ({ selectionMode, selectedIds, tileSize, onLongPressNote }),
+    [selectionMode, selectedIds, tileSize, onLongPressNote],
   );
 
   const renderItem = useCallback(
@@ -58,6 +61,17 @@ function GalleryGrid({
       return (
         <Pressable
           onPress={() => (selectionMode ? onToggleSelect?.(note) : onOpenNote(note))}
+          //* not while selecting: a held tile there already means the one thing
+          //* selection is for, and a menu over it would fight the checkmarks
+          onLongPress={
+            selectionMode || onLongPressNote == null
+              ? undefined
+              : (e) =>
+                  onLongPressNote(note, {
+                    x: e.nativeEvent.pageX,
+                    y: e.nativeEvent.pageY,
+                  })
+          }
           accessibilityRole={selectionMode ? "checkbox" : "button"}
           accessibilityState={selectionMode ? { checked: selected } : undefined}
           accessibilityLabel={shortDate.length > 0 ? `${kind} note, ${shortDate}` : `${kind} note`}
@@ -86,7 +100,7 @@ function GalleryGrid({
         </Pressable>
       );
     },
-    [selectionMode, selectedIds, tileSize, colors, onToggleSelect, onOpenNote],
+    [selectionMode, selectedIds, tileSize, colors, onToggleSelect, onOpenNote, onLongPressNote],
   );
 
   return (

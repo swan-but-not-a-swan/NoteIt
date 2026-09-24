@@ -448,6 +448,17 @@ export default function Home() {
                                     )
                                 }
                                 onDeleteNotes={confirmDeleteNotes}
+                                //* the viewer opens the note and starts editing it
+                                onEditNote={(note) =>
+                                    navigateOnce(() =>
+                                        router.push({
+                                            pathname: "/(tabs)/note/[id]",
+                                            params: scopeFolderId != null
+                                                ? { id: note.id, folderId: scopeFolderId, edit: "1" }
+                                                : { id: note.id, edit: "1" },
+                                        })
+                                    )
+                                }
                                 onMoveNotes={(notes, onMoved) => setPendingMove({ notes, onMoved })}
                                 onShowAll={() => {
                                     //* forward, like the pill's arrow: the folder opens out into everything

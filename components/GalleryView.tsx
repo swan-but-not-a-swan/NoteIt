@@ -1,6 +1,6 @@
 
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Text, View } from "react-native";
+import { Alert, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { useEntitlements } from "@/lib/EntitlementsContext";
@@ -11,7 +11,8 @@ import type { FolderModel } from "@/models/FolderModel";
 import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import GalleryGrid from "./GalleryGrid";
 import GalleryToolbar from "./GalleryToolbar";
-import OverflowMenu from "./OverflowMenu";
+import OverflowMenu, { anchorFor, OverflowMenuCard, type MenuAnchor } from "./OverflowMenu";
+import * as Haptics from "expo-haptics";
 import GlassPill from "./GlassPill";
 import SearchNotesModal from "./SearchNotesModal";
 import { galleryViewStyles as styles } from "@/theme/styles/gallery.styles";
@@ -31,6 +32,8 @@ type Props = {
   onShowAll?: () => void;
   /** Deletes the picked notes, from the More menu while selecting. */
   onDeleteNotes?: (notes: NoteModel[]) => void;
+  /** Opens one note straight into editing — the held tile's menu. */
+  onEditNote?: (note: NoteModel) => void;
   /** Moves the picked notes into another folder. Called with a callback to
    *  run once they have actually moved — picking a folder can be cancelled,
    *  and a cancelled move should leave the selection as it was. */
@@ -48,8 +51,10 @@ export default function GalleryView({
   onShowAll,
   onDeleteNotes,
   onMoveNotes,
+  onEditNote,
 }: Props) {
   const { hasPlus, openPaywall } = useEntitlements();
+  const { width: screenW, height: screenH } = useWindowDimensions();
 
   const [query, setQuery] = useState<NoteQuery>(EMPTY_QUERY);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -138,6 +143,20 @@ export default function GalleryView({
     setSelectedIds([]);
   }
 
+  //* the note whose tile is being held, and where to put its menu
+  const [held, setHeld] = useState<{ note: NoteModel; anchor: MenuAnchor } | null>(null);
+
+  const onLongPressNote = useCallback(
+    (note: NoteModel, point: { x: number; y: number }) => {
+      //* the press is held, not tapped, so the phone says so before anything
+      //* appears — the menu is the answer to a question already felt
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      //* a point, not a tile: the menu belongs where the finger is
+      setHeld({ note, anchor: anchorFor(point.x, point.y, 0, 0, screenW, screenH) });
+    },
+    [screenW, screenH],
+  );
+
   const openSearch = useCallback(() => setSearchOpen(true), []);
   const closeSearch = useCallback(() => setSearchOpen(false), []);
 
@@ -163,6 +182,7 @@ export default function GalleryView({
         selectedIds={selectedIds}
         onToggleSelect={toggleNoteSelected}
         onOpenNote={onOpenNote}
+        onLongPressNote={onLongPressNote}
       />
 
       {/* hidden while comparing: the compare bar owns the bottom edge then */}
@@ -220,6 +240,41 @@ export default function GalleryView({
           </Pressable>
         </View>
       )}
+
+      {/* the held tile's own menu: one note, and the three things worth doing
+          to it without opening it first */}
+      <OverflowMenuCard
+        colors={colors}
+        anchor={held?.anchor ?? null}
+        onClose={() => setHeld(null)}
+        items={[
+          {
+            key: "edit",
+            label: "Edit note",
+            icon: "edit-2",
+            onPress: () => {
+              if (held != null) onEditNote?.(held.note);
+            },
+          },
+          {
+            key: "move",
+            label: "Move",
+            icon: "folder",
+            onPress: () => {
+              if (held != null) onMoveNotes?.([held.note], () => {});
+            },
+          },
+          {
+            key: "delete",
+            label: "Delete",
+            icon: "trash-2",
+            onPress: () => {
+              if (held != null) onDeleteNotes?.([held.note]);
+            },
+            destructive: true,
+          },
+        ]}
+      />
 
       <SearchNotesModal
         visible={searchOpen}

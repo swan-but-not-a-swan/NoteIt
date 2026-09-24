@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Image, useImage } from "expo-image";
@@ -136,8 +136,13 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
 
   const canConfirm = natural != null && !saving;
 
+  // A root of its own, not just the app's. This screen renders inside a
+  // <Modal>, which on Android is a separate native window — the
+  // GestureHandlerRootView at the app root doesn't reach into it, so the pan
+  // and pinch below never received a single touch and the photo couldn't be
+  // repositioned at all.
   return (
-    <View style={styles.screen}>
+    <GestureHandlerRootView style={styles.screen}>
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
         <Pressable onPress={onCancel} hitSlop={8}>
           <Text style={[styles.topBarAction, { color: colors.textPrimary }]}>Cancel</Text>
@@ -192,7 +197,7 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
           </>
         )}
       </View>
-    </View>
+    </GestureHandlerRootView>
   );
 }
 

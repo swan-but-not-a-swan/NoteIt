@@ -378,6 +378,17 @@ type CompactDatePickerProps = {
 function CompactDatePicker({ date, colors, onChange }: CompactDatePickerProps) {
   const [value, setValue] = useState(() => new Date(`${date}T00:00:00`));
 
+  //* the date can now arrive from outside — picking a photo fills in the day
+  //* it was taken — and this control keeps its own copy, so it would otherwise
+  //* go on showing the one it mounted with while the note saved another.
+  //* Adjusted during render rather than in an effect, so the field never lags
+  //* a frame behind the photo it belongs to.
+  const [shownDate, setShownDate] = useState(date);
+  if (shownDate !== date) {
+    setShownDate(date);
+    setValue(new Date(`${date}T00:00:00`));
+  }
+
   return (
     <DateTimePicker
       value={value}

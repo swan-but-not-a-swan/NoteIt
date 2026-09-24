@@ -332,6 +332,18 @@ export default function ViewNote({
 
   // Two instances rather than one that resizes: they overlap for the length of
   // a fade, and a single strip would visibly jump tile size mid-crossfade.
+  // Mounted the moment the drag starts rather than when it commits. Mounting
+  // the strip is a React commit — its tiles, their images — and at commit time
+  // that lands in the middle of the opening animation, on the same thread. At
+  // the start of a drag the frame has nothing else to do.
+  const [stripMounted, setStripMounted] = useState(noteOpen);
+  useAnimatedReaction(
+    () => open.get() > 0,
+    (opening, previous) => {
+      if (opening !== previous) scheduleOnRN(setStripMounted, opening);
+    },
+  );
+
   const stripProps = {
     notes,
     currentIndex: index,
@@ -432,7 +444,7 @@ export default function ViewNote({
         //* is just another way to page away from an unsaved draft
         pointerEvents={noteOpen && !editing ? "auto" : "none"}
       >
-        {noteOpen && <FilmStrip {...stripProps} tileSize={NOTE_TILE} showSingle />}
+        {stripMounted && <FilmStrip {...stripProps} tileSize={NOTE_TILE} showSingle />}
       </Animated.View>
 
       {/* picture mode keeps it where it has always been, under the hint */}
@@ -502,7 +514,7 @@ function NoteCard({
   // An overlay rather than a box in the column, and that is load-bearing: the
   // note's position now comes from the spacer alone, so a photo animation that
   // stalls can leave the photo wrong but can never leave a hole above the text.
-  const photoStyle = useAnimatedStyle(() => {
+  const photoAnimated = useAnimatedStyle(() => {
     const p = open.get();
     return {
       width: interpolate(p, [0, 1], [cardW, TILE.activeSize]),
@@ -515,14 +527,36 @@ function NoteCard({
   });
 
   //* the pill is legible over a full-bleed photo and absurd over a 96pt tile
-  const pillStyle = useAnimatedStyle(() => ({ opacity: 1 - open.get() }));
+  const pillAnimated = useAnimatedStyle(() => ({ opacity: 1 - open.get() }));
 
   // What actually places the note. At rest it is the photo's full height, so
   // the hint line sits under the photo; open, it is the strip's height, so the
   // text sits under the strip.
-  const spacerStyle = useAnimatedStyle(() => ({
+  const spacerAnimated = useAnimatedStyle(() => ({
     height: interpolate(open.get(), [0, 1], [photoFull, TILE.height]),
   }));
+
+  // Only the page you are on is worth animating. The neighbours sit outside
+  // the viewport, and the sideways swipe is off while the note is open, so
+  // nothing can bring one into view mid-animation — they take the end state
+  // directly. That is two thirds of the layout work per frame, spent on views
+  // no one can see: every one of these properties resizes or repositions a
+  // view, which means a layout pass and a commit each frame it changes.
+  const photoResting = noteOpen
+    ? {
+        width: TILE.activeSize,
+        height: TILE.activeSize,
+        left: (cardW - TILE.activeSize) / 2,
+        top: TILE.padTop,
+        borderRadius: TILE.radius,
+        //* handed off to the strip's own tile by the end of the animation
+        opacity: 0,
+      }
+    : { width: cardW, height: photoFull, left: 0, top: 0, borderRadius: 0, opacity: 1 };
+
+  const photoStyle = isCurrent ? photoAnimated : photoResting;
+  const pillStyle = isCurrent ? pillAnimated : { opacity: noteOpen ? 0 : 1 };
+  const spacerStyle = isCurrent ? spacerAnimated : { height: noteOpen ? TILE.height : photoFull };
 
   const noteTags = note.tagIds
     .map((id) => tags.find((t) => t.id === id))

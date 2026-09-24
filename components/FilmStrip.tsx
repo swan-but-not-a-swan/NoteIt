@@ -110,9 +110,18 @@ export default function FilmStrip({
   const [viewportWidth, setViewportWidth] = useState(windowWidth);
   const viewport = useSharedValue(windowWidth);
 
+  const minTiles = showSingle ? 1 : 2;
+  const rendered = notes.length >= minTiles;
+
   useAnimatedReaction(
     () => position.get(),
     (pos) => {
+      //* the hook has to run whether or not there is a strip to scroll, since
+      //* the early return below is a render decision and hooks can't follow
+      //* it. Scrolling a ScrollView that was never rendered warns on every
+      //* frame the pager moves, so the reaction stops here instead.
+      if (!rendered) return;
+
       const width = viewport.get();
       // Tile `pos` begins at sidePadding + pos * STRIDE, and its centre is
       // half an active tile beyond that. Putting that centre in the middle of
@@ -122,8 +131,7 @@ export default function FilmStrip({
     },
   );
 
-  const minTiles = showSingle ? 1 : 2;
-  if (notes.length < minTiles) return null;
+  if (!rendered) return null;
 
   return (
     <Animated.ScrollView
