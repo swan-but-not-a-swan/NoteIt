@@ -1,6 +1,7 @@
 import { Linking, Modal, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { sendFeedbackStyles as styles } from "@/theme/styles/settings.styles";
 
 /** Where feedback goes. Shown in the sheet as well as used for the mail link,
@@ -54,7 +55,8 @@ export default function SendFeedback({ visible, colors, onClose }: Props) {
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+                glass(colors),
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Close</Text>
@@ -65,7 +67,8 @@ export default function SendFeedback({ visible, colors, onClose }: Props) {
               accessibilityLabel={`Email ${FEEDBACK_EMAIL}`}
               style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: colors.accent, opacity: pressed ? 0.75 : 1 },
+                glass(colors, { tint: colors.accent, strength: "fill" }),
+                { opacity: pressed ? 0.75 : 1 },
               ]}
             >
               <View style={styles.buttonRow}>

@@ -3,7 +3,8 @@
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { CropperContent } from "./ThumbnailCropper";
 import { newFolderStyles as styles } from "@/theme/styles/folders.styles";
 
@@ -77,7 +78,7 @@ export default function NewFolder({
               <Pressable
                 onPress={onDelete}
                 hitSlop={8}
-                style={[styles.deleteButton, { backgroundColor: hexToRgba(colors.error, 0.15) }]}
+                style={[styles.deleteButton, glass(colors, { tint: colors.error })]}
               >
                 <Feather name="trash-2" size={16} color={colors.error} />
               </Pressable>
@@ -158,11 +159,14 @@ export default function NewFolder({
           <View style={styles.buttons}>
             <Pressable
               onPress={onCancel}
-              style={[styles.button, { backgroundColor: colors.surface }]}
+              style={[styles.button, glass(colors)]}
             >
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Cancel</Text>
             </Pressable>
-            <Pressable onPress={onSave} style={[styles.button, { backgroundColor: colors.accent }]}>
+            <Pressable
+              onPress={onSave}
+              style={[styles.button, glass(colors, { tint: colors.accent, strength: "fill" })]}
+            >
               <Text style={[styles.buttonLabel, { color: colors.onAccent }]}>
                 {mode === "edit" ? "Save changes" : "Create"}
               </Text>

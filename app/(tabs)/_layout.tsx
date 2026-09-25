@@ -16,6 +16,14 @@ export default function TabsLayout() {
       <Stack.Screen name="settings" />
       <Stack.Screen name="folder/[id]" />
       <Stack.Screen name="compare" />
+      {/* A full screen, not a sheet — but it keeps the slide-up the old
+          AddNote modal had, since that is what starting a note feels like.
+          Quicker than the 500ms default. The duration option is iOS-only;
+          Android's comes from plugins/withFasterBottomSlide.js. */}
+      <Stack.Screen
+        name="add-note"
+        options={{ animation: "slide_from_bottom", animationDuration: 350 }}
+      />
       {/* Modal presentation keeps the slide-up the viewer had as a <Modal>,
           while still being a real route — so the back gesture works and
           AddNote can present over it. */}

@@ -48,7 +48,7 @@ export const splashStyles = StyleSheet.create({
 
   label: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
+    fontSize: 10.5,
     letterSpacing: 3,
     textTransform: "uppercase",
     color: SPLASH_COLORS.stoneDim,
@@ -63,8 +63,8 @@ export const splashStyles = StyleSheet.create({
 
   wordmark: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 29,
+    lineHeight: 35,
     textAlign: "center",
     color: SPLASH_COLORS.textPrimary,
     // Native shadow rendering (especially Android) doesn't blur nearly as
@@ -103,7 +103,7 @@ export const topBarStyles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 30,
+    fontSize: 29,
     fontWeight: "600",
     flexShrink: 1,
   },
@@ -120,37 +120,49 @@ export const glassPillStyles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-  label: common.semiBold13_5,
+  label: common.semiBold12_5,
 });
 
 //* components/BottomTabBar.tsx
 export const bottomTabBarStyles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    borderTopWidth: 1,
-    paddingTop: 10,
-    paddingHorizontal: 12,
+  //* full width and see-through: only there to hold the dock off the edges
+  dockWrap: {
+    paddingHorizontal: 14,
   },
-  tab: {
+  //* the iOS home-screen dock: a floating glass slab (theme/glass.ts, inline)
+  dock: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    //* a rounded rectangle rather than a pill, like the reference dock — and
+    //* the same corners as the gallery's select bar that stacks on it
+    borderRadius: 24,
+  },
+  dockSlot: {
     flex: 1,
     alignItems: "center",
-    gap: 4,
-    paddingBottom: 4,
   },
-  tabLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11,
-    //* stretched so a long folder name truncates at the tab's edge instead of
-    //* sizing the text past it
-    alignSelf: "stretch",
-    textAlign: "center",
+  dockButton: {
+    width: 64,
+    height: 46,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  //* same footprint as the 20pt Feather icons it stands in for, plus the ring
+  //* the lens the active tab's icon sits in
+  dockLens: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 23,
+  },
+  //* same footprint as the 24pt Feather icons it stands in for, plus the ring
   folderThumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 7,
     borderWidth: 1.5,
     overflow: "hidden",
     alignItems: "center",
@@ -164,15 +176,15 @@ export const bottomTabBarStyles = StyleSheet.create({
     width: 76,
     alignItems: "center",
   },
+  //* in the dock now rather than rising out of it, like any other icon there
   addButton: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -34,
-    // The shadow itself is applied inline above, since it needs the accent
-    // colour from the theme.
+    // The shadow itself is applied inline, since it needs the accent colour
+    // from the theme.
   },
   hint: {
     pointerEvents: "none",
@@ -183,7 +195,7 @@ export const bottomTabBarStyles = StyleSheet.create({
     alignItems: "center",
   },
   hintPill: common.chip,
-  hintLabel: common.semiBold11_5,
+  hintLabel: common.semiBold10_5,
 });
 
 //* the height shared by the buttons that sit in a bar together — the gallery
@@ -206,7 +218,7 @@ export const overflowMenuStyles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  triggerLabel: common.bold13_5,
+  triggerLabel: common.bold12_5,
   backdrop: {
     position: "absolute",
     top: 0,
@@ -228,7 +240,7 @@ export const overflowMenuStyles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 14,
   },
-  label: common.semiBold13_5,
+  label: common.semiBold12_5,
 });
 
 //* components/AdBannerStrip.tsx

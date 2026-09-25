@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { overflowMenuStyles as styles } from "@/theme/styles/app.styles";
 
 export type OverflowMenuItem = {
@@ -45,7 +46,7 @@ export default function OverflowMenu({
         hitSlop={8}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        style={[label != null ? styles.labelledTrigger : styles.trigger, { backgroundColor: colors.surface }]}
+        style={[label != null ? styles.labelledTrigger : styles.trigger, glass(colors)]}
       >
         <Feather name="more-horizontal" size={17} color={colors.textPrimary} />
         {label != null && (

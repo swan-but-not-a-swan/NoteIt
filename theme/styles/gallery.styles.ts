@@ -9,13 +9,18 @@ import { BAR_BUTTON_HEIGHT } from "@/theme/styles/app.styles";
 //* components/GalleryView.tsx
 export const galleryViewStyles = StyleSheet.create({
   container: common.fill,
+  //* a floating panel stacked on the tab bar's dock: the same side gaps and
+  //* the same kind of corners, one layer below it. marginBottom (the dock's
+  //* height plus SELECT_BAR_GAP) and the shadow are set inline
   compareBar: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderTopWidth: 1,
+    marginHorizontal: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 24,
+    borderWidth: 1,
   },
   compareGo: {
     flex: 1,
@@ -27,19 +32,25 @@ export const galleryViewStyles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 16,
   },
-  compareGoLabel: common.bold13_5,
+  compareGoLabel: common.bold12_5,
   //* floats the folder view's "Gallery" pill over the bottom of the grid, high
   //* enough to clear the tab bar's add button, which rises 24pt above the bar.
-  //* Full width but touch-transparent, so the tiles either side stay pressable
+  //* Full width but touch-transparent, so the tiles either side stay pressable.
+  //* `bottom` is SHOW_ALL_DOCK_LIFT plus the floating bar's height, set inline
   showAllDock: {
     position: "absolute",
     left: 0,
     right: 0,
-    bottom: 40,
     alignItems: "center",
     pointerEvents: "box-none",
   },
 });
+
+/** How far the "Gallery" pill sits above the top of the tab bar's dock. */
+export const SHOW_ALL_DOCK_LIFT = 14;
+
+/** The gap between the select bar and the tab bar's dock under it. */
+export const SELECT_BAR_GAP = 10;
 
 //* components/GalleryToolbar.tsx
 export const galleryToolbarStyles = StyleSheet.create({
@@ -77,7 +88,7 @@ export const galleryToolbarStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
+    fontSize: 12.5,
   },
   selectButton: {
     width: 42,
@@ -87,34 +98,46 @@ export const galleryToolbarStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  chipScroll: common.fixedSize,
+  //* a scroll view clips what it draws, so the row gets room around the chips
+  //* for their glass shadows — edge to edge, and 6 above and below — and
+  //* negative margins give the same room back so nothing else moves
+  chipScroll: {
+    ...common.fixedSize,
+    marginHorizontal: -18,
+    marginVertical: -6,
+  },
   chips: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingRight: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
   },
   chip: common.chip,
-  chipLabel: common.semiBold12,
-  hint: common.regular12_5,
+  chipLabel: common.semiBold11,
+  hint: common.regular11_5,
   summary: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  summaryLabel: common.regular12,
-  clearLabel: common.semiBold12,
+  summaryLabel: common.regular11,
+  clearLabel: common.semiBold11,
 });
 
 //* components/GalleryGrid.tsx
 export const GALLERY_GRID_PADDING = 18;
-export const GALLERY_GRID_GAP = 6;
+//* laid out like iOS home-screen widgets: room between them for their shadows
+//* to fall into, and a caption under each
+export const GALLERY_GRID_GAP = 14;
+export const GALLERY_TILE_RADIUS = 20;
 
 export const galleryGridStyles = StyleSheet.create({
   scroll: common.fill,
   content: {
     paddingHorizontal: GALLERY_GRID_PADDING,
-    paddingBottom: 18,
+    //* plus the floating tab bar's height, added at the call site
+    paddingBottom: GALLERY_GRID_PADDING,
   },
   //* lets the empty state centre itself in the space the list fills
   contentEmpty: {
@@ -126,10 +149,24 @@ export const galleryGridStyles = StyleSheet.create({
   rowGap: {
     height: GALLERY_GRID_GAP,
   },
-  //* width and height are set from the window in the component
+  //* the tile and its caption; the width is set from the window in the component
+  cell: {
+    alignItems: "center",
+  },
+  //* width, height and the shadow are set in the component
   tile: {
-    borderRadius: 8,
+    borderRadius: GALLERY_TILE_RADIUS,
     overflow: "hidden",
+  },
+  //* the widget's name line: the note's short date. A fixed height, so a note
+  //* with no date still keeps its row in line with the others
+  caption: {
+    ...common.semiBold10_5,
+    alignSelf: "stretch",
+    textAlign: "center",
+    marginTop: 6,
+    height: 14,
+    lineHeight: 14,
   },
   tilePressed: {
     opacity: 0.8,
@@ -146,7 +183,7 @@ export const galleryGridStyles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderWidth: 2.5,
-    borderRadius: 8,
+    borderRadius: GALLERY_TILE_RADIUS,
   },
   checkSlot: {
     position: "absolute",
@@ -163,12 +200,12 @@ export const galleryGridStyles = StyleSheet.create({
   },
   emptyTitle: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 17,
+    fontSize: 16,
     marginTop: 10,
   },
   emptySubtitle: {
     fontFamily: fonts.interRegular,
-    fontSize: 13,
+    fontSize: 12,
     textAlign: "center",
   },
 });
@@ -201,7 +238,7 @@ export const searchNotesModalStyles = StyleSheet.create({
   //* carries its own bottom margin, so this only pulls the gap back up
   hint: {
     fontFamily: fonts.interRegular,
-    fontSize: 12,
+    fontSize: 11,
     marginTop: -6,
     marginBottom: 16,
   },
@@ -210,7 +247,7 @@ export const searchNotesModalStyles = StyleSheet.create({
   scrollContent: { paddingBottom: 4 },
   label: {
     fontFamily: fonts.interBold,
-    fontSize: 10.5,
+    fontSize: 9.5,
     letterSpacing: 1,
     textTransform: "uppercase",
     marginBottom: 8,
@@ -229,7 +266,7 @@ export const searchNotesModalStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontFamily: fonts.interRegular,
-    fontSize: 14,
+    fontSize: 13,
     //* RN gives TextInput a default vertical padding that shifts the caret off
     //* the row's centre; zeroing it lets the fixed height do the centring
     paddingVertical: 0,
@@ -249,18 +286,18 @@ export const searchNotesModalStyles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
   },
-  tagLabel: common.semiBold12_5,
+  tagLabel: common.semiBold11_5,
   //* folder names are user-typed and can run long; capped so one chip can't
   //* take a whole row and push the rest into a column
   folderLabel: { maxWidth: 160 },
   emptyNote: {
     fontFamily: fonts.interRegular,
-    fontSize: 12.5,
+    fontSize: 11.5,
     marginBottom: 18,
   },
   dateRow: common.row10,
   dateCol: common.fillShrinkable,
-  dateCaption: { fontFamily: fonts.interRegular, fontSize: 11.5, marginBottom: 5 },
+  dateCaption: { fontFamily: fonts.interRegular, fontSize: 10.5, marginBottom: 5 },
   dateBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -271,20 +308,20 @@ export const searchNotesModalStyles = StyleSheet.create({
     height: 42,
   },
   dateFill: { flex: 1, minWidth: 0, justifyContent: "center" },
-  dateValue: common.regular13,
+  dateValue: common.regular12,
   footer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 18,
   },
-  clearLabel: common.semiBold12_5,
+  clearLabel: common.semiBold11_5,
   confirm: {
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
-  confirmLabel: common.bold13_5,
+  confirmLabel: common.bold12_5,
 });
 
 //* app/(tabs)/compare.tsx
@@ -333,15 +370,15 @@ export const compareScreenStyles = StyleSheet.create({
   },
   datePillLabel: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 10.5,
+    fontSize: 9.5,
     color: "#fff",
   },
   cardBody: common.fill,
   cardBodyContent: { padding: 14, paddingBottom: 16 },
   noteText: {
     fontFamily: fonts.frauncesMedium,
-    fontSize: 14.5,
-    lineHeight: 22,
+    fontSize: 13.5,
+    lineHeight: 21,
   },
   tagsRow: {
     flexDirection: "row",
@@ -350,12 +387,12 @@ export const compareScreenStyles = StyleSheet.create({
     marginTop: 12,
   },
   tagPill: { borderRadius: 999, paddingVertical: 3, paddingHorizontal: 8 },
-  tagLabel: { fontFamily: fonts.interSemiBold, fontSize: 10.5 },
+  tagLabel: { fontFamily: fonts.interSemiBold, fontSize: 9.5 },
   empty: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
   },
-  emptyLabel: common.regular13,
+  emptyLabel: common.regular12,
 });

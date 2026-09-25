@@ -115,37 +115,45 @@ export const common = StyleSheet.create({
   },
   snippetLabel: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 12,
+    fontSize: 11,
     flexShrink: 1,
   },
 
   //* text
   dialogTitle: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 18,
+    fontSize: 17,
   },
   sectionLabel: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
+    fontSize: 10.5,
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
   errorText: {
     fontFamily: fonts.interRegular,
-    fontSize: 12.5,
+    fontSize: 11.5,
     marginBottom: 14,
+  },
+  regular11: {
+    fontFamily: fonts.interRegular,
+    fontSize: 11,
+  },
+  regular11_5: {
+    fontFamily: fonts.interRegular,
+    fontSize: 11.5,
   },
   regular12: {
     fontFamily: fonts.interRegular,
     fontSize: 12,
   },
-  regular12_5: {
-    fontFamily: fonts.interRegular,
-    fontSize: 12.5,
+  semiBold10_5: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 10.5,
   },
-  regular13: {
-    fontFamily: fonts.interRegular,
-    fontSize: 13,
+  semiBold11: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 11,
   },
   semiBold11_5: {
     fontFamily: fonts.interSemiBold,
@@ -159,16 +167,8 @@ export const common = StyleSheet.create({
     fontFamily: fonts.interSemiBold,
     fontSize: 12.5,
   },
-  semiBold13: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13,
-  },
-  semiBold13_5: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 13.5,
-  },
-  bold13_5: {
+  bold12_5: {
     fontFamily: fonts.interBold,
-    fontSize: 13.5,
+    fontSize: 12.5,
   },
 });

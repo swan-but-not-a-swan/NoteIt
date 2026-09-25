@@ -5,10 +5,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
 import TopBar from "@/components/TopBar";
 import GalleryGrid from "@/components/GalleryGrid";
-import AddNote from "@/components/AddNote";
 import OverflowMenu from "@/components/OverflowMenu";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
-import { useAddNote } from "@/lib/useAddNote";
 import { useLibrary } from "@/lib/LibraryContext";
 import { folderScreenStyles as styles } from "@/theme/styles/folders.styles";
 
@@ -19,18 +17,16 @@ export default function FolderNotes() {
     const router = useRouter();
     const { id } = useLocalSearchParams<{ id: string }>();
 
-    const { folders, notes, tags, snippets, refreshNotesAndTagsAsync } = useLibrary();
+    const { folders, notes } = useLibrary();
 
     const folder = folders.find((f) => f.id === id) ?? null; //* get the folder
     const folderNotes = notes.filter((note) => note.folderId === id); //* get notes from the folder
 
     const navigateOnce = useNavigateOnce();
 
-    //* the same modal home uses, presented here over this folder's own grid.
-    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: refreshNotesAndTagsAsync });
-
     //* new notes default into the folder being viewed
-    const openAddNoteHere = () => addNote.open(id);
+    const openAddNoteHere = () =>
+        navigateOnce(() => router.push({ pathname: "/(tabs)/add-note", params: { folderId: id } }));
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>
@@ -66,7 +62,6 @@ export default function FolderNotes() {
                     }
                 />
             </View>
-            <AddNote colors={colors} folders={folders} {...addNote.props} />
         </View>
     );
 }

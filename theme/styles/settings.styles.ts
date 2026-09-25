@@ -36,23 +36,23 @@ export const settingsScreenStyles = StyleSheet.create({
   },
   plusTitle: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 16,
+    fontSize: 15,
   },
   plusSubtitle: {
     fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-    lineHeight: 17,
+    fontSize: 11.5,
+    lineHeight: 16,
   },
   sectionLabel: {
     fontFamily: fonts.interBold,
-    fontSize: 10.5,
+    fontSize: 9.5,
     letterSpacing: 1,
     textTransform: "uppercase",
   },
   sectionHint: {
     fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 11.5,
+    lineHeight: 17,
     marginTop: -4,
   },
   segment: {
@@ -71,7 +71,7 @@ export const settingsScreenStyles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: 10,
   },
-  segmentLabel: common.semiBold13,
+  segmentLabel: common.semiBold12,
   snippetList: {
     gap: 8,
   },
@@ -89,9 +89,9 @@ export const settingsScreenStyles = StyleSheet.create({
     minWidth: 0,
     gap: 1,
   },
-  snippetName: common.semiBold13,
-  snippetText: common.regular12,
-  emptyLabel: common.regular12_5,
+  snippetName: common.semiBold12,
+  snippetText: common.regular11,
+  emptyLabel: common.regular11_5,
   addRow: {
     flexDirection: "row",
     gap: 8,
@@ -104,7 +104,7 @@ export const settingsScreenStyles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     fontFamily: fonts.interRegular,
-    fontSize: 13,
+    fontSize: 12,
   },
   addButton: {
     justifyContent: "center",
@@ -113,7 +113,7 @@ export const settingsScreenStyles = StyleSheet.create({
   },
   addButtonLabel: {
     fontFamily: fonts.interBold,
-    fontSize: 13,
+    fontSize: 12,
   },
 });
 
@@ -125,7 +125,7 @@ export const newSnippetStyles = StyleSheet.create({
   titleRow: common.spacedRow14,
   title: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 18,
+    fontSize: 17,
     flexShrink: 1,
   },
   deleteButton: common.iconButton30,
@@ -135,7 +135,7 @@ export const newSnippetStyles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 14,
     fontFamily: fonts.interRegular,
-    fontSize: 14,
+    fontSize: 13,
     marginBottom: 18,
   },
   namePill: {
@@ -152,12 +152,12 @@ export const newSnippetStyles = StyleSheet.create({
   },
   nameLabel: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 13,
+    fontSize: 12,
     flexShrink: 1,
   },
   label: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
+    fontSize: 10.5,
     letterSpacing: 0.4,
     textTransform: "uppercase",
     marginBottom: 8,
@@ -168,8 +168,8 @@ export const newSnippetStyles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 14,
     fontFamily: fonts.interRegular,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 19,
     minHeight: 108,
     //* Android centres multiline text vertically by default, which strands a
     //* one-line snippet in the middle of the box
@@ -177,13 +177,13 @@ export const newSnippetStyles = StyleSheet.create({
   },
   hint: {
     fontFamily: fonts.interRegular,
-    fontSize: 11.5,
+    fontSize: 10.5,
     marginTop: 7,
     marginBottom: 18,
   },
   error: {
     fontFamily: fonts.interRegular,
-    fontSize: 12.5,
+    fontSize: 11.5,
     //* pulls up against the hint's margin so the message sits with the field
     //* it belongs to rather than floating between the two
     marginTop: -8,
@@ -191,7 +191,7 @@ export const newSnippetStyles = StyleSheet.create({
   },
   buttons: common.row10,
   button: common.dialogButton,
-  buttonLabel: common.semiBold13_5,
+  buttonLabel: common.semiBold12_5,
 });
 
 //* components/SendFeedback.tsx
@@ -206,13 +206,13 @@ export const sendFeedbackStyles = StyleSheet.create({
   },
   title: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 18,
+    fontSize: 17,
     flexShrink: 1,
   },
   body: {
     fontFamily: fonts.interRegular,
-    fontSize: 13,
-    lineHeight: 20,
+    fontSize: 12,
+    lineHeight: 19,
     marginBottom: 14,
   },
   //* the address itself, set apart so it reads as the thing being offered
@@ -228,12 +228,12 @@ export const sendFeedbackStyles = StyleSheet.create({
   },
   address: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 13,
+    fontSize: 12,
     flexShrink: 1,
   },
   buttons: common.row10,
   button: common.dialogButton,
-  buttonLabel: common.semiBold13_5,
+  buttonLabel: common.semiBold12_5,
   //* the primary button carries an icon, so it needs a row of its own
   buttonRow: {
     flexDirection: "row",

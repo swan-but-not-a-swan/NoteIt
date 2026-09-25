@@ -9,7 +9,8 @@ import {
   View,
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { newSnippetStyles as styles } from "@/theme/styles/settings.styles";
 
 type Props = {
@@ -86,7 +87,8 @@ export default function NewSnippet({
                 accessibilityLabel="Delete snippet"
                 style={({ pressed }) => [
                   styles.deleteButton,
-                  { backgroundColor: hexToRgba(colors.error, 0.15), opacity: pressed ? 0.7 : 1 },
+                  glass(colors, { tint: colors.error }),
+                  { opacity: pressed ? 0.7 : 1 },
                 ]}
               >
                 <Feather name="trash-2" size={16} color={colors.error} />
@@ -156,7 +158,8 @@ export default function NewSnippet({
               onPress={onCancel}
               style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 },
+                glass(colors),
+                { opacity: pressed ? 0.7 : 1 },
               ]}
             >
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Cancel</Text>
@@ -165,7 +168,8 @@ export default function NewSnippet({
               onPress={onSave}
               style={({ pressed }) => [
                 styles.button,
-                { backgroundColor: colors.accent, opacity: pressed ? 0.75 : 1 },
+                glass(colors, { tint: colors.accent, strength: "fill" }),
+                { opacity: pressed ? 0.75 : 1 },
               ]}
             >
               <Text style={[styles.buttonLabel, { color: colors.onAccent }]}>

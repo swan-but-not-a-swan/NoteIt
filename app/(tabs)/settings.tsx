@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
+import { glass } from "@/theme/glass";
 import TopBar, { TopBarIconButton } from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
 import SendFeedback from "@/components/SendFeedback";
@@ -39,7 +40,7 @@ function AppearanceToggle({
     onSelect: (mode: ThemeMode) => void;
 }) {
     return (
-        <View style={[styles.segment, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+        <View style={[styles.segment, glass(colors)]}>
             {THEME_OPTIONS.map((option) => {
                 const active = mode === option.id;
                 //* the active pill is the only filled surface in the row, so
@@ -54,7 +55,11 @@ function AppearanceToggle({
                         accessibilityLabel={`${option.label} theme`}
                         style={[
                             styles.segmentItem,
-                            active && { backgroundColor: colors.accentSolid },
+                            //* the idle side keeps a clear rim of the same width, so
+                            //* switching doesn't shift its contents by a pixel
+                            active
+                                ? glass(colors, { tint: colors.accentSolid, strength: "fill" })
+                                : { borderWidth: 1, borderColor: "transparent" },
                         ]}
                     >
                         <Feather name={option.icon} size={15} color={tint} />
@@ -106,7 +111,8 @@ function PlusRow({ colors }: { colors: ThemeColors }) {
             accessibilityLabel="NoteIt Plus"
             style={({ pressed }) => [
                 styles.plusRow,
-                { backgroundColor: colors.surface, borderColor: colors.line, opacity: pressed ? 0.85 : 1 },
+                glass(colors),
+                { opacity: pressed ? 0.85 : 1 },
             ]}
         >
             <View style={[styles.plusBadge, { backgroundColor: colors.accent }]}>
@@ -292,11 +298,8 @@ export default function Settings() {
                                 accessibilityLabel={`Edit snippet ${snippet.name}`}
                                 style={({ pressed }) => [
                                     styles.snippetRow,
-                                    {
-                                        backgroundColor: colors.surface,
-                                        borderColor: colors.line,
-                                        opacity: pressed ? 0.7 : 1,
-                                    },
+                                    glass(colors),
+                                    { opacity: pressed ? 0.7 : 1 },
                                 ]}
                             >
                                 <Feather name="star" size={14} color={colors.accent} />
@@ -350,10 +353,8 @@ export default function Settings() {
                             accessibilityState={{ disabled: !canAddSnippet }}
                             style={({ pressed }) => [
                                 styles.addButton,
-                                {
-                                    backgroundColor: colors.accent,
-                                    opacity: !canAddSnippet ? 0.4 : pressed ? 0.75 : 1,
-                                },
+                                glass(colors, { tint: colors.accent, strength: "fill" }),
+                                { opacity: !canAddSnippet ? 0.4 : pressed ? 0.75 : 1 },
                             ]}
                         >
                             <Text style={[styles.addButtonLabel, { color: colors.onAccent }]}>Add</Text>
