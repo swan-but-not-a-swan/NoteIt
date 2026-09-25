@@ -17,6 +17,7 @@ import { scheduleOnRN } from "react-native-worklets";
 import { useVideoPlayer, VideoView } from "expo-video";
 import type { NativeAd } from "react-native-google-mobile-ads";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { formatDayDate, formatShortDate } from "@/lib/date";
 import { appendSnippet, rubberBand, snapTarget } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
@@ -28,13 +29,16 @@ import MarkdownText from "./MarkdownText";
 import MediaThumb from "./MediaThumb";
 import { viewNoteStyles as styles } from "@/theme/styles/note.styles";
 
+// The geometry and timing below are exported for the add-note screen, whose
+// draft card condenses its photo onto the same tile the same way.
+
 /** Dead space between two pages, so the photo arriving is visibly a separate
  *  one rather than the same photo sliding. iOS Photos uses the same trick. */
 const GUTTER = 16;
 
 /** One line of note plus its padding — what shows under the photo while the
  *  photo is the thing you're looking at. */
-const HINT_H = 46;
+export const HINT_H = 46;
 
 /** Inactive tile size for the strip while the note is open. The active tile
  *  comes out 8 larger — 96 — which is exactly what the standalone thumbnail
@@ -43,9 +47,9 @@ const NOTE_TILE = 88;
 
 /** Where the open strip's active tile lands. The photo condenses onto exactly
  *  these numbers, so the hand-off from photo to tile is invisible. */
-const TILE = filmStripMetrics(NOTE_TILE);
+export const TILE = filmStripMetrics(NOTE_TILE);
 
-const OPEN_MS = 300;
+export const OPEN_MS = 300;
 /** The strip's own fade. Short and independent of the drag: the gap opens with
  *  your finger, but the strip arriving is an event, not something you scrub. */
 const STRIP_FADE_MS = 140;
@@ -53,10 +57,10 @@ const STRIP_FADE_MS = 140;
 /** The last stretch of the condense, over which the photo hands off to the
  *  strip's own tile. Same image, same place, so the crossfade is invisible and
  *  what you see is one continuous movement. */
-const HANDOFF_FROM = 0.75;
+export const HANDOFF_FROM = 0.75;
 /** Drag this far, or throw the finger this fast, and the note commits. */
-const OPEN_DISTANCE = 55;
-const OPEN_VELOCITY = 500; // px/s
+export const OPEN_DISTANCE = 55;
+export const OPEN_VELOCITY = 500; // px/s
 
 /** The sideways snap. Slightly overdamped (zeta ~1.07), so it decelerates into
  *  place without the bounce a springier config would add — and it takes the
@@ -632,10 +636,7 @@ function NoteCard({
                     onPress={() => onDraftChange(appendSnippet(draft, s.text))}
                     accessibilityRole="button"
                     accessibilityLabel={`Insert snippet ${s.name}`}
-                    style={[
-                      styles.snippetChip,
-                      { backgroundColor: colors.surface, borderColor: colors.line },
-                    ]}
+                    style={[styles.snippetChip, glass(colors)]}
                   >
                     <Feather name="star" size={11} color={colors.accent} />
                     <Text

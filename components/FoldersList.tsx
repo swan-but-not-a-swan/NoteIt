@@ -3,11 +3,13 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import Folder from "./Folder";
 import AdBannerStrip from "./AdBannerStrip";
 import { FolderModel } from "../models/FolderModel";
 import { FolderListItemModel } from "../models/FolderListItemModel";
-import { foldersListStyles as styles } from "@/theme/styles/folders.styles";
+import { useBottomBarInset } from "@/lib/BottomBarInset";
+import { foldersListStyles as styles, FOLDERS_LIST_PADDING } from "@/theme/styles/folders.styles";
 
 type Props = {
   items: FolderListItemModel[];
@@ -26,10 +28,12 @@ export default function FolderList({
   onNewFolder,
   showAdBanner = true,
 }: Props) {
+  const bottomBarInset = useBottomBarInset();
+
   return (
     <ScrollView
       style={styles.scroll}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[styles.content, { paddingBottom: FOLDERS_LIST_PADDING + bottomBarInset }]}
       showsVerticalScrollIndicator={false}
     >
       {items.map(({ folder, count }) => (
@@ -46,7 +50,8 @@ export default function FolderList({
 
       <Pressable
         onPress={onNewFolder}
-        style={[styles.newFolder, { borderColor: colors.line }]}
+        //* glass, with the dashed rim that says "an empty slot" kept
+        style={[styles.newFolder, glass(colors)]}
       >
         <Feather name="folder-plus" size={17} color={colors.stone} />
         <Text style={[styles.newFolderLabel, { color: colors.stone }]}>New folder</Text>

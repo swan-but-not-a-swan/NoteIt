@@ -2,6 +2,7 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import type { FolderModel } from "@/models/FolderModel";
 import { moveNotesModalStyles as styles } from "@/theme/styles/folders.styles";
 
@@ -40,7 +41,7 @@ export default function MoveNotesModal({
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Cancel moving"
-              style={[styles.closeButton, { backgroundColor: colors.surface }]}
+              style={[styles.closeButton, glass(colors)]}
             >
               <Feather name="x" size={14} color={colors.textPrimary} />
             </Pressable>

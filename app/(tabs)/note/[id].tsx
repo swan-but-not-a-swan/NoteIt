@@ -4,15 +4,14 @@ import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
+import { glass } from "@/theme/glass";
 import { formatDayDate } from "@/lib/date";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
-import AddNote from "@/components/AddNote";
 import AdBannerStrip from "@/components/AdBannerStrip";
 import OverflowMenu from "@/components/OverflowMenu";
 import { useEndAd } from "@/components/EndAd";
 import { useEntitlements } from "@/lib/EntitlementsContext";
-import { useAddNote } from "@/lib/useAddNote";
 import { useLibrary } from "@/lib/LibraryContext";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
@@ -28,9 +27,9 @@ import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 // A route rather than a <Modal> rendered by whichever screen owned the list.
 // That version had to be duplicated in home and the folder screen, carried a
 // `viewingNote` state in each, and — because it was a modal — couldn't present
-// AddNote over itself without closing first and waiting out the dismissal. As
-// a route the back gesture works natively and AddNote is just another modal
-// from an ordinary screen.
+// the note composer over itself without closing first and waiting out the
+// dismissal. As a route the back gesture works natively, and starting a new
+// note is an ordinary push onto the same stack.
 
 export default function ViewNotes() {
     const { colors } = useTheme();
@@ -51,7 +50,6 @@ export default function ViewNotes() {
         ready,
         saveNoteAsync,
         deleteNotesAsync,
-        refreshNotesAndTagsAsync,
     } = useLibrary();
 
     const scopedNotes = folderId != null ? notes.filter((n) => n.folderId === folderId) : notes;
@@ -90,7 +88,6 @@ export default function ViewNotes() {
         if (ready && note == null) router.back();
     }, [ready, note, router]);
 
-    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: refreshNotesAndTagsAsync });
 
     // Both routes to a different note land here — the pager's own swipe and a
     // filmstrip tap — so "showing a different note" means the same thing
@@ -254,7 +251,8 @@ export default function ViewNotes() {
                                 accessibilityLabel="Cancel editing"
                                 style={({ pressed }) => [
                                     styles.headerButton,
-                                    { backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 },
+                                    glass(colors),
+                                    { opacity: pressed ? 0.6 : 1 },
                                 ]}
                             >
                                 <Feather name="x" size={16} color={colors.textPrimary} />
@@ -271,10 +269,8 @@ export default function ViewNotes() {
                                 accessibilityState={{ disabled: savingEdit }}
                                 style={({ pressed }) => [
                                     styles.headerButton,
-                                    {
-                                        backgroundColor: colors.accent,
-                                        opacity: savingEdit ? 0.5 : pressed ? 0.75 : 1,
-                                    },
+                                    glass(colors, { tint: colors.accent, strength: "fill" }),
+                                    { opacity: savingEdit ? 0.5 : pressed ? 0.75 : 1 },
                                 ]}
                             >
                                 <Feather name="check" size={16} color={colors.onAccent} />
@@ -300,7 +296,7 @@ export default function ViewNotes() {
                             accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
                             style={[
                                 styles.headerButton,
-                                { backgroundColor: noteOpen ? colors.accent : colors.surface },
+                                glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
                             ]}
                         >
                             <Feather
@@ -314,7 +310,7 @@ export default function ViewNotes() {
                             onPress={handleShareAsync}
                             hitSlop={8}
                             accessibilityLabel="Share this picture-note"
-                            style={[styles.headerButton, { backgroundColor: colors.surface }]}
+                            style={[styles.headerButton, glass(colors)]}
                         >
                             <Feather name="share" size={16} color={colors.textPrimary} />
                         </Pressable>
@@ -328,7 +324,11 @@ export default function ViewNotes() {
                                     icon: "plus",
                                     //* defaults into the folder being viewed, so
                                     //* adding from inside a folder stays in it
-                                    onPress: () => addNote.open(folderId ?? null),
+                                    onPress: () =>
+                                        router.push({
+                                            pathname: "/(tabs)/add-note",
+                                            params: folderId != null ? { folderId } : undefined,
+                                        }),
                                 },
                                 {
                                     key: "edit",
@@ -386,7 +386,6 @@ export default function ViewNotes() {
                 <View style={{ height: insets.bottom }} />
             )}
 
-            <AddNote colors={colors} folders={folders} {...addNote.props} />
         </View>
     );
 }
