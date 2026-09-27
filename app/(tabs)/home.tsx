@@ -350,7 +350,7 @@ export default function Home() {
                     //* the store drops them from memory as the write lands; a
                     //* failure part-way leaves the two out of step, so resync
                     onPress: () => {
-                        deleteNotesAsync(toDelete).catch(() => reloadAsync().catch(() => {}));
+                        deleteNotesAsync(toDelete).catch(() => reloadAsync().catch(() => { }));
                     },
                 },
             ],
@@ -365,7 +365,7 @@ export default function Home() {
             await moveNotesToFolderAsync(pending.notes, folderId);
             pending.onMoved(); //* only once the move actually landed
         } catch {
-            reloadAsync().catch(() => {});
+            reloadAsync().catch(() => { });
         }
     };
 
@@ -452,7 +452,7 @@ export default function Home() {
                                     onEditNote={(note) =>
                                         navigateOnce(() =>
                                             router.push({
-                                                pathname: "/(tabs)/add-note",
+                                                pathname: "/(tabs)/enter-note",
                                                 params: { id: note.id },
                                             })
                                         )
