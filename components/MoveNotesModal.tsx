@@ -15,6 +15,9 @@ type Props = {
   onCancel: () => void;
   /** null means "no folder" — the gallery-only notes. */
   onSelectFolder: (folderId: string | null) => void;
+  /** Replaces the "Move N picture-notes" title — the import preview asks
+   *  where a note should go rather than moving it. */
+  title?: string;
 };
 
 // Where to put the picture-notes just picked. Every folder, plus the
@@ -27,6 +30,7 @@ export default function MoveNotesModal({
   count,
   onCancel,
   onSelectFolder,
+  title,
 }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -34,7 +38,7 @@ export default function MoveNotesModal({
         <View style={[styles.card, { backgroundColor: colors.bg, borderColor: colors.line }]}>
           <View style={styles.titleRow}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
-              {count === 1 ? "Move 1 picture-note" : `Move ${count} picture-notes`}
+              {title ?? (count === 1 ? "Move 1 picture-note" : `Move ${count} picture-notes`)}
             </Text>
             <Pressable
               onPress={onCancel}

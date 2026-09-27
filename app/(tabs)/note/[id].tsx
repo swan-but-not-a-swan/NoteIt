@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, Share, Text, View } from "react-native";
+import { Alert, Platform, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
 import { glass } from "@/theme/glass";
-import { formatDayDate } from "@/lib/date";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
 import AdBannerStrip from "@/components/AdBannerStrip";
@@ -13,13 +12,9 @@ import OverflowMenu from "@/components/OverflowMenu";
 import { useEndAd } from "@/components/EndAd";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { useLibrary } from "@/lib/LibraryContext";
-import { NoteModel, TagModel } from "@/models/NoteModel";
-import {
-    buildExportPayload,
-    shareExportFileAsync,
-    TransferError,
-    writeExportFileAsync,
-} from "@/lib/noteTransfer";
+import { NoteModel } from "@/models/NoteModel";
+import { useExportTransfer } from "@/lib/useExportTransfer";
+import ExportProgress from "@/components/ExportProgress";
 import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 
 // The picture-note viewer screen: header, the card itself, the filmstrip and
@@ -106,27 +101,13 @@ export default function ViewNotes() {
 
     // --- exporting ---------------------------------------------------------
 
-    //* guards a second tap while the container is still being written — the
-    //* same reason saveEditAsync has one
-    const [exporting, setExporting] = useState(false);
+    //* the hook guards a second tap while the file is still being written
+    const { exporting, progress: exportProgress, exportAsync, cancel: cancelExport } = useExportTransfer(tags);
 
+    //* a single note travels without its folder: on the way back in, the
+    //* receiver picks where it goes
     const exportNoteAsync = async () => {
-        if (note == null || exporting) return;
-        setExporting(true);
-        try {
-            //* a single note travels without its folder: on the way back in it
-            //* has nowhere to belong, so it lands in the gallery
-            const { payload, mediaUris } = buildExportPayload([note], tags, null);
-            const fileUri = await writeExportFileAsync(payload, mediaUris);
-            await shareExportFileAsync(fileUri, "picture-note.noteit");
-        } catch (error) {
-            Alert.alert(
-                "Couldn't export",
-                error instanceof TransferError ? error.message : "That note didn't export. Try again.",
-            );
-        } finally {
-            setExporting(false);
-        }
+        if (note != null) await exportAsync([note], null);
     };
 
     // --- deleting ----------------------------------------------------------
@@ -155,26 +136,6 @@ export default function ViewNotes() {
         //* the effect above would back out of a viewer that still has notes
         if (nextId != null) setCurrentId(nextId);
         await deleteNotesAsync([target]);
-    };
-
-    const handleShareAsync = async () => {
-        if (note == null || Platform.OS === "web") return;
-        const noteTags = note.tagIds
-            .map((tagId) => tags.find((t) => t.id === tagId))
-            .filter((t): t is TagModel => t != null);
-        const shareText = [
-            note.note,
-            noteTags.length > 0 ? noteTags.map((t) => `#${t.title}`).join(" ") : null,
-            note.date.length > 0 ? formatDayDate(note.date) : null,
-        ]
-            .filter((s): s is string => s != null && s.length > 0)
-            .join("\n\n");
-
-        try {
-            await Share.share({ title, message: shareText });
-        } catch {
-            // user dismissed the share sheet — no-op
-        }
     };
 
     const insets = useSafeAreaInsets();
@@ -223,13 +184,17 @@ export default function ViewNotes() {
                             />
                         </Pressable>
 
+                        {/* Exports the note as a .noteit file. It replaced
+                            sharing the note as text: one share button, and it
+                            sends the whole picture-note rather than its words. */}
                         <Pressable
-                            onPress={handleShareAsync}
+                            onPress={exportNoteAsync}
+                            disabled={exporting}
                             hitSlop={8}
-                            //* "as text" since the overflow now also exports the
-                            //* note as a file, and the two need telling apart
-                            accessibilityLabel="Share this picture-note as text"
-                            style={[styles.headerButton, glass(colors)]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Export this picture-note"
+                            accessibilityState={{ disabled: exporting, busy: exporting }}
+                            style={[styles.headerButton, glass(colors), { opacity: exporting ? 0.5 : 1 }]}
                         >
                             <Feather name="share" size={16} color={colors.textPrimary} />
                         </Pressable>
@@ -254,12 +219,6 @@ export default function ViewNotes() {
                                     label: "Edit note",
                                     icon: "edit-2",
                                     onPress: openEditor,
-                                },
-                                {
-                                    key: "export",
-                                    label: "Export note",
-                                    icon: "upload",
-                                    onPress: exportNoteAsync,
                                 },
                                 {
                                     key: "delete",
@@ -307,6 +266,7 @@ export default function ViewNotes() {
                 <View style={{ height: insets.bottom }} />
             )}
 
+            <ExportProgress progress={exportProgress} colors={colors} onCancel={cancelExport} />
         </View>
     );
 }

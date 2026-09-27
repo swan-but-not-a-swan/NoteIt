@@ -1,5 +1,5 @@
 // Shortens the `slide_from_bottom` screen transition on Android — the one the
-// add-note screen opens and closes with.
+// enter-note screen opens and closes with.
 //
 // native-stack's `animationDuration` option only works on iOS. On Android,
 // react-native-screens fixes this transition at the system's medium animation

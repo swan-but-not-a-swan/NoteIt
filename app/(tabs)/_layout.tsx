@@ -21,7 +21,7 @@ export default function TabsLayout() {
           Quicker than the 500ms default. The duration option is iOS-only;
           Android's comes from plugins/withFasterBottomSlide.js. */}
       <Stack.Screen
-        name="add-note"
+        name="enter-note"
         options={{ animation: "slide_from_bottom", animationDuration: 350 }}
       />
       {/* Modal presentation keeps the slide-up the viewer had as a <Modal>,

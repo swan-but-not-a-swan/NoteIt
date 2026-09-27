@@ -77,6 +77,13 @@ export const newFolderStyles = StyleSheet.create({
   card: common.dialogCard,
   titleRow: common.spacedRow16,
   title: common.dialogTitle,
+  //* export and delete, side by side at the end of the title row
+  titleActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  exportButton: common.iconButton30,
   deleteButton: common.iconButton30,
   nameRow: {
     flexDirection: "row",

@@ -222,7 +222,7 @@ export const endAdStyles = StyleSheet.create({
   },
 });
 
-//* app/(tabs)/add-note.tsx
+//* app/(tabs)/enter-note.tsx
 /** Horizontal inset for the whole screen — header, body, pills and footer. */
 const ADD_NOTE_SIDE_PAD = 18;
 

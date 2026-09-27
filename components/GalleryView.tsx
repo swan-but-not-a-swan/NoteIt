@@ -40,6 +40,8 @@ type Props = {
    *  run once they have actually moved — picking a folder can be cancelled,
    *  and a cancelled move should leave the selection as it was. */
   onMoveNotes?: (notes: NoteModel[], onMoved: () => void) => void;
+  /** Exports the picked notes as one .noteit file, from the More menu. */
+  onExportNotes?: (notes: NoteModel[]) => void;
 };
 
 export default function GalleryView({
@@ -53,6 +55,7 @@ export default function GalleryView({
   onShowAll,
   onDeleteNotes,
   onMoveNotes,
+  onExportNotes,
   onEditNote,
 }: Props) {
   const { hasPlus, openPaywall } = useEntitlements();
@@ -235,6 +238,14 @@ export default function GalleryView({
                 onPress: () => onMoveNotes?.(selectedNotes, leaveSelectMode),
               },
               {
+                key: "export",
+                label: "Export",
+                icon: "upload",
+                //* the selection stays: exporting copies the notes out and
+                //* changes nothing here, so there is nothing to have dealt with
+                onPress: () => onExportNotes?.(selectedNotes),
+              },
+              {
                 key: "delete",
                 label: "Delete",
                 icon: "trash-2",
@@ -263,7 +274,7 @@ export default function GalleryView({
         </View>
       )}
 
-      {/* the held tile's own menu: one note, and the three things worth doing
+      {/* the held tile's own menu: one note, and the four things worth doing
           to it without opening it first */}
       <OverflowMenuCard
         colors={colors}
@@ -284,6 +295,14 @@ export default function GalleryView({
             icon: "folder",
             onPress: () => {
               if (held != null) onMoveNotes?.([held.note], () => {});
+            },
+          },
+          {
+            key: "export",
+            label: "Export",
+            icon: "upload",
+            onPress: () => {
+              if (held != null) onExportNotes?.([held.note]);
             },
           },
           {

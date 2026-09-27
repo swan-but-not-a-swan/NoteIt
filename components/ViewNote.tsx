@@ -26,7 +26,7 @@ import MarkdownText from "./MarkdownText";
 import MediaThumb from "./MediaThumb";
 import { viewNoteStyles as styles } from "@/theme/styles/note.styles";
 
-// The geometry and timing below are exported for the add-note screen, whose
+// The geometry and timing below are exported for the enter-note screen, whose
 // draft card condenses its photo onto the same tile the same way.
 
 /** Dead space between two pages, so the photo arriving is visibly a separate

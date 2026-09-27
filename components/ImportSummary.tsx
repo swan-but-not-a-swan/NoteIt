@@ -4,12 +4,12 @@ import type { ThemeColors } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/theme/colors";
 import { formatDayDate } from "@/lib/date";
-import type { ExportPayload } from "@/models/ExportModel";
+import type { ExportedPayload } from "@/models/ExportModel";
 
 type Props = {
   visible: boolean;
   /** Null while the picked file is still being read. */
-  payload: ExportPayload | null;
+  payload: ExportedPayload | null;
   /** Set once reading or importing failed; shown instead of the summary. */
   error?: string;
   /** True while the import is actually writing. */
@@ -46,7 +46,7 @@ export default function ImportSummary({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={busy ? undefined : onCancel}>
         <Pressable
-          onPress={() => {}}
+          onPress={() => { }}
           style={[styles.card, { backgroundColor: colors.bg, borderColor: colors.line }]}
         >
           <Text style={[styles.title, { color: colors.textPrimary }]}>
