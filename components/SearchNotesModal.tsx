@@ -12,6 +12,7 @@ import { Feather } from "@react-native-vector-icons/feather/static";
 import Animated, { SlideInUp } from "react-native-reanimated";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
+import { useFieldFocus } from "@/theme/focus";
 import { glass } from "@/theme/glass";
 import { formatDayDate, todayISO } from "@/lib/date";
 import { EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
@@ -58,6 +59,7 @@ export default function SearchNotesModal({
   folders = [],
   showFolders = false,
 }: Props) {
+  const textFocus = useFieldFocus(colors);
   //* web has no native date control; say so once here rather than silently
   //* doing nothing when a date field is tapped
   const [dateHint, setDateHint] = useState<string | null>(null);
@@ -116,16 +118,17 @@ export default function SearchNotesModal({
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.label, { color: colors.stoneDim }]}>Text</Text>
-            <View style={[styles.field, glass(colors)]}>
-              <Feather name="search" size={15} color={colors.stoneDim} />
+            <View style={[styles.field, glass(colors), { borderColor: textFocus.border }]}>
+              <Feather name="search" size={15} color={textFocus.focused ? colors.stone : colors.stoneDim} />
               <TextInput
                 value={query.text}
                 onChangeText={(text) => onQueryChange({ ...query, text })}
                 placeholder="Words in a note or tag"
-                placeholderTextColor={colors.stoneDim}
+                placeholderTextColor={textFocus.placeholder}
                 returnKeyType="search"
                 autoCorrect={false}
                 style={[styles.input, { color: colors.textPrimary }]}
+                {...textFocus.handlers}
               />
               {query.text.length > 0 && (
                 <Pressable onPress={() => onQueryChange({ ...query, text: "" })} hitSlop={8}>

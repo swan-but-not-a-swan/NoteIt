@@ -26,7 +26,7 @@ export default function FolderNotes() {
 
     //* new notes default into the folder being viewed
     const openAddNoteHere = () =>
-        navigateOnce(() => router.push({ pathname: "/(tabs)/add-note", params: { folderId: id } }));
+        navigateOnce(() => router.push({ pathname: "/(tabs)/enter-note", params: { folderId: id } }));
 
     return (
         <View style={[styles.container, { backgroundColor: colors.bg }]}>

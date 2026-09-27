@@ -284,7 +284,7 @@ export async function saveNoteDraftAsync(draft: NoteDraft, storedTags: TagModel[
 /** Stores any of `tagNames` that aren't stored yet, and returns the note's tag
  *  ids in the order the sheet showed them. Titles match without case, so
  *  "Beach" and "beach" are the same tag. */
-async function saveTagsAsync(tagNames: string[], storedTags: TagModel[]): Promise<string[]> {
+export async function saveTagsAsync(tagNames: string[], storedTags: TagModel[]): Promise<string[]> {
     //* repeats dropped first, keeping the first spelling — otherwise two new
     //* names differing only in case would each become a tag, and the note
     //* would get the same id twice

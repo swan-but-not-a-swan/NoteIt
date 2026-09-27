@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
+import { useFieldFocus } from "@/theme/focus";
 import { glass } from "@/theme/glass";
 import TopBar, { TopBarIconButton } from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
@@ -145,6 +146,7 @@ export default function Settings() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formError, setFormError] = useState<string | undefined>(undefined);
     const [feedbackOpen, setFeedbackOpen] = useState(false);
+    const snippetNameFocus = useFieldFocus(colors);
 
     const canAddSnippet = newSnippetName.trim().length > 0;
 
@@ -337,11 +339,12 @@ export default function Settings() {
                             onChangeText={setNewSnippetName}
                             onSubmitEditing={startWritingSnippet}
                             placeholder="Name a snippet..."
-                            placeholderTextColor={colors.stoneDim}
+                            placeholderTextColor={snippetNameFocus.placeholder}
                             style={[
                                 styles.addInput,
-                                { backgroundColor: colors.surface, borderColor: colors.line, color: colors.textPrimary },
+                                { backgroundColor: colors.surface, borderColor: snippetNameFocus.border, color: colors.textPrimary },
                             ]}
+                            {...snippetNameFocus.handlers}
                         />
                         <Pressable
                             onPress={startWritingSnippet}

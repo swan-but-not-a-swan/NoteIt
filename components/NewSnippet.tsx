@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { useFieldFocus } from "@/theme/focus";
 import { glass } from "@/theme/glass";
 import { newSnippetStyles as styles } from "@/theme/styles/settings.styles";
 
@@ -53,6 +54,9 @@ export default function NewSnippet({
   onCancel,
   onSave,
 }: Props) {
+  const nameFocus = useFieldFocus(colors);
+  const textFocus = useFieldFocus(colors);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       {/* The body field is multi-line, so Return inserts a newline instead of
@@ -103,15 +107,16 @@ export default function NewSnippet({
                 value={name}
                 onChangeText={onNameChange}
                 placeholder="Snippet name"
-                placeholderTextColor={colors.stoneDim}
+                placeholderTextColor={nameFocus.placeholder}
                 style={[
                   styles.nameInput,
                   {
                     backgroundColor: colors.surface,
-                    borderColor: colors.line,
+                    borderColor: nameFocus.border,
                     color: colors.textPrimary,
                   },
                 ]}
+                {...nameFocus.handlers}
               />
             </>
           ) : (
@@ -134,15 +139,16 @@ export default function NewSnippet({
             //* into the moment it appears
             autoFocus
             placeholder="What do you want to be able to drop into a note?"
-            placeholderTextColor={colors.stoneDim}
+            placeholderTextColor={textFocus.placeholder}
             style={[
               styles.input,
               {
                 backgroundColor: colors.surface,
-                borderColor: colors.line,
+                borderColor: textFocus.border,
                 color: colors.textPrimary,
               },
             ]}
+            {...textFocus.handlers}
           />
           {/* Worth saying out loud: nothing else in the app advertises that
               the note text takes markdown, and a snippet is the one place you

@@ -4,6 +4,7 @@ import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { useFieldFocus } from "@/theme/focus";
 import { glass } from "@/theme/glass";
 import { CropperContent } from "./ThumbnailCropper";
 import { newFolderStyles as styles } from "@/theme/styles/folders.styles";
@@ -50,6 +51,9 @@ export default function NewFolder({
   onCancel,
   onSave,
 }: Props) {
+  //* before the early return below, as every hook has to be
+  const nameFocus = useFieldFocus(colors);
+
   if (cropSourceUri != null) {
     return (
       <Modal visible={visible} transparent animationType="fade" onRequestClose={onCropCancel}>
@@ -113,15 +117,16 @@ export default function NewFolder({
               value={name}
               onChangeText={onNameChange}
               placeholder="Folder name"
-              placeholderTextColor={colors.stoneDim}
+              placeholderTextColor={nameFocus.placeholder}
               style={[
                 styles.input,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: colors.line,
+                  borderColor: nameFocus.border,
                   color: colors.textPrimary,
                 },
               ]}
+              {...nameFocus.handlers}
             />
           </View>
 

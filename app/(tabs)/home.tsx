@@ -373,7 +373,7 @@ export default function Home() {
     const openAddNote = () =>
         navigateOnce(() =>
             router.push({
-                pathname: "/(tabs)/add-note",
+                pathname: "/(tabs)/enter-note",
                 params: scopeFolderId != null ? { folderId: scopeFolderId } : undefined,
             })
         );
@@ -446,14 +446,14 @@ export default function Home() {
                                         )
                                     }
                                     onDeleteNotes={confirmDeleteNotes}
-                                    //* the viewer opens the note and starts editing it
+                                    //* straight into the editor — the same screen a note is
+                                    //* written on, with this one loaded into it. No folder
+                                    //* param: an existing note brings its own
                                     onEditNote={(note) =>
                                         navigateOnce(() =>
                                             router.push({
-                                                pathname: "/(tabs)/note/[id]",
-                                                params: scopeFolderId != null
-                                                    ? { id: note.id, folderId: scopeFolderId, edit: "1" }
-                                                    : { id: note.id, edit: "1" },
+                                                pathname: "/(tabs)/add-note",
+                                                params: { id: note.id },
                                             })
                                         )
                                     }

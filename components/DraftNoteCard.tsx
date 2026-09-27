@@ -13,6 +13,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import { useFieldFocus } from "@/theme/focus";
 import { glass } from "@/theme/glass";
 import { formatDayDate, formatShortDate } from "@/lib/date";
 import { NoteMediaType } from "../models/NoteModel";
@@ -71,6 +72,13 @@ export default function DraftNoteCard({
   const { width: windowW } = useWindowDimensions();
   const [box, setBox] = useState({ w: windowW, h: 0 });
   const [fullscreenUri, setFullscreenUri] = useState<string | null>(null);
+  const noteFocus = useFieldFocus(colors);
+
+  // This card mounts when the picture lands, so the note can start focused and
+  // the keyboard is already up to write into. Spent on the first focus: the
+  // field unmounts whenever the photo opens back out, and without this it
+  // would grab the keyboard again every time you flipped back to the note.
+  const [focusOnMount, setFocusOnMount] = useState(true);
 
   const cardW = box.w;
   const photoFull = Math.max(0, box.h - HINT_H);
@@ -180,17 +188,23 @@ export default function DraftNoteCard({
                 {/* the viewer's type, so the note reads the same before and
                     after it's saved; a ruled line rather than a box, because
                     this is somewhere to write rather than a note being fixed */}
-                <View style={[styles.captionBox, { borderBottomColor: colors.line }]}>
+                <View style={[styles.captionBox, { borderBottomColor: noteFocus.border }]}>
                   <TextInput
                     value={note}
                     onChangeText={onNoteChange}
                     placeholder="What's happening…"
-                    placeholderTextColor={colors.stoneDim}
+                    placeholderTextColor={noteFocus.placeholder}
                     multiline
                     scrollEnabled={false}
                     textAlignVertical="top"
+                    autoFocus={focusOnMount}
                     accessibilityLabel="Note"
                     style={[styles.noteText, styles.caption, { color: colors.textPrimary }]}
+                    onFocus={() => {
+                      setFocusOnMount(false);
+                      noteFocus.handlers.onFocus();
+                    }}
+                    onBlur={noteFocus.handlers.onBlur}
                   />
                 </View>
 

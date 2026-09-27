@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Keyboard, Platform, Pressable, Share, Text, View } from "react-native";
+import { Alert, Platform, Pressable, Share, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -36,19 +36,16 @@ export default function ViewNotes() {
     const router = useRouter();
     //* `id` is the note to open on; `folderId` scopes the list you can swipe
     //* through, so the same screen serves a folder and the whole gallery
-    const { id, folderId, edit } = useLocalSearchParams<{
+    const { id, folderId } = useLocalSearchParams<{
         id: string;
         folderId?: string;
-        edit?: string;
     }>();
 
     const {
         folders,
         notes,
         tags,
-        snippets,
         ready,
-        saveNoteAsync,
         deleteNotesAsync,
     } = useLibrary();
 
@@ -75,14 +72,6 @@ export default function ViewNotes() {
     //* the last note rather than jumping onto the next ad when one loads
     if (adShowing && endAd == null) setAdShowing(false);
 
-    //* the draft lives here rather than in ViewNote because the buttons that
-    //* commit and discard it are in this screen's header, not in the card
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState("");
-    //* same guard as useAddNote's `saving`: every await below is a chance for
-    //* a second tap to start a duplicate write (GitHub issue #4)
-    const [savingEdit, setSavingEdit] = useState(false);
-
     //* the note was deleted, or the folder emptied, while this screen was open
     useEffect(() => {
         if (ready && note == null) router.back();
@@ -102,72 +91,11 @@ export default function ViewNotes() {
         setCurrentId(scopedNotes[i].id);
     };
 
-    // --- editing -----------------------------------------------------------
-
-    //* opened from the gallery's held-tile menu, which asks for editing rather
-    //* than just viewing. Adjusted during render rather than in an effect: the
-    //* note arrives from the store a render later than the param does, and this
-    //* way the viewer's first painted frame is already the editing one
-    const [editRequested, setEditRequested] = useState(edit === "1");
-    if (editRequested && note != null) {
-        setEditRequested(false);
-        setDraft(note.note);
-        setNoteOpen(true);
-        setEditing(true);
-    }
-
-    const beginEdit = () => {
+    //* editing happens on the same screen a note is written on, with this
+    //* note loaded into it — the viewer's job is showing, not writing
+    const openEditor = () => {
         if (note == null) return;
-        setDraft(note.note);
-        //* you cannot edit what isn't on screen, so opening the note is part
-        //* of entering edit mode rather than something to ask the user for
-        setNoteOpen(true);
-        setEditing(true);
-    };
-
-    const endEdit = () => {
-        //* same reason as the snippet form: unmounting a focused TextInput can
-        //* leave the iOS keyboard up, here over a note that is no longer
-        //* editable. Both commit and discard come through here.
-        Keyboard.dismiss();
-        setEditing(false);
-        setDraft("");
-    };
-
-    const cancelEdit = () => {
-        //* nothing typed, nothing to lose — don't make them confirm away a
-        //* dialog they didn't earn
-        if (note == null || draft === note.note) {
-            endEdit();
-            return;
-        }
-        Alert.alert("Discard changes?", "Your edits to this note won't be saved.", [
-            { text: "Keep editing", style: "cancel" },
-            { text: "Discard", style: "destructive", onPress: endEdit },
-        ]);
-    };
-
-    const saveEditAsync = async () => {
-        if (note == null || savingEdit) return;
-        //* unchanged text would still cost a write, so treat it as the cancel
-        //* it effectively is
-        if (draft === note.note) {
-            endEdit();
-            return;
-        }
-        setSavingEdit(true);
-        try {
-            //* saveNoteAsync replaces by id, so this is an update, not a second
-            //* note — and every screen sees the new text without a reload
-            await saveNoteAsync({ ...note, note: draft });
-            endEdit();
-        } catch {
-            //* the write failed and the draft is still the only copy of it —
-            //* staying in edit mode is what keeps it from being thrown away
-            Alert.alert("Couldn't save", "That edit didn't save. Try again.");
-        } finally {
-            setSavingEdit(false);
-        }
+        router.push({ pathname: "/(tabs)/enter-note", params: { id: note.id } });
     };
 
     // --- deleting ----------------------------------------------------------
@@ -234,52 +162,10 @@ export default function ViewNotes() {
                 //* false. Only visible on a real Android surface, which is why it
                 //* survived until the first emulator run.
                 insetTop={Platform.OS !== "ios"}
-                //* while editing the arrow means "get me out of this edit",
-                //* not "leave the viewer" — leaving with the draft still in
-                //* hand would discard it with no warning at all
-                onBack={editing ? cancelEdit : () => router.back()}
+                onBack={() => router.back()}
                 right={
-                    editing ? (
-                        <View style={styles.headerRight}>
-                            {/* Discard sits left of commit and stays plain;
-                                only the check is filled, so the primary action
-                                is the one that reads as a button. */}
-                            <Pressable
-                                onPress={cancelEdit}
-                                hitSlop={8}
-                                accessibilityRole="button"
-                                accessibilityLabel="Cancel editing"
-                                style={({ pressed }) => [
-                                    styles.headerButton,
-                                    glass(colors),
-                                    { opacity: pressed ? 0.6 : 1 },
-                                ]}
-                            >
-                                <Feather name="x" size={16} color={colors.textPrimary} />
-                            </Pressable>
-
-                            <Pressable
-                                onPress={saveEditAsync}
-                                //* disabled rather than merely guarded, so the
-                                //* button also *looks* spent while it writes
-                                disabled={savingEdit}
-                                hitSlop={8}
-                                accessibilityRole="button"
-                                accessibilityLabel="Save the note"
-                                accessibilityState={{ disabled: savingEdit }}
-                                style={({ pressed }) => [
-                                    styles.headerButton,
-                                    glass(colors, { tint: colors.accent, strength: "fill" }),
-                                    { opacity: savingEdit ? 0.5 : pressed ? 0.75 : 1 },
-                                ]}
-                            >
-                                <Feather name="check" size={16} color={colors.onAccent} />
-                            </Pressable>
-                        </View>
-                    ) : adShowing ? (
-                        //* an ad page has no note to count, open, share, edit or delete
-                        null
-                    ) : (
+                    //* an ad page has no note to count, open, share, edit or delete
+                    adShowing ? null : (
                     <View style={styles.headerRight}>
                         <Text style={[styles.counter, { color: colors.stoneDim }]}>
                             {index + 1} / {scopedNotes.length}
@@ -334,7 +220,7 @@ export default function ViewNotes() {
                                     key: "edit",
                                     label: "Edit note",
                                     icon: "edit-2",
-                                    onPress: beginEdit,
+                                    onPress: openEditor,
                                 },
                                 {
                                     key: "delete",
@@ -359,10 +245,6 @@ export default function ViewNotes() {
                     colors={colors}
                     noteOpen={noteOpen}
                     onToggleNote={setNoteOpen}
-                    editing={editing}
-                    draft={draft}
-                    onDraftChange={setDraft}
-                    snippets={snippets}
                     endAd={endAd}
                     adShowing={adShowing}
                     onAdShowingChange={setAdShowing}
