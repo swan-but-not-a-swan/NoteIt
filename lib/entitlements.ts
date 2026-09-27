@@ -20,9 +20,11 @@ export const FREE_COMPARE_LIMIT = 4;
 
 // Whether Plus is on sale in this build. Off for the first App Store release,
 // because a subscription needs Apple's Paid Apps agreement, which isn't active
-// yet. While it is off nobody can hold Plus: RevenueCat is never configured,
-// ads and the compare limit apply to everyone, and every way into the paywall
-// is hidden — Apple rejects a purchase button that can't complete a purchase.
+// yet. While it is off nobody can hold Plus: entitlements are never read, ads
+// and the compare limit apply to everyone, and every way into the paywall is
+// hidden — Apple rejects a purchase button that can't complete a purchase.
+// RevenueCat itself is still configured, by lib/adTracking.ts, to report the
+// ads.
 // Flip it once the subscription exists in App Store Connect. Typed as boolean
 // so TypeScript doesn't treat the branches behind it as unreachable.
 export const PLUS_ON_SALE: boolean = false;

@@ -1,8 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform, View } from "react-native";
 import { BannerAd, BannerAdSize } from "react-native-google-mobile-ads";
 import type { ThemeColors } from "@/theme/colors";
 import { bannerAdUnitId, initializeAds } from "@/lib/ads";
+import {
+  AdFormat,
+  newImpressionId,
+  trackAdDisplayed,
+  trackAdFailedToLoad,
+  trackAdLoaded,
+  trackAdOpened,
+  trackAdRevenue,
+  type TrackedAd,
+} from "@/lib/adTracking";
 import { adBannerStripStyles as styles, AD_BAR_HEIGHT, AD_BORDER_WIDTH } from "@/theme/styles/app.styles";
 
 //* Tallest the card's banner may be, in dp. Without a cap an inline adaptive banner can
@@ -47,6 +57,9 @@ export default function AdBannerStrip({
   //* the inner width. Adaptive banners default to the full device width,
   //* which the card's side padding would clip, so the request waits for this
   const [width, setWidth] = useState<number | null>(null);
+  //* the ad currently in the slot, as RevenueCat knows it. A banner refreshes
+  //* itself, and every refresh is a new ad with an id of its own
+  const shownAd = useRef<TrackedAd | null>(null);
 
   // Initialising here rather than at app startup is deliberate: this
   // component only renders when hasPlus === false, so a subscriber never
@@ -78,6 +91,8 @@ export default function AdBannerStrip({
   }
 
   const bar = variant === "bar";
+  const unitId = bannerAdUnitId();
+  const placement = bar ? "viewer_bar" : "folders_list";
 
   if (failed) {
     //* the card simply goes; the bar still has to keep the screen clear of
@@ -119,7 +134,7 @@ export default function AdBannerStrip({
     >
       {ready && width != null && !suppressed && (
         <BannerAd
-          unitId={bannerAdUnitId()}
+          unitId={unitId}
           // Inline adaptive for both variants. It is the size Google documents
           // for scrolling content like the folders list, and it is the only
           // size that takes a maxHeight — an anchored banner picks its own
@@ -127,11 +142,32 @@ export default function AdBannerStrip({
           size={BannerAdSize.INLINE_ADAPTIVE_BANNER}
           width={width}
           maxHeight={bar ? AD_BAR_HEIGHT : AD_MAX_HEIGHT}
-          onAdLoaded={() => setLoaded(true)}
+          onAdLoaded={() => {
+            setLoaded(true);
+            shownAd.current = {
+              adFormat: AdFormat.banner,
+              adUnitId: unitId,
+              placement,
+              impressionId: newImpressionId(),
+            };
+            trackAdLoaded(shownAd.current);
+          }}
+          onAdImpression={() => {
+            if (shownAd.current != null) trackAdDisplayed(shownAd.current);
+          }}
+          onAdClicked={() => {
+            if (shownAd.current != null) trackAdOpened(shownAd.current);
+          }}
+          onPaid={(event) => {
+            if (shownAd.current != null) {
+              trackAdRevenue(shownAd.current, event.value, event.currency, event.precision);
+            }
+          }}
           onAdFailedToLoad={(error) => {
             // Logged rather than surfaced: a no-fill is not something the
             // person writing a journal entry can act on.
             console.warn("Banner ad failed to load.", error);
+            trackAdFailedToLoad({ adFormat: AdFormat.banner, adUnitId: unitId, placement });
             setFailed(true);
           }}
         />
