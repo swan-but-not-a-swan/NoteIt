@@ -166,72 +166,72 @@ export default function ViewNotes() {
                 right={
                     //* an ad page has no note to count, open, share, edit or delete
                     adShowing ? null : (
-                    <View style={styles.headerRight}>
-                        <Text style={[styles.counter, { color: colors.stoneDim }]}>
-                            {index + 1} / {scopedNotes.length}
-                        </Text>
+                        <View style={styles.headerRight}>
+                            <Text style={[styles.counter, { color: colors.stoneDim }]}>
+                                {index + 1} / {scopedNotes.length}
+                            </Text>
 
-                        {/* Lit while the note is showing, so the header says
+                            {/* Lit while the note is showing, so the header says
                             which of the two you are looking at without a label
                             that has to flip its wording to do it. */}
-                        <Pressable
-                            onPress={() => setNoteOpen(!noteOpen)}
-                            hitSlop={8}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: noteOpen }}
-                            accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
-                            style={[
-                                styles.headerButton,
-                                glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
-                            ]}
-                        >
-                            <Feather
-                                name="file-text"
-                                size={16}
-                                color={noteOpen ? colors.onAccent : colors.textPrimary}
+                            <Pressable
+                                onPress={() => setNoteOpen(!noteOpen)}
+                                hitSlop={8}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected: noteOpen }}
+                                accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
+                                style={[
+                                    styles.headerButton,
+                                    glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
+                                ]}
+                            >
+                                <Feather
+                                    name="file-text"
+                                    size={16}
+                                    color={noteOpen ? colors.onAccent : colors.textPrimary}
+                                />
+                            </Pressable>
+
+                            <Pressable
+                                onPress={handleShareAsync}
+                                hitSlop={8}
+                                accessibilityLabel="Share this picture-note"
+                                style={[styles.headerButton, glass(colors)]}
+                            >
+                                <Feather name="share" size={16} color={colors.textPrimary} />
+                            </Pressable>
+
+                            <OverflowMenu
+                                colors={colors}
+                                items={[
+                                    {
+                                        key: "add",
+                                        label: "Add picture-note",
+                                        icon: "plus",
+                                        //* defaults into the folder being viewed, so
+                                        //* adding from inside a folder stays in it
+                                        onPress: () =>
+                                            router.push({
+                                                pathname: "/(tabs)/enter-note",
+                                                params: folderId != null ? { folderId } : undefined,
+                                            }),
+                                    },
+                                    {
+                                        key: "edit",
+                                        label: "Edit note",
+                                        icon: "edit-2",
+                                        onPress: openEditor,
+                                    },
+                                    {
+                                        key: "delete",
+                                        label: "Delete note",
+                                        icon: "trash-2",
+                                        onPress: confirmDelete,
+                                        destructive: true,
+                                    },
+                                ]}
                             />
-                        </Pressable>
-
-                        <Pressable
-                            onPress={handleShareAsync}
-                            hitSlop={8}
-                            accessibilityLabel="Share this picture-note"
-                            style={[styles.headerButton, glass(colors)]}
-                        >
-                            <Feather name="share" size={16} color={colors.textPrimary} />
-                        </Pressable>
-
-                        <OverflowMenu
-                            colors={colors}
-                            items={[
-                                {
-                                    key: "add",
-                                    label: "Add picture-note",
-                                    icon: "plus",
-                                    //* defaults into the folder being viewed, so
-                                    //* adding from inside a folder stays in it
-                                    onPress: () =>
-                                        router.push({
-                                            pathname: "/(tabs)/enter-note",
-                                            params: folderId != null ? { folderId } : undefined,
-                                        }),
-                                },
-                                {
-                                    key: "edit",
-                                    label: "Edit note",
-                                    icon: "edit-2",
-                                    onPress: openEditor,
-                                },
-                                {
-                                    key: "delete",
-                                    label: "Delete note",
-                                    icon: "trash-2",
-                                    onPress: confirmDelete,
-                                    destructive: true,
-                                },
-                            ]}
-                        />
-                    </View>
+                        </View>
                     )
                 }
             />
