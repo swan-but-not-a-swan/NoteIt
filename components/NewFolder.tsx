@@ -1,4 +1,4 @@
-//! Manually reviewed since 15/09/2026
+
 
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
@@ -24,6 +24,8 @@ type Props = {
   onCropCancel: () => void;
   onCropConfirm: (croppedUri: string) => Promise<void>;
   onDelete?: () => void;
+  /** Exports the folder as it is saved, not with this dialog's unsaved edits. */
+  onExport?: () => void;
   error?: string;
   colors: ThemeColors;
   onCancel: () => void;
@@ -46,6 +48,7 @@ export default function NewFolder({
   onCropCancel,
   onCropConfirm,
   onDelete,
+  onExport,
   error,
   colors,
   onCancel,
@@ -78,14 +81,31 @@ export default function NewFolder({
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               {mode === "edit" ? "Edit folder" : "New folder"}
             </Text>
-            {mode === "edit" && onDelete != null && (
-              <Pressable
-                onPress={onDelete}
-                hitSlop={8}
-                style={[styles.deleteButton, glass(colors, { tint: colors.error })]}
-              >
-                <Feather name="trash-2" size={16} color={colors.error} />
-              </Pressable>
+            {mode === "edit" && (
+              <View style={styles.titleActions}>
+                {onExport != null && (
+                  <Pressable
+                    onPress={onExport}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Export folder"
+                    style={[styles.exportButton, glass(colors)]}
+                  >
+                    <Feather name="upload" size={16} color={colors.textPrimary} />
+                  </Pressable>
+                )}
+                {onDelete != null && (
+                  <Pressable
+                    onPress={onDelete}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete folder"
+                    style={[styles.deleteButton, glass(colors, { tint: colors.error })]}
+                  >
+                    <Feather name="trash-2" size={16} color={colors.error} />
+                  </Pressable>
+                )}
+              </View>
             )}
           </View>
 

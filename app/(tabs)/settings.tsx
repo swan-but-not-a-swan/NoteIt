@@ -10,11 +10,14 @@ import { glass } from "@/theme/glass";
 import TopBar, { TopBarIconButton } from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
 import SendFeedback from "@/components/SendFeedback";
+import ImportSummary from "@/components/ImportSummary";
+import SettingsActionRow from "@/components/SettingsActionRow";
 import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
 import { useLibrary } from "@/lib/LibraryContext";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { PLUS_ON_SALE } from "@/lib/entitlements";
+import { pickExportFileAsync, TransferError } from "@/lib/noteTransfer";
 import { settingsScreenStyles as styles } from "@/theme/styles/settings.styles";
 
 type ThemeOption = {
@@ -150,6 +153,25 @@ export default function Settings() {
 
     const canAddSnippet = newSnippetName.trim().length > 0;
 
+    // --- import ------------------------------------------------------------
+
+    //* only a picker that fails outright is reported here. Reading the file,
+    //* the preview and adding it are all the /import screen's
+    const [pickError, setPickError] = useState<string | undefined>(undefined);
+
+    const startImport = async () => {
+        let uri: string | null;
+        try {
+            uri = await pickExportFileAsync();
+        } catch (error) {
+            setPickError(error instanceof TransferError ? error.message : "Couldn't open the file picker.");
+            return;
+        }
+        //* cancelled — nothing happened
+        if (uri == null) return;
+        router.push({ pathname: "/import", params: { uri } });
+    };
+
     //* "Add" doesn't commit — it carries the name into the modal, which is
     //* where the body actually gets written
     const startWritingSnippet = () => {
@@ -282,6 +304,22 @@ export default function Settings() {
                 </View>
 
                 <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Data</Text>
+                    {/* Import lives here rather than on a note screen because
+                        it isn't about any one note — it drops a file's whole
+                        contents into the app. Exporting is the opposite: it is
+                        always about the thing you are looking at, so it sits in
+                        the viewer's and the folder's own menus. */}
+                    <SettingsActionRow
+                        icon="download"
+                        title="Import from a file"
+                        subtitle="Add picture-notes or a whole folder from a .noteit file."
+                        colors={colors}
+                        onPress={startImport}
+                    />
+                </View>
+
+                <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Snippets</Text>
                     <Text style={[styles.sectionHint, { color: colors.stone }]}>
                         Create reusable phrases to quickly drop into a picture-note while you&apos;re writing.
@@ -370,6 +408,16 @@ export default function Settings() {
                 visible={feedbackOpen}
                 colors={colors}
                 onClose={() => setFeedbackOpen(false)}
+            />
+
+            <ImportSummary
+                visible={pickError != null}
+                payload={null}
+                error={pickError}
+                busy={false}
+                colors={colors}
+                onCancel={() => setPickError(undefined)}
+                onConfirm={() => {}}
             />
 
             <NewSnippet

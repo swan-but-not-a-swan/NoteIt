@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, Share, Text, View } from "react-native";
+import { Alert, Platform, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
 import { glass } from "@/theme/glass";
-import { formatDayDate } from "@/lib/date";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
 import AdBannerStrip from "@/components/AdBannerStrip";
@@ -13,7 +12,9 @@ import OverflowMenu from "@/components/OverflowMenu";
 import { useEndAd } from "@/components/EndAd";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { useLibrary } from "@/lib/LibraryContext";
-import { NoteModel, TagModel } from "@/models/NoteModel";
+import { NoteModel } from "@/models/NoteModel";
+import { useExportTransfer } from "@/lib/useExportTransfer";
+import ExportProgress from "@/components/ExportProgress";
 import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 
 // The picture-note viewer screen: header, the card itself, the filmstrip and
@@ -98,6 +99,17 @@ export default function ViewNotes() {
         router.push({ pathname: "/(tabs)/enter-note", params: { id: note.id } });
     };
 
+    // --- exporting ---------------------------------------------------------
+
+    //* the hook guards a second tap while the file is still being written
+    const { exporting, progress: exportProgress, exportAsync, cancel: cancelExport } = useExportTransfer(tags);
+
+    //* a single note travels without its folder: on the way back in, the
+    //* receiver picks where it goes
+    const exportNoteAsync = async () => {
+        if (note != null) await exportAsync([note], null);
+    };
+
     // --- deleting ----------------------------------------------------------
 
     const confirmDelete = () => {
@@ -126,26 +138,6 @@ export default function ViewNotes() {
         await deleteNotesAsync([target]);
     };
 
-    const handleShareAsync = async () => {
-        if (note == null || Platform.OS === "web") return;
-        const noteTags = note.tagIds
-            .map((tagId) => tags.find((t) => t.id === tagId))
-            .filter((t): t is TagModel => t != null);
-        const shareText = [
-            note.note,
-            noteTags.length > 0 ? noteTags.map((t) => `#${t.title}`).join(" ") : null,
-            note.date.length > 0 ? formatDayDate(note.date) : null,
-        ]
-            .filter((s): s is string => s != null && s.length > 0)
-            .join("\n\n");
-
-        try {
-            await Share.share({ title, message: shareText });
-        } catch {
-            // user dismissed the share sheet — no-op
-        }
-    };
-
     const insets = useSafeAreaInsets();
 
     if (note == null) return <View style={[styles.screen, { backgroundColor: colors.bg }]} />;
@@ -166,72 +158,78 @@ export default function ViewNotes() {
                 right={
                     //* an ad page has no note to count, open, share, edit or delete
                     adShowing ? null : (
-                        <View style={styles.headerRight}>
-                            <Text style={[styles.counter, { color: colors.stoneDim }]}>
-                                {index + 1} / {scopedNotes.length}
-                            </Text>
+                    <View style={styles.headerRight}>
+                        <Text style={[styles.counter, { color: colors.stoneDim }]}>
+                            {index + 1} / {scopedNotes.length}
+                        </Text>
 
-                            {/* Lit while the note is showing, so the header says
+                        {/* Lit while the note is showing, so the header says
                             which of the two you are looking at without a label
                             that has to flip its wording to do it. */}
-                            <Pressable
-                                onPress={() => setNoteOpen(!noteOpen)}
-                                hitSlop={8}
-                                accessibilityRole="button"
-                                accessibilityState={{ selected: noteOpen }}
-                                accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
-                                style={[
-                                    styles.headerButton,
-                                    glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
-                                ]}
-                            >
-                                <Feather
-                                    name="file-text"
-                                    size={16}
-                                    color={noteOpen ? colors.onAccent : colors.textPrimary}
-                                />
-                            </Pressable>
-
-                            <Pressable
-                                onPress={handleShareAsync}
-                                hitSlop={8}
-                                accessibilityLabel="Share this picture-note"
-                                style={[styles.headerButton, glass(colors)]}
-                            >
-                                <Feather name="share" size={16} color={colors.textPrimary} />
-                            </Pressable>
-
-                            <OverflowMenu
-                                colors={colors}
-                                items={[
-                                    {
-                                        key: "add",
-                                        label: "Add picture-note",
-                                        icon: "plus",
-                                        //* defaults into the folder being viewed, so
-                                        //* adding from inside a folder stays in it
-                                        onPress: () =>
-                                            router.push({
-                                                pathname: "/(tabs)/enter-note",
-                                                params: folderId != null ? { folderId } : undefined,
-                                            }),
-                                    },
-                                    {
-                                        key: "edit",
-                                        label: "Edit note",
-                                        icon: "edit-2",
-                                        onPress: openEditor,
-                                    },
-                                    {
-                                        key: "delete",
-                                        label: "Delete note",
-                                        icon: "trash-2",
-                                        onPress: confirmDelete,
-                                        destructive: true,
-                                    },
-                                ]}
+                        <Pressable
+                            onPress={() => setNoteOpen(!noteOpen)}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: noteOpen }}
+                            accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
+                            style={[
+                                styles.headerButton,
+                                glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
+                            ]}
+                        >
+                            <Feather
+                                name="file-text"
+                                size={16}
+                                color={noteOpen ? colors.onAccent : colors.textPrimary}
                             />
-                        </View>
+                        </Pressable>
+
+                        {/* Exports the note as a .noteit file. It replaced
+                            sharing the note as text: one share button, and it
+                            sends the whole picture-note rather than its words. */}
+                        <Pressable
+                            onPress={exportNoteAsync}
+                            disabled={exporting}
+                            hitSlop={8}
+                            accessibilityRole="button"
+                            accessibilityLabel="Export this picture-note"
+                            accessibilityState={{ disabled: exporting, busy: exporting }}
+                            style={[styles.headerButton, glass(colors), { opacity: exporting ? 0.5 : 1 }]}
+                        >
+                            <Feather name="share" size={16} color={colors.textPrimary} />
+                        </Pressable>
+
+                        <OverflowMenu
+                            colors={colors}
+                            items={[
+                                {
+                                    key: "add",
+                                    label: "Add picture-note",
+                                    icon: "plus",
+                                    //* defaults into the folder being viewed, so
+                                    //* adding from inside a folder stays in it
+                                    onPress: () =>
+                                        router.push({
+                                            pathname: "/(tabs)/enter-note",
+                                            params: folderId != null ? { folderId } : undefined,
+                                        }),
+                                },
+                                {
+                                    key: "edit",
+                                    label: "Edit note",
+                                    icon: "edit-2",
+                                    onPress: openEditor,
+                                },
+                                {
+                                    key: "delete",
+                                    label: "Delete note",
+                                    icon: "trash-2",
+                                    onPress: confirmDelete,
+                                    destructive: true,
+                                },
+                            ]}
+                        />
+                    </View>
                     )
                 }
             />
@@ -268,6 +266,7 @@ export default function ViewNotes() {
                 <View style={{ height: insets.bottom }} />
             )}
 
+            <ExportProgress progress={exportProgress} colors={colors} onCancel={cancelExport} />
         </View>
     );
 }

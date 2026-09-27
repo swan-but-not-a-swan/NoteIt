@@ -13,6 +13,37 @@
       "bundleIdentifier": "com.smktechnologies.noteit",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "com.smktechnologies.noteit.export",
+            "UTTypeDescription": "NoteIt export",
+            "UTTypeConformsTo": [
+              "public.data",
+              "public.content"
+            ],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": [
+                "noteit"
+              ],
+              "public.mime-type": [
+                "application/x-noteit"
+              ]
+            }
+          }
+        ],
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "NoteIt export",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Owner",
+            "LSItemContentTypes": [
+              "com.smktechnologies.noteit.export"
+            ]
+          }
+        ],
+        "LSSupportsOpeningDocumentsInPlace": false
       }
     },
     "android": {
@@ -26,7 +57,47 @@
       "permissions": [
         "com.google.android.gms.permission.AD_ID"
       ],
-      "package": "com.smktechnologies.noteit"
+      "package": "com.smktechnologies.noteit",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "application/octet-stream"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "application/x-noteit"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "file",
+              "host": "*",
+              "mimeType": "*/*",
+              "pathPattern": ".*\\.noteit"
+            }
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -85,7 +156,8 @@
         {
           "userTrackingPermission": "Allows NoteIt to show more relevant ads. Your notes and photos are never used or shared."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

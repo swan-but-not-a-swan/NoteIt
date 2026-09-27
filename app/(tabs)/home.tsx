@@ -26,6 +26,8 @@ import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { deleteFileIfExists, moveAndGetImageUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
 import { NoteModel } from "@/models/NoteModel";
+import { useExportTransfer } from "@/lib/useExportTransfer";
+import ExportProgress from "@/components/ExportProgress";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 
@@ -333,6 +335,23 @@ export default function Home() {
         onMoved: () => void;
     } | null>(null);
 
+    // --- exporting ---------------------------------------------------------
+
+    //* notes picked in the gallery travel loose; a folder from its edit dialog
+    //* travels with its notes, so they land in a folder of the same name on the
+    //* other side
+    const { progress: exportProgress, exportAsync, cancel: cancelExport } = useExportTransfer(storedTags);
+
+    //* the folder as it is saved. The dialog closes first — like Cancel, so
+    //* edits still open in it are dropped — because iOS can't stack the export
+    //* dialog and then the share sheet on top of another modal
+    const exportEditingFolder = () => {
+        const folder = folders.find((f) => f.id === editingFolderId);
+        if (folder == null) return;
+        cancelNewFolder();
+        exportAsync(notes.filter((note) => note.folderId === folder.id), folder);
+    };
+
     const confirmDeleteNotes = (toDelete: NoteModel[]) => {
         if (toDelete.length === 0) return;
         Alert.alert(
@@ -458,6 +477,7 @@ export default function Home() {
                                         )
                                     }
                                     onMoveNotes={(notes, onMoved) => setPendingMove({ notes, onMoved })}
+                                    onExportNotes={(picked) => exportAsync(picked, null)}
                                     onShowAll={() => {
                                         //* forward, like the pill's arrow: the folder opens out into everything
                                         setTabDir("forward");
@@ -512,11 +532,14 @@ export default function Home() {
                 onCropCancel={() => setCropSourceUri(null)}
                 onCropConfirm={confirmCroppedThumbnail}
                 onDelete={editingFolderId != null ? confirmDeleteFolder : undefined}
+                onExport={editingFolderId != null ? exportEditingFolder : undefined}
                 error={newFolderError}
                 colors={colors}
                 onCancel={cancelNewFolder}
                 onSave={saveNewFolderAsync}
             />
+
+            <ExportProgress progress={exportProgress} colors={colors} onCancel={cancelExport} />
         </View>
     );
 }
