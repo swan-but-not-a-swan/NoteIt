@@ -212,7 +212,7 @@ export default function ViewNotes() {
                                     //* adding from inside a folder stays in it
                                     onPress: () =>
                                         router.push({
-                                            pathname: "/(tabs)/add-note",
+                                            pathname: "/(tabs)/enter-note",
                                             params: folderId != null ? { folderId } : undefined,
                                         }),
                                 },
