@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Image, Text, View } from "react-native";
 import {
   NativeAd,
+  NativeAdEventType,
   NativeAdView,
   NativeAsset,
   NativeAssetType,
@@ -10,6 +11,15 @@ import {
 } from "react-native-google-mobile-ads";
 import type { ThemeColors } from "@/theme/colors";
 import { initializeAds, nativeAdUnitId } from "@/lib/ads";
+import {
+  AdFormat,
+  trackAdDisplayed,
+  trackAdFailedToLoad,
+  trackAdLoaded,
+  trackAdOpened,
+  trackAdRevenue,
+  type TrackedAd,
+} from "@/lib/adTracking";
 import { endAdStyles as styles } from "@/theme/styles/note.styles";
 
 // The ad at the end of the picture-note viewer: one more page after the last
@@ -38,6 +48,8 @@ export function useEndAd(enabled: boolean, nearEnd: boolean): NativeAd | null {
     if (!enabled || !wanted) return;
     let cancelled = false;
     let loaded: NativeAd | null = null;
+    //* the ad's event listeners, dropped along with it
+    let listeners: { remove: () => void }[] = [];
 
     //* same gate as AdBannerStrip: consent is gathered before the first request
     initializeAds()
@@ -54,15 +66,33 @@ export function useEndAd(enabled: boolean, nearEnd: boolean): NativeAd | null {
         }
         loaded = result;
         setAd(result);
+
+        //* reported to RevenueCat under AdMob's own id for this response
+        const tracked: TrackedAd = {
+          adFormat: AdFormat.nativeAd,
+          adUnitId: result.adUnitId,
+          placement: "viewer_end",
+          impressionId: result.responseId,
+        };
+        trackAdLoaded(tracked);
+        listeners = [
+          result.addAdEventListener(NativeAdEventType.IMPRESSION, () => trackAdDisplayed(tracked)),
+          result.addAdEventListener(NativeAdEventType.CLICKED, () => trackAdOpened(tracked)),
+          result.addAdEventListener(NativeAdEventType.PAID, (paid) =>
+            trackAdRevenue(tracked, paid.value, paid.currencyCode, paid.precision),
+          ),
+        ];
       })
       .catch((error) => {
         //* no-fill is ordinary, and nothing the person can act on: the list
         //* simply ends at the last note, the way it does for Plus
         console.warn("Native ad failed to load; the viewer won't show an ad page.", error);
+        trackAdFailedToLoad({ adFormat: AdFormat.nativeAd, adUnitId: nativeAdUnitId(), placement: "viewer_end" });
       });
 
     return () => {
       cancelled = true;
+      for (const listener of listeners) listener.remove();
       //* a native ad holds native memory until it is destroyed
       if (loaded != null) loaded.destroy();
       setAd(null);

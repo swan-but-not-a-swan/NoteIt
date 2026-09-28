@@ -5,6 +5,7 @@ import { Pressable, Text, View } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { topBarStyles as styles } from "@/theme/styles/app.styles";
 
 type Props = {
@@ -55,7 +56,7 @@ export function TopBarIconButton({ icon, accessibilityLabel, colors, onPress }: 
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={[styles.iconButton, { backgroundColor: colors.surface }]}
+      style={[styles.iconButton, glass(colors)]}
     >
       <Feather name={icon} size={17} color={colors.textPrimary} />
     </Pressable>
@@ -79,7 +80,7 @@ export function SettingsButton({ colors, onPress }: SettingsButtonProps) {
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel="Settings"
-      style={[styles.iconButton, { backgroundColor: colors.surface }]}
+      style={[styles.iconButton, glass(colors)]}
     >
       <Feather name="settings" size={17} color={colors.textPrimary} />
     </Pressable>

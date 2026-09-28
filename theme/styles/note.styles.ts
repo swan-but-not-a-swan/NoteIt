@@ -15,7 +15,7 @@ export const noteScreenStyles = StyleSheet.create({
     //* tighter than the 10 a lone share button could afford
     gap: 8,
   },
-  counter: common.regular12,
+  counter: common.regular11,
   headerButton: common.iconButton38,
   body: {
     flex: 1,
@@ -80,7 +80,7 @@ export const viewNoteStyles = StyleSheet.create({
   },
   datePillLabel: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 11,
+    fontSize: 10,
     color: "#fff",
   },
   noteArea: common.fill,
@@ -99,13 +99,13 @@ export const viewNoteStyles = StyleSheet.create({
   },
   hintText: {
     fontFamily: fonts.frauncesMedium,
-    fontSize: 20,
-    lineHeight: 22,
+    fontSize: 19,
+    lineHeight: 21,
   },
   noteText: {
     fontFamily: fonts.frauncesMedium,
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: 21,
+    lineHeight: 26,
   },
   //* same pill as AddNote's row — one snippet chip should look like a snippet
   //* chip wherever you meet it
@@ -122,14 +122,14 @@ export const viewNoteStyles = StyleSheet.create({
     //* one-line note in the middle of a 120pt box
     textAlignVertical: "top",
   },
-  noteDate: common.semiBold11_5,
+  noteDate: common.semiBold10_5,
   tagsRow: common.wrapRow6,
   tagPill: {
     borderRadius: 999,
     paddingVertical: 4,
     paddingHorizontal: 10,
   },
-  tagLabel: common.semiBold11_5,
+  tagLabel: common.semiBold10_5,
 });
 
 //* components/FilmStrip.tsx
@@ -173,11 +173,11 @@ export const endAdStyles = StyleSheet.create({
   },
   badgeLabel: {
     fontFamily: fonts.interBold,
-    fontSize: 11,
+    fontSize: 10,
   },
   advertiser: {
     fontFamily: fonts.interSemiBold,
-    fontSize: 12,
+    fontSize: 11,
     flexShrink: 1,
   },
   //* takes whatever height the rows leave. NativeMediaView sets an aspectRatio
@@ -205,10 +205,10 @@ export const endAdStyles = StyleSheet.create({
   },
   headline: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 18,
-    lineHeight: 22,
+    fontSize: 17,
+    lineHeight: 21,
   },
-  body: common.regular13,
+  body: common.regular12,
   //* padding on the Text itself rather than a Pressable around it: the SDK
   //* handles the click on the registered view, so the whole button has to be
   //* that view
@@ -218,173 +218,223 @@ export const endAdStyles = StyleSheet.create({
     paddingVertical: 13,
     textAlign: "center",
     fontFamily: fonts.interBold,
-    fontSize: 14,
+    fontSize: 13,
   },
 });
 
-//* components/AddNote.tsx
-export const addNoteStyles = StyleSheet.create({
-  flex: common.fill,
-  root: {
-    flex: 1,
-    justifyContent: "flex-end",
+//* app/(tabs)/enter-note.tsx
+/** Horizontal inset for the whole screen — header, body, pills and footer. */
+const ADD_NOTE_SIDE_PAD = 18;
+
+export const addNoteScreenStyles = StyleSheet.create({
+  screen: common.fill,
+  //* the viewer's note toggle, same shape as TopBar's own buttons beside it
+  headerButton: common.iconButton38,
+  body: {
+    paddingHorizontal: ADD_NOTE_SIDE_PAD,
+    paddingBottom: 10,
+    gap: 14,
   },
-  backdrop: {
+  //* the empty state is the screen: a note without a picture isn't a
+  //* picture-note, so the drop zone takes the room the photo will
+  pickButton: {
+    height: 330,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+  },
+  pickLabel: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 14,
+  },
+  pickHint: {
+    fontFamily: fonts.interRegular,
+    fontSize: 11,
+  },
+  //* the viewer's date line: same weight, size and colour, and above the note
+  dateLine: common.semiBold10_5,
+  //* no box around the caption — a hairline under it, the way a page rules a
+  //* line to write on
+  captionBox: {
+    borderBottomWidth: 1,
+    paddingBottom: 12,
+  },
+  //* the viewer's note type, so the text reads the same before and after saving
+  caption: {
+    fontFamily: fonts.frauncesMedium,
+    fontSize: 21,
+    lineHeight: 26,
+    minHeight: 52,
+    padding: 0,
+    textAlignVertical: "top",
+  },
+  snippets: common.wrapRow6,
+  snippetChip: common.snippetChip,
+  snippetLabel: common.snippetLabel,
+  tagRow: common.wrapRow6,
+  //* the viewer's tag pill, plus room for the remove cross
+  tagPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingLeft: 10,
+    paddingRight: 7,
+  },
+  tagLabel: common.semiBold10_5,
+  //* whichever foot pill is open drops its panel right above the pills, so
+  //* the thing you tapped and the thing that opened stay next to each other
+  panel: {
+    marginHorizontal: ADD_NOTE_SIDE_PAD,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+  },
+  panelLabel: {
+    fontFamily: fonts.interBold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  panelChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  panelChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+  },
+  panelChipLabel: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 12,
+  },
+  tagInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  tagInput: {
+    flex: 1,
+    fontFamily: fonts.interRegular,
+    fontSize: 12.5,
+    paddingVertical: 9,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dateValue: {
+    fontFamily: fonts.interRegular,
+    fontSize: 13,
+  },
+  footPills: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: ADD_NOTE_SIDE_PAD,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  footPill: {
+    flex: 1,
+    height: 40,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  footPillLabel: {
+    flexShrink: 1,
+    fontFamily: fonts.interSemiBold,
+    fontSize: 11.5,
+  },
+  error: {
+    fontFamily: fonts.interRegular,
+    fontSize: 11.5,
+    paddingHorizontal: ADD_NOTE_SIDE_PAD,
+    marginBottom: 10,
+  },
+  footer: {
+    paddingHorizontal: ADD_NOTE_SIDE_PAD,
+    gap: 10,
+  },
+  saveButton: {
+    height: 50,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  saveLabel: {
+    fontFamily: fonts.interBold,
+    fontSize: 14,
+  },
+  footnote: {
+    fontFamily: fonts.interRegular,
+    fontSize: 10,
+    lineHeight: 16,
+  },
+});
+
+//* components/DraftNoteCard.tsx — the viewer's card for a note not saved yet.
+//* Everything it shares with ViewNote points at viewNoteStyles, so a change to
+//* the viewer's layout carries over rather than drifting.
+export const draftNoteCardStyles = StyleSheet.create({
+  root: viewNoteStyles.root,
+  viewport: viewNoteStyles.viewport,
+  noteArea: viewNoteStyles.noteArea,
+  noteContent: viewNoteStyles.noteContent,
+  photo: viewNoteStyles.photo,
+  photoFill: viewNoteStyles.photoFill,
+  media: viewNoteStyles.media,
+  datePill: viewNoteStyles.datePill,
+  datePillLabel: viewNoteStyles.datePillLabel,
+  noteDate: viewNoteStyles.noteDate,
+  noteText: viewNoteStyles.noteText,
+  hintText: viewNoteStyles.hintText,
+  snippets: viewNoteStyles.snippets,
+  snippetChip: viewNoteStyles.snippetChip,
+  snippetLabel: viewNoteStyles.snippetLabel,
+  tagsRow: viewNoteStyles.tagsRow,
+  tagLabel: viewNoteStyles.tagLabel,
+  tagPill: addNoteScreenStyles.tagPill,
+  captionBox: addNoteScreenStyles.captionBox,
+  //* laid over noteText: the input's own padding and height rules only
+  caption: {
+    padding: 0,
+    minHeight: 52,
+    textAlignVertical: "top",
+  },
+  //* the strip's active-tile border (filmStripStyles.tile), drawn over the
+  //* photo's edge since there is no strip tile to hand off to
+  tileBorder: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    borderWidth: 2,
   },
-  sheet: {
-    maxHeight: "88%",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    borderBottomWidth: 0,
-    paddingHorizontal: 20,
-    paddingTop: 18,
-  },
-  header: common.spacedRow16,
-  title: {
-    fontFamily: fonts.frauncesSemiBold,
-    fontSize: 19,
-  },
-  closeButton: common.iconButton36,
-  pickButton: {
-    width: "100%",
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderRadius: 14,
-    paddingVertical: 20,
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 18,
-  },
-  pickButtonLabel: common.semiBold12_5,
-  mediaWrap: {
-    marginBottom: 18,
-  },
-  mediaPreview: {
-    width: "100%",
-    height: 200,
-    borderRadius: 14,
-    overflow: "hidden",
-    backgroundColor: "#000",
-  },
-  mediaImage: common.fullSize,
-  removeMediaButton: {
+  tileCover: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  label: common.sectionLabel,
-  noteInput: {
-    marginTop: 8,
-    marginBottom: 18,
-    minHeight: 76,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontFamily: fonts.interRegular,
-    fontSize: 14,
-  },
-  snippets: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: -10,
-    marginBottom: 18,
-  },
-  snippetChip: common.snippetChip,
-  snippetLabel: common.snippetLabel,
-  dateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginTop: 8,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  dateLabel: {
-    fontFamily: fonts.interRegular,
-    fontSize: 14,
-  },
-  tagsBox: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    gap: 6,
-    marginTop: 8,
-    marginBottom: 18,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  tagPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 999,
-    paddingVertical: 5,
-    paddingLeft: 10,
-    paddingRight: 6,
-  },
-  tagLabel: common.semiBold12_5,
-  tagInput: {
-    flex: 1,
-    minWidth: 90,
-    fontFamily: fonts.interRegular,
-    fontSize: 13,
-    paddingVertical: 5,
-    paddingHorizontal: 4,
-  },
-  storedTagPills: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: -10,
-    marginBottom: 18,
-  },
-  storedTagPill: common.pill,
-  //* text inside the stored-tag and folder pills; colour depends on selection,
-  //* so it's applied at the call site
-  pillLabel: common.semiBold12_5,
-  folderPills: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  folderPill: common.pill,
-  error: common.errorText,
-  saveButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 12,
-    paddingVertical: 13,
-  },
-  saveButtonBusy: {
-    opacity: 0.7,
-  },
-  saveButtonLabel: {
-    fontFamily: fonts.interBold,
-    fontSize: 14,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
 });
 

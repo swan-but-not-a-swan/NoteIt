@@ -11,6 +11,8 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
+import GlassSurface from "./GlassSurface";
 import type { FolderModel } from "@/models/FolderModel";
 import { bottomTabBarStyles as styles } from "@/theme/styles/app.styles";
 
@@ -30,6 +32,10 @@ type Props = {
 // How far up the bar needs to be swiped before releasing counts as
 // "swiped up" rather than "dragged and gave up".
 const SWIPE_TRIGGER_DISTANCE = 44;
+
+/** The dock's gap to the screen's bottom edge where there's no safe-area inset
+ *  to sit on. The side gaps are in the stylesheet. */
+const DOCK_EDGE_GAP = 12;
 
 // Fully controlled, same as NewFolder/TopBar — this component only renders
 // what it's given and reports taps back up; the screen (or router) owns
@@ -78,97 +84,93 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
 
   return (
     <GestureDetector gesture={swipeUpGesture}>
-      <View
-        style={[
-          styles.row,
-          {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.line,
-            paddingBottom: insets.bottom + 10,
-          },
-        ]}
-      >
-        <TabButton
-          icon="folder"
-          label="Folders"
-          active={activeTab === "folders"}
-          colors={colors}
-          onPress={() => onSelectTab("folders")}
-        />
+      {/* the full-width strip only holds the dock off the screen's edges; the
+          pages show through everything around it */}
+      <View style={[styles.dockWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : DOCK_EDGE_GAP }]}>
+        {/* real Liquid Glass where iOS has it, the painted one everywhere
+            else — the dock is the app's most-seen chrome, so it is the surface
+            worth spending the native material on */}
+        <GlassSurface colors={colors} lift="float" style={styles.dock}>
+          <DockButton
+            icon="folder"
+            label="Folders"
+            active={activeTab === "folders"}
+            colors={colors}
+            onPress={() => onSelectTab("folders")}
+          />
 
-        <View style={styles.addSlot}>
-          <Animated.View style={[styles.hint, hintStyle]}>
-            <View style={[styles.hintPill, { backgroundColor: colors.bg, borderColor: colors.line }]}>
-              <Text style={[styles.hintLabel, { color: colors.accent }]}>
-                {readyToRelease ? "Release to add" : "Swipe up to add note"}
-              </Text>
-            </View>
-          </Animated.View>
-
-          <Pressable onPress={onAdd} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add a picture-note">
-            <Animated.View
-              style={[
-                styles.addButton,
-                addButtonStyle,
-                {
-                  backgroundColor: colors.accent,
-                  // boxShadow folds shadowColor/Opacity/Radius/Offset and
-                  // Android's elevation into one cross-platform prop, so the
-                  // tint and its alpha combine into a single colour here.
-                  boxShadow: [
-                    { offsetX: 0, offsetY: 5, blurRadius: 10, color: hexToRgba(colors.accent, 0.35) },
-                  ],
-                },
-              ]}
-            >
-              <Feather name="plus" size={27} color={colors.onAccent} />
+          <View style={styles.addSlot}>
+            <Animated.View style={[styles.hint, hintStyle]}>
+              <View style={[styles.hintPill, { backgroundColor: colors.bg, borderColor: colors.line }]}>
+                <Text style={[styles.hintLabel, { color: colors.accent }]}>
+                  {readyToRelease ? "Release to add" : "Swipe up to add note"}
+                </Text>
+              </View>
             </Animated.View>
-          </Pressable>
-        </View>
 
-        <TabButton
-          icon="image"
-          iconNode={
-            galleryFolder != null ? (
-              <FolderTabIcon folder={galleryFolder} active={activeTab === "gallery"} colors={colors} />
-            ) : undefined
-          }
-          label={galleryFolder != null ? galleryFolder.name : "Gallery"}
-          active={activeTab === "gallery"}
-          colors={colors}
-          onPress={() => onSelectTab("gallery")}
-        />
+            <Pressable onPress={onAdd} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add a picture-note">
+              <Animated.View
+                style={[
+                  styles.addButton,
+                  addButtonStyle,
+                  glass(colors, { tint: colors.accent, strength: "fill" }),
+                ]}
+              >
+                <Feather name="plus" size={25} color={colors.onAccent} />
+              </Animated.View>
+            </Pressable>
+          </View>
+
+          <DockButton
+            icon="image"
+            iconNode={
+              galleryFolder != null ? (
+                <FolderTabIcon folder={galleryFolder} active={activeTab === "gallery"} colors={colors} />
+              ) : undefined
+            }
+            label={galleryFolder != null ? galleryFolder.name : "Gallery"}
+            active={activeTab === "gallery"}
+            colors={colors}
+            onPress={() => onSelectTab("gallery")}
+          />
+        </GlassSurface>
       </View>
     </GestureDetector>
   );
 }
 
-type TabButtonProps = {
+type DockButtonProps = {
   icon: FeatherIconName;
   /** Drawn instead of `icon` when given — the scoped folder's cover. */
   iconNode?: ReactNode;
+  /** Not shown — the dock is icons only — but still what a screen reader says. */
   label: string;
   active: boolean;
   colors: ThemeColors;
   onPress: () => void;
 };
 
-function TabButton({ icon, iconNode, label, active, colors, onPress }: TabButtonProps) {
-  const tint = active ? colors.accent : colors.stoneDim;
+//* icon only, like the dock it's modelled on. With no label to colour, the
+//* tab you're on is marked by a soft lens of the accent behind its icon
+function DockButton({ icon, iconNode, label, active, colors, onPress }: DockButtonProps) {
   return (
     <Pressable
       onPress={onPress}
       hitSlop={8}
-      style={styles.tab}
+      style={styles.dockSlot}
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
     >
-      {iconNode ?? <Feather name={icon} size={20} color={tint} />}
-      {/* one line: a folder name can be as long as the user likes */}
-      <Text style={[styles.tabLabel, { color: tint }]} numberOfLines={1}>
-        {label}
-      </Text>
+      <View style={styles.dockButton}>
+        {/* a layer of its own that fades rather than a background that
+            changes: on Android, changing a rounded view's background colour
+            after it has drawn loses the rounding */}
+        <View
+          style={[styles.dockLens, { backgroundColor: hexToRgba(colors.accent, 0.16), opacity: active ? 1 : 0 }]}
+        />
+        {iconNode ?? <Feather name={icon} size={24} color={active ? colors.accent : colors.stone} />}
+      </View>
     </Pressable>
   );
 }

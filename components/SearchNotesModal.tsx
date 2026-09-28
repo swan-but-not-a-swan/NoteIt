@@ -11,7 +11,9 @@ import {
 import { Feather } from "@react-native-vector-icons/feather/static";
 import Animated, { SlideInUp } from "react-native-reanimated";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { hexToRgba, LIGHT_THEME, type ThemeColors } from "@/theme/colors";
+import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
+import { useFieldFocus } from "@/theme/focus";
+import { glass } from "@/theme/glass";
 import { formatDayDate, todayISO } from "@/lib/date";
 import { EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
 import { withRange } from "@/lib/dateHelper";
@@ -57,6 +59,7 @@ export default function SearchNotesModal({
   folders = [],
   showFolders = false,
 }: Props) {
+  const textFocus = useFieldFocus(colors);
   //* web has no native date control; say so once here rather than silently
   //* doing nothing when a date field is tapped
   const [dateHint, setDateHint] = useState<string | null>(null);
@@ -97,7 +100,7 @@ export default function SearchNotesModal({
               onPress={onClose}
               hitSlop={8}
               accessibilityLabel="Close search"
-              style={[styles.closeButton, { backgroundColor: colors.surface }]}
+              style={[styles.closeButton, glass(colors)]}
             >
               <Feather name="x" size={15} color={colors.textPrimary} />
             </Pressable>
@@ -115,16 +118,17 @@ export default function SearchNotesModal({
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.label, { color: colors.stoneDim }]}>Text</Text>
-            <View style={[styles.field, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-              <Feather name="search" size={15} color={colors.stoneDim} />
+            <View style={[styles.field, glass(colors), { borderColor: textFocus.border }]}>
+              <Feather name="search" size={15} color={textFocus.focused ? colors.stone : colors.stoneDim} />
               <TextInput
                 value={query.text}
                 onChangeText={(text) => onQueryChange({ ...query, text })}
                 placeholder="Words in a note or tag"
-                placeholderTextColor={colors.stoneDim}
+                placeholderTextColor={textFocus.placeholder}
                 returnKeyType="search"
                 autoCorrect={false}
                 style={[styles.input, { color: colors.textPrimary }]}
+                {...textFocus.handlers}
               />
               {query.text.length > 0 && (
                 <Pressable onPress={() => onQueryChange({ ...query, text: "" })} hitSlop={8}>
@@ -144,10 +148,7 @@ export default function SearchNotesModal({
                       onPress={() => toggleTag(tag.id)}
                       style={[
                         styles.tagChip,
-                        {
-                          backgroundColor: active ? hexToRgba(colors.teal, 0.18) : colors.surface,
-                          borderColor: active ? colors.teal : colors.line,
-                        },
+                        glass(colors, active ? { tint: colors.teal } : undefined),
                       ]}
                     >
                       <Feather name="tag" size={12} color={active ? colors.teal : colors.stone} />
@@ -225,7 +226,10 @@ export default function SearchNotesModal({
                 Clear all
               </Text>
             </Pressable>
-            <Pressable onPress={onClose} style={[styles.confirm, { backgroundColor: colors.accent }]}>
+            <Pressable
+              onPress={onClose}
+              style={[styles.confirm, glass(colors, { tint: colors.accent, strength: "fill" })]}
+            >
               <Text style={[styles.confirmLabel, { color: colors.onAccent }]}>
                 Show {resultCount} {resultCount === 1 ? "result" : "results"}
               </Text>
@@ -257,10 +261,7 @@ function FolderChip({ label, icon, tint, active, colors, onPress }: FolderChipPr
       accessibilityLabel={`Folder ${label}`}
       style={[
         styles.tagChip,
-        {
-          backgroundColor: active ? hexToRgba(tint, 0.18) : colors.surface,
-          borderColor: active ? tint : colors.line,
-        },
+        glass(colors, active ? { tint } : undefined),
       ]}
     >
       <Feather name={icon} size={12} color={active ? tint : colors.stone} />
@@ -308,7 +309,7 @@ function DateField({ caption, value, colors, onChange, onUnsupported }: DateFiel
   return (
     <View style={styles.dateCol}>
       <Text style={[styles.dateCaption, { color: colors.stone }]}>{caption}</Text>
-      <View style={[styles.dateBox, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+      <View style={[styles.dateBox, glass(colors)]}>
         <Feather name="calendar" size={14} color={colors.stone} />
 
         {!set ? (

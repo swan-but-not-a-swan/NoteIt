@@ -20,8 +20,14 @@ import { ICON_FONTS } from "@/theme/iconFont";
 import { ThemeProvider, useTheme } from "@/theme/ThemeContext";
 import { EntitlementsProvider } from "@/lib/EntitlementsContext";
 import { LibraryProvider, useLibrary } from "@/lib/LibraryContext";
+import { sweepTransferCache } from "@/lib/noteTransfer";
 
 SplashScreen.preventAutoHideAsync();
+
+//* leftovers from earlier exports and previews. Here, at load, rather than in
+//* an effect: a file opened from another app can make /import the first screen,
+//* and its preview must not start unpacking before this has cleared the way
+sweepTransferCache();
 
 // Split out of RootLayout because useTheme() has to run *below* the provider
 // — a component can't consume a context it renders itself. Everything that
@@ -93,6 +99,9 @@ function AppShell() {
             that doesn't affect routing/rendering either way. */}
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
+          {/* the preview of a .noteit file slides up over whatever opened
+              it — Settings today, another app later */}
+          <Stack.Screen name="import" options={{ animation: "slide_from_bottom" }} />
         </Stack>
       </SafeAreaProvider>
     </GestureHandlerRootView>

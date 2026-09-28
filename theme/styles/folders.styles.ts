@@ -6,11 +6,14 @@ import { fonts } from "@/theme/fonts";
 import { common } from "@/theme/styles/common.styles";
 
 //* components/FoldersList.tsx
+export const FOLDERS_LIST_PADDING = 18;
+
 export const foldersListStyles = StyleSheet.create({
   scroll: common.fill,
   content: {
-    paddingHorizontal: 18,
-    paddingBottom: 18,
+    paddingHorizontal: FOLDERS_LIST_PADDING,
+    //* plus the floating tab bar's height, added at the call site
+    paddingBottom: FOLDERS_LIST_PADDING,
     gap: 10,
   },
   item: common.gap10,
@@ -25,7 +28,7 @@ export const foldersListStyles = StyleSheet.create({
     gap: 8,
     marginTop: 4,
   },
-  newFolderLabel: common.semiBold13_5,
+  newFolderLabel: common.semiBold12_5,
 });
 
 //* components/Folder.tsx
@@ -55,11 +58,11 @@ export const folderStyles = StyleSheet.create({
   info: common.fillShrinkable,
   name: {
     fontFamily: fonts.frauncesSemiBold,
-    fontSize: 16.5,
+    fontSize: 15.5,
   },
   count: {
     fontFamily: fonts.interRegular,
-    fontSize: 12.5,
+    fontSize: 11.5,
     marginTop: 3,
   },
   editButton: common.iconButton36,
@@ -74,6 +77,13 @@ export const newFolderStyles = StyleSheet.create({
   card: common.dialogCard,
   titleRow: common.spacedRow16,
   title: common.dialogTitle,
+  //* export and delete, side by side at the end of the title row
+  titleActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  exportButton: common.iconButton30,
   deleteButton: common.iconButton30,
   nameRow: {
     flexDirection: "row",
@@ -108,7 +118,7 @@ export const newFolderStyles = StyleSheet.create({
     alignSelf: "flex-start",
     marginBottom: 18,
   },
-  removeThumbnailLabel: common.regular12,
+  removeThumbnailLabel: common.regular11,
   input: {
     flex: 1,
     borderWidth: 1,
@@ -116,7 +126,7 @@ export const newFolderStyles = StyleSheet.create({
     paddingVertical: 11,
     paddingHorizontal: 14,
     fontFamily: fonts.interRegular,
-    fontSize: 14,
+    fontSize: 13,
   },
   label: common.sectionLabel,
   swatches: {
@@ -135,7 +145,7 @@ export const newFolderStyles = StyleSheet.create({
   error: common.errorText,
   buttons: common.row10,
   button: common.dialogButton,
-  buttonLabel: common.semiBold13_5,
+  buttonLabel: common.semiBold12_5,
 });
 
 //* app/(tabs)/folder/[id].tsx
@@ -177,6 +187,6 @@ export const moveNotesModalStyles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     fontFamily: fonts.interSemiBold,
-    fontSize: 14,
+    fontSize: 13,
   },
 });

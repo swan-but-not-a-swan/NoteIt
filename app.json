@@ -3,7 +3,7 @@
     "name": "NoteIt",
     "slug": "noteit",
     "owner": "reacttut",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "noteit",
@@ -13,6 +13,37 @@
       "bundleIdentifier": "com.smktechnologies.noteit",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "UTExportedTypeDeclarations": [
+          {
+            "UTTypeIdentifier": "com.smktechnologies.noteit.export",
+            "UTTypeDescription": "NoteIt export",
+            "UTTypeConformsTo": [
+              "public.data",
+              "public.content"
+            ],
+            "UTTypeTagSpecification": {
+              "public.filename-extension": [
+                "noteit"
+              ],
+              "public.mime-type": [
+                "application/x-noteit"
+              ]
+            }
+          }
+        ],
+        "CFBundleDocumentTypes": [
+          {
+            "CFBundleTypeName": "NoteIt export",
+            "CFBundleTypeRole": "Viewer",
+            "LSHandlerRank": "Owner",
+            "LSItemContentTypes": [
+              "com.smktechnologies.noteit.export"
+            ]
+          }
+        ],
+        "LSSupportsOpeningDocumentsInPlace": false
       }
     },
     "android": {
@@ -26,7 +57,47 @@
       "permissions": [
         "com.google.android.gms.permission.AD_ID"
       ],
-      "package": "com.smktechnologies.noteit"
+      "package": "com.smktechnologies.noteit",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "application/octet-stream"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "content",
+              "mimeType": "application/x-noteit"
+            }
+          ]
+        },
+        {
+          "action": "VIEW",
+          "category": [
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "file",
+              "host": "*",
+              "mimeType": "*/*",
+              "pathPattern": ".*\\.noteit"
+            }
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -34,6 +105,7 @@
     },
     "plugins": [
       "expo-router",
+      "./plugins/withFasterBottomSlide",
       [
         "expo-splash-screen",
         {
@@ -64,7 +136,7 @@
       [
         "react-native-google-mobile-ads",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "androidAppId": "ca-app-pub-7571874738779847~5929086231",
           "iosAppId": "ca-app-pub-7571874738779847~7658033088",
           "skAdNetworkItems": [
             "cstr6suwn9.skadnetwork"
@@ -84,7 +156,8 @@
         {
           "userTrackingPermission": "Allows NoteIt to show more relevant ads. Your notes and photos are never used or shared."
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "experiments": {
       "typedRoutes": true,

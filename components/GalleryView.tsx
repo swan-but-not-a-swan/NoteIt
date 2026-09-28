@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, Text, useWindowDimensions, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { FREE_COMPARE_LIMIT, PLUS_ON_SALE } from "@/lib/entitlements";
 import { EMPTY_QUERY, filterNotes, isEmptyQuery } from "@/lib/noteHelper";
@@ -11,11 +12,13 @@ import type { FolderModel } from "@/models/FolderModel";
 import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import GalleryGrid from "./GalleryGrid";
 import GalleryToolbar from "./GalleryToolbar";
+import HeldNotePreview from "./HeldNotePreview";
 import OverflowMenu, { anchorFor, OverflowMenuCard, type MenuAnchor } from "./OverflowMenu";
 import * as Haptics from "expo-haptics";
 import GlassPill from "./GlassPill";
 import SearchNotesModal from "./SearchNotesModal";
-import { galleryViewStyles as styles } from "@/theme/styles/gallery.styles";
+import { BottomBarInsetContext, useBottomBarInset } from "@/lib/BottomBarInset";
+import { galleryViewStyles as styles, SELECT_BAR_GAP, SHOW_ALL_DOCK_LIFT } from "@/theme/styles/gallery.styles";
 
 type Props = {
   notes: NoteModel[];
@@ -38,6 +41,8 @@ type Props = {
    *  run once they have actually moved — picking a folder can be cancelled,
    *  and a cancelled move should leave the selection as it was. */
   onMoveNotes?: (notes: NoteModel[], onMoved: () => void) => void;
+  /** Exports the picked notes as one .noteit file, from the More menu. */
+  onExportNotes?: (notes: NoteModel[]) => void;
 };
 
 export default function GalleryView({
@@ -51,10 +56,12 @@ export default function GalleryView({
   onShowAll,
   onDeleteNotes,
   onMoveNotes,
+  onExportNotes,
   onEditNote,
 }: Props) {
   const { hasPlus, openPaywall } = useEntitlements();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const bottomBarInset = useBottomBarInset();
 
   const [query, setQuery] = useState<NoteQuery>(EMPTY_QUERY);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -174,20 +181,24 @@ export default function GalleryView({
         selectMode={selectMode}
         onToggleSelectMode={toggleSelectMode}
       />
-      <GalleryGrid
-        notes={visibleNotes}
-        colors={colors}
-        filtered={!isEmptyQuery(query)}
-        selectionMode={selectMode}
-        selectedIds={selectedIds}
-        onToggleSelect={toggleNoteSelected}
-        onOpenNote={onOpenNote}
-        onLongPressNote={onLongPressNote}
-      />
+      {/* the select sheet stands on the tab bar, so while it's up the grid
+          ends above both and has nothing extra to clear */}
+      <BottomBarInsetContext.Provider value={selectMode ? 0 : bottomBarInset}>
+        <GalleryGrid
+          notes={visibleNotes}
+          colors={colors}
+          filtered={!isEmptyQuery(query)}
+          selectionMode={selectMode}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleNoteSelected}
+          onOpenNote={onOpenNote}
+          onLongPressNote={onLongPressNote}
+        />
+      </BottomBarInsetContext.Provider>
 
       {/* hidden while comparing: the compare bar owns the bottom edge then */}
       {scopeFolderId != null && onShowAll != null && !selectMode && (
-        <View style={styles.showAllDock}>
+        <View style={[styles.showAllDock, { bottom: SHOW_ALL_DOCK_LIFT + bottomBarInset }]}>
           <GlassPill
             label="Gallery"
             trailingIcon="arrow-right"
@@ -199,7 +210,19 @@ export default function GalleryView({
       )}
 
       {selectMode && (
-        <View style={[styles.compareBar, { backgroundColor: colors.bg, borderTopColor: colors.line }]}>
+        <View
+          style={[
+            styles.compareBar,
+            {
+              //* a panel lifted off the grid, one layer below the dock
+              backgroundColor: colors.surface,
+              borderColor: colors.line,
+              boxShadow: [{ offsetX: 0, offsetY: 8, blurRadius: 24, color: colors.shadow }],
+              //* stacked on the floating dock rather than hidden under it
+              marginBottom: bottomBarInset + SELECT_BAR_GAP,
+            },
+          ]}
+        >
           {/* what to do with the notes just picked. Leaving the mode is the
               cross in the toolbar, so this row is only about acting on them */}
           <OverflowMenu
@@ -214,6 +237,14 @@ export default function GalleryView({
                 //* the picked notes have been dealt with, so the mode ends —
                 //* even where they stay on screen, as in the whole gallery
                 onPress: () => onMoveNotes?.(selectedNotes, leaveSelectMode),
+              },
+              {
+                key: "export",
+                label: "Export",
+                icon: "upload",
+                //* the selection stays: exporting copies the notes out and
+                //* changes nothing here, so there is nothing to have dealt with
+                onPress: () => onExportNotes?.(selectedNotes),
               },
               {
                 key: "delete",
@@ -231,7 +262,10 @@ export default function GalleryView({
             accessibilityLabel={`Compare ${selectedIds.length} notes`}
             accessibilityState={{ disabled: !canCompare }}
             accessibilityHint={canCompare ? undefined : "Pick at least two notes"}
-            style={[styles.compareGo, { backgroundColor: canCompare ? colors.accent : colors.surfaceHi }]}
+            style={[
+              styles.compareGo,
+              glass(colors, canCompare ? { tint: colors.accent, strength: "fill" } : undefined),
+            ]}
           >
             <Feather name="columns" size={15} color={canCompare ? colors.onAccent : colors.stoneDim} />
             <Text style={[styles.compareGoLabel, { color: canCompare ? colors.onAccent : colors.stoneDim }]}>
@@ -241,12 +275,15 @@ export default function GalleryView({
         </View>
       )}
 
-      {/* the held tile's own menu: one note, and the three things worth doing
+      {/* the held tile's own menu: one note, and the four things worth doing
           to it without opening it first */}
       <OverflowMenuCard
         colors={colors}
         anchor={held?.anchor ?? null}
         onClose={() => setHeld(null)}
+        //* the note itself, popped up over the dimmed grid — a menu of four
+        //* verbs says nothing about which note they would act on
+        preview={held != null ? <HeldNotePreview note={held.note} /> : null}
         items={[
           {
             key: "edit",
@@ -262,6 +299,14 @@ export default function GalleryView({
             icon: "folder",
             onPress: () => {
               if (held != null) onMoveNotes?.([held.note], () => {});
+            },
+          },
+          {
+            key: "export",
+            label: "Export",
+            icon: "upload",
+            onPress: () => {
+              if (held != null) onExportNotes?.([held.note]);
             },
           },
           {

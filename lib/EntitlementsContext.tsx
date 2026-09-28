@@ -88,7 +88,8 @@ export function EntitlementsProvider({ children }: { children: ReactNode }) {
   // state. Splitting them across two effects would also mean two configure()
   // paths racing on startup.
   useEffect(() => {
-    // A build that sells nothing never configures RevenueCat.
+    // A build that sells nothing has no entitlements to read. (RevenueCat may
+    // still be configured, by lib/adTracking.ts, to report the ads.)
     if (!PLUS_ON_SALE) return;
     let cancelled = false;
 

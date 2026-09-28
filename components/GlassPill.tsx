@@ -1,6 +1,7 @@
 import { Pressable, Text } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
-import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { glassPillStyles as styles } from "@/theme/styles/app.styles";
 
 type Props = {
@@ -16,11 +17,8 @@ type Props = {
 // A floating pill in the Liquid Glass style, for a control that sits over
 // scrolling content rather than inside a bar.
 //
-// Drawn with translucency and a light rim rather than real glass:
-// expo-glass-effect isn't a direct dependency, so it isn't compiled into the
-// app, and on Android it would fall back to a plain view anyway. Once it is
-// added, GlassView takes the place of the Pressable's background here and no
-// caller has to change.
+// The material is the app's shared glass (theme/glass.ts), which explains why
+// it is drawn rather than real.
 export default function GlassPill({ label, trailingIcon, onPress, colors, accessibilityLabel }: Props) {
   return (
     <Pressable
@@ -30,13 +28,9 @@ export default function GlassPill({ label, trailingIcon, onPress, colors, access
       accessibilityLabel={accessibilityLabel ?? label}
       style={({ pressed }) => [
         styles.pill,
-        {
-          //* see-through enough for the tiles to show beneath, dense enough to
-          //* keep the label readable over a bright photo
-          backgroundColor: hexToRgba(colors.surfaceHi, pressed ? 0.92 : 0.74),
-          borderColor: hexToRgba(colors.textPrimary, 0.16),
-          boxShadow: [{ offsetX: 0, offsetY: 6, blurRadius: 18, color: "rgba(0,0,0,0.35)" }],
-        },
+        //* floating over the grid, like the tab bar's dock
+        glass(colors, { lift: "float" }),
+        pressed && { opacity: 0.8 },
       ]}
     >
       <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>

@@ -5,14 +5,19 @@ import { useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
+import { useFieldFocus } from "@/theme/focus";
+import { glass } from "@/theme/glass";
 import TopBar, { TopBarIconButton } from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
 import SendFeedback from "@/components/SendFeedback";
+import ImportSummary from "@/components/ImportSummary";
+import SettingsActionRow from "@/components/SettingsActionRow";
 import MarkdownText from "@/components/MarkdownText";
 import type { SnippetModel } from "@/models/SnippetModel";
 import { useLibrary } from "@/lib/LibraryContext";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { PLUS_ON_SALE } from "@/lib/entitlements";
+import { pickExportFileAsync, TransferError } from "@/lib/noteTransfer";
 import { settingsScreenStyles as styles } from "@/theme/styles/settings.styles";
 
 type ThemeOption = {
@@ -39,7 +44,7 @@ function AppearanceToggle({
     onSelect: (mode: ThemeMode) => void;
 }) {
     return (
-        <View style={[styles.segment, { backgroundColor: colors.surface, borderColor: colors.line }]}>
+        <View style={[styles.segment, glass(colors)]}>
             {THEME_OPTIONS.map((option) => {
                 const active = mode === option.id;
                 //* the active pill is the only filled surface in the row, so
@@ -54,7 +59,11 @@ function AppearanceToggle({
                         accessibilityLabel={`${option.label} theme`}
                         style={[
                             styles.segmentItem,
-                            active && { backgroundColor: colors.accentSolid },
+                            //* the idle side keeps a clear rim of the same width, so
+                            //* switching doesn't shift its contents by a pixel
+                            active
+                                ? glass(colors, { tint: colors.accentSolid, strength: "fill" })
+                                : { borderWidth: 1, borderColor: "transparent" },
                         ]}
                     >
                         <Feather name={option.icon} size={15} color={tint} />
@@ -106,7 +115,8 @@ function PlusRow({ colors }: { colors: ThemeColors }) {
             accessibilityLabel="NoteIt Plus"
             style={({ pressed }) => [
                 styles.plusRow,
-                { backgroundColor: colors.surface, borderColor: colors.line, opacity: pressed ? 0.85 : 1 },
+                glass(colors),
+                { opacity: pressed ? 0.85 : 1 },
             ]}
         >
             <View style={[styles.plusBadge, { backgroundColor: colors.accent }]}>
@@ -139,8 +149,28 @@ export default function Settings() {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formError, setFormError] = useState<string | undefined>(undefined);
     const [feedbackOpen, setFeedbackOpen] = useState(false);
+    const snippetNameFocus = useFieldFocus(colors);
 
     const canAddSnippet = newSnippetName.trim().length > 0;
+
+    // --- import ------------------------------------------------------------
+
+    //* only a picker that fails outright is reported here. Reading the file,
+    //* the preview and adding it are all the /import screen's
+    const [pickError, setPickError] = useState<string | undefined>(undefined);
+
+    const startImport = async () => {
+        let uri: string | null;
+        try {
+            uri = await pickExportFileAsync();
+        } catch (error) {
+            setPickError(error instanceof TransferError ? error.message : "Couldn't open the file picker.");
+            return;
+        }
+        //* cancelled — nothing happened
+        if (uri == null) return;
+        router.push({ pathname: "/import", params: { uri } });
+    };
 
     //* "Add" doesn't commit — it carries the name into the modal, which is
     //* where the body actually gets written
@@ -274,6 +304,22 @@ export default function Settings() {
                 </View>
 
                 <View style={styles.section}>
+                    <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Data</Text>
+                    {/* Import lives here rather than on a note screen because
+                        it isn't about any one note — it drops a file's whole
+                        contents into the app. Exporting is the opposite: it is
+                        always about the thing you are looking at, so it sits in
+                        the viewer's and the folder's own menus. */}
+                    <SettingsActionRow
+                        icon="download"
+                        title="Import from a file"
+                        subtitle="Add picture-notes or a whole folder from a .noteit file."
+                        colors={colors}
+                        onPress={startImport}
+                    />
+                </View>
+
+                <View style={styles.section}>
                     <Text style={[styles.sectionLabel, { color: colors.stoneDim }]}>Snippets</Text>
                     <Text style={[styles.sectionHint, { color: colors.stone }]}>
                         Create reusable phrases to quickly drop into a picture-note while you&apos;re writing.
@@ -292,11 +338,8 @@ export default function Settings() {
                                 accessibilityLabel={`Edit snippet ${snippet.name}`}
                                 style={({ pressed }) => [
                                     styles.snippetRow,
-                                    {
-                                        backgroundColor: colors.surface,
-                                        borderColor: colors.line,
-                                        opacity: pressed ? 0.7 : 1,
-                                    },
+                                    glass(colors),
+                                    { opacity: pressed ? 0.7 : 1 },
                                 ]}
                             >
                                 <Feather name="star" size={14} color={colors.accent} />
@@ -334,11 +377,12 @@ export default function Settings() {
                             onChangeText={setNewSnippetName}
                             onSubmitEditing={startWritingSnippet}
                             placeholder="Name a snippet..."
-                            placeholderTextColor={colors.stoneDim}
+                            placeholderTextColor={snippetNameFocus.placeholder}
                             style={[
                                 styles.addInput,
-                                { backgroundColor: colors.surface, borderColor: colors.line, color: colors.textPrimary },
+                                { backgroundColor: colors.surface, borderColor: snippetNameFocus.border, color: colors.textPrimary },
                             ]}
+                            {...snippetNameFocus.handlers}
                         />
                         <Pressable
                             onPress={startWritingSnippet}
@@ -350,10 +394,8 @@ export default function Settings() {
                             accessibilityState={{ disabled: !canAddSnippet }}
                             style={({ pressed }) => [
                                 styles.addButton,
-                                {
-                                    backgroundColor: colors.accent,
-                                    opacity: !canAddSnippet ? 0.4 : pressed ? 0.75 : 1,
-                                },
+                                glass(colors, { tint: colors.accent, strength: "fill" }),
+                                { opacity: !canAddSnippet ? 0.4 : pressed ? 0.75 : 1 },
                             ]}
                         >
                             <Text style={[styles.addButtonLabel, { color: colors.onAccent }]}>Add</Text>
@@ -366,6 +408,16 @@ export default function Settings() {
                 visible={feedbackOpen}
                 colors={colors}
                 onClose={() => setFeedbackOpen(false)}
+            />
+
+            <ImportSummary
+                visible={pickError != null}
+                payload={null}
+                error={pickError}
+                busy={false}
+                colors={colors}
+                onCancel={() => setPickError(undefined)}
+                onConfirm={() => {}}
             />
 
             <NewSnippet

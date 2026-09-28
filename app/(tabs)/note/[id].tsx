@@ -1,20 +1,20 @@
 import { useEffect, useState } from "react";
-import { Alert, Keyboard, Platform, Pressable, Share, Text, View } from "react-native";
+import { Alert, Platform, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
-import { formatDayDate } from "@/lib/date";
+import { glass } from "@/theme/glass";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
-import AddNote from "@/components/AddNote";
 import AdBannerStrip from "@/components/AdBannerStrip";
 import OverflowMenu from "@/components/OverflowMenu";
 import { useEndAd } from "@/components/EndAd";
 import { useEntitlements } from "@/lib/EntitlementsContext";
-import { useAddNote } from "@/lib/useAddNote";
 import { useLibrary } from "@/lib/LibraryContext";
-import { NoteModel, TagModel } from "@/models/NoteModel";
+import { NoteModel } from "@/models/NoteModel";
+import { useExportTransfer } from "@/lib/useExportTransfer";
+import ExportProgress from "@/components/ExportProgress";
 import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 
 // The picture-note viewer screen: header, the card itself, the filmstrip and
@@ -28,30 +28,26 @@ import { noteScreenStyles as styles } from "@/theme/styles/note.styles";
 // A route rather than a <Modal> rendered by whichever screen owned the list.
 // That version had to be duplicated in home and the folder screen, carried a
 // `viewingNote` state in each, and — because it was a modal — couldn't present
-// AddNote over itself without closing first and waiting out the dismissal. As
-// a route the back gesture works natively and AddNote is just another modal
-// from an ordinary screen.
+// the note composer over itself without closing first and waiting out the
+// dismissal. As a route the back gesture works natively, and starting a new
+// note is an ordinary push onto the same stack.
 
 export default function ViewNotes() {
     const { colors } = useTheme();
     const router = useRouter();
     //* `id` is the note to open on; `folderId` scopes the list you can swipe
     //* through, so the same screen serves a folder and the whole gallery
-    const { id, folderId, edit } = useLocalSearchParams<{
+    const { id, folderId } = useLocalSearchParams<{
         id: string;
         folderId?: string;
-        edit?: string;
     }>();
 
     const {
         folders,
         notes,
         tags,
-        snippets,
         ready,
-        saveNoteAsync,
         deleteNotesAsync,
-        refreshNotesAndTagsAsync,
     } = useLibrary();
 
     const scopedNotes = folderId != null ? notes.filter((n) => n.folderId === folderId) : notes;
@@ -77,20 +73,11 @@ export default function ViewNotes() {
     //* the last note rather than jumping onto the next ad when one loads
     if (adShowing && endAd == null) setAdShowing(false);
 
-    //* the draft lives here rather than in ViewNote because the buttons that
-    //* commit and discard it are in this screen's header, not in the card
-    const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState("");
-    //* same guard as useAddNote's `saving`: every await below is a chance for
-    //* a second tap to start a duplicate write (GitHub issue #4)
-    const [savingEdit, setSavingEdit] = useState(false);
-
     //* the note was deleted, or the folder emptied, while this screen was open
     useEffect(() => {
         if (ready && note == null) router.back();
     }, [ready, note, router]);
 
-    const addNote = useAddNote({ storedTags: tags, snippets, onSaved: refreshNotesAndTagsAsync });
 
     // Both routes to a different note land here — the pager's own swipe and a
     // filmstrip tap — so "showing a different note" means the same thing
@@ -105,72 +92,22 @@ export default function ViewNotes() {
         setCurrentId(scopedNotes[i].id);
     };
 
-    // --- editing -----------------------------------------------------------
-
-    //* opened from the gallery's held-tile menu, which asks for editing rather
-    //* than just viewing. Adjusted during render rather than in an effect: the
-    //* note arrives from the store a render later than the param does, and this
-    //* way the viewer's first painted frame is already the editing one
-    const [editRequested, setEditRequested] = useState(edit === "1");
-    if (editRequested && note != null) {
-        setEditRequested(false);
-        setDraft(note.note);
-        setNoteOpen(true);
-        setEditing(true);
-    }
-
-    const beginEdit = () => {
+    //* editing happens on the same screen a note is written on, with this
+    //* note loaded into it — the viewer's job is showing, not writing
+    const openEditor = () => {
         if (note == null) return;
-        setDraft(note.note);
-        //* you cannot edit what isn't on screen, so opening the note is part
-        //* of entering edit mode rather than something to ask the user for
-        setNoteOpen(true);
-        setEditing(true);
+        router.push({ pathname: "/(tabs)/enter-note", params: { id: note.id } });
     };
 
-    const endEdit = () => {
-        //* same reason as the snippet form: unmounting a focused TextInput can
-        //* leave the iOS keyboard up, here over a note that is no longer
-        //* editable. Both commit and discard come through here.
-        Keyboard.dismiss();
-        setEditing(false);
-        setDraft("");
-    };
+    // --- exporting ---------------------------------------------------------
 
-    const cancelEdit = () => {
-        //* nothing typed, nothing to lose — don't make them confirm away a
-        //* dialog they didn't earn
-        if (note == null || draft === note.note) {
-            endEdit();
-            return;
-        }
-        Alert.alert("Discard changes?", "Your edits to this note won't be saved.", [
-            { text: "Keep editing", style: "cancel" },
-            { text: "Discard", style: "destructive", onPress: endEdit },
-        ]);
-    };
+    //* the hook guards a second tap while the file is still being written
+    const { exporting, progress: exportProgress, exportAsync, cancel: cancelExport } = useExportTransfer(tags);
 
-    const saveEditAsync = async () => {
-        if (note == null || savingEdit) return;
-        //* unchanged text would still cost a write, so treat it as the cancel
-        //* it effectively is
-        if (draft === note.note) {
-            endEdit();
-            return;
-        }
-        setSavingEdit(true);
-        try {
-            //* saveNoteAsync replaces by id, so this is an update, not a second
-            //* note — and every screen sees the new text without a reload
-            await saveNoteAsync({ ...note, note: draft });
-            endEdit();
-        } catch {
-            //* the write failed and the draft is still the only copy of it —
-            //* staying in edit mode is what keeps it from being thrown away
-            Alert.alert("Couldn't save", "That edit didn't save. Try again.");
-        } finally {
-            setSavingEdit(false);
-        }
+    //* a single note travels without its folder: on the way back in, the
+    //* receiver picks where it goes
+    const exportNoteAsync = async () => {
+        if (note != null) await exportAsync([note], null);
     };
 
     // --- deleting ----------------------------------------------------------
@@ -201,26 +138,6 @@ export default function ViewNotes() {
         await deleteNotesAsync([target]);
     };
 
-    const handleShareAsync = async () => {
-        if (note == null || Platform.OS === "web") return;
-        const noteTags = note.tagIds
-            .map((tagId) => tags.find((t) => t.id === tagId))
-            .filter((t): t is TagModel => t != null);
-        const shareText = [
-            note.note,
-            noteTags.length > 0 ? noteTags.map((t) => `#${t.title}`).join(" ") : null,
-            note.date.length > 0 ? formatDayDate(note.date) : null,
-        ]
-            .filter((s): s is string => s != null && s.length > 0)
-            .join("\n\n");
-
-        try {
-            await Share.share({ title, message: shareText });
-        } catch {
-            // user dismissed the share sheet — no-op
-        }
-    };
-
     const insets = useSafeAreaInsets();
 
     if (note == null) return <View style={[styles.screen, { backgroundColor: colors.bg }]} />;
@@ -237,53 +154,10 @@ export default function ViewNotes() {
                 //* false. Only visible on a real Android surface, which is why it
                 //* survived until the first emulator run.
                 insetTop={Platform.OS !== "ios"}
-                //* while editing the arrow means "get me out of this edit",
-                //* not "leave the viewer" — leaving with the draft still in
-                //* hand would discard it with no warning at all
-                onBack={editing ? cancelEdit : () => router.back()}
+                onBack={() => router.back()}
                 right={
-                    editing ? (
-                        <View style={styles.headerRight}>
-                            {/* Discard sits left of commit and stays plain;
-                                only the check is filled, so the primary action
-                                is the one that reads as a button. */}
-                            <Pressable
-                                onPress={cancelEdit}
-                                hitSlop={8}
-                                accessibilityRole="button"
-                                accessibilityLabel="Cancel editing"
-                                style={({ pressed }) => [
-                                    styles.headerButton,
-                                    { backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 },
-                                ]}
-                            >
-                                <Feather name="x" size={16} color={colors.textPrimary} />
-                            </Pressable>
-
-                            <Pressable
-                                onPress={saveEditAsync}
-                                //* disabled rather than merely guarded, so the
-                                //* button also *looks* spent while it writes
-                                disabled={savingEdit}
-                                hitSlop={8}
-                                accessibilityRole="button"
-                                accessibilityLabel="Save the note"
-                                accessibilityState={{ disabled: savingEdit }}
-                                style={({ pressed }) => [
-                                    styles.headerButton,
-                                    {
-                                        backgroundColor: colors.accent,
-                                        opacity: savingEdit ? 0.5 : pressed ? 0.75 : 1,
-                                    },
-                                ]}
-                            >
-                                <Feather name="check" size={16} color={colors.onAccent} />
-                            </Pressable>
-                        </View>
-                    ) : adShowing ? (
-                        //* an ad page has no note to count, open, share, edit or delete
-                        null
-                    ) : (
+                    //* an ad page has no note to count, open, share, edit or delete
+                    adShowing ? null : (
                     <View style={styles.headerRight}>
                         <Text style={[styles.counter, { color: colors.stoneDim }]}>
                             {index + 1} / {scopedNotes.length}
@@ -300,7 +174,7 @@ export default function ViewNotes() {
                             accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
                             style={[
                                 styles.headerButton,
-                                { backgroundColor: noteOpen ? colors.accent : colors.surface },
+                                glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
                             ]}
                         >
                             <Feather
@@ -310,11 +184,17 @@ export default function ViewNotes() {
                             />
                         </Pressable>
 
+                        {/* Exports the note as a .noteit file. It replaced
+                            sharing the note as text: one share button, and it
+                            sends the whole picture-note rather than its words. */}
                         <Pressable
-                            onPress={handleShareAsync}
+                            onPress={exportNoteAsync}
+                            disabled={exporting}
                             hitSlop={8}
-                            accessibilityLabel="Share this picture-note"
-                            style={[styles.headerButton, { backgroundColor: colors.surface }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Export this picture-note"
+                            accessibilityState={{ disabled: exporting, busy: exporting }}
+                            style={[styles.headerButton, glass(colors), { opacity: exporting ? 0.5 : 1 }]}
                         >
                             <Feather name="share" size={16} color={colors.textPrimary} />
                         </Pressable>
@@ -328,13 +208,17 @@ export default function ViewNotes() {
                                     icon: "plus",
                                     //* defaults into the folder being viewed, so
                                     //* adding from inside a folder stays in it
-                                    onPress: () => addNote.open(folderId ?? null),
+                                    onPress: () =>
+                                        router.push({
+                                            pathname: "/(tabs)/enter-note",
+                                            params: folderId != null ? { folderId } : undefined,
+                                        }),
                                 },
                                 {
                                     key: "edit",
                                     label: "Edit note",
                                     icon: "edit-2",
-                                    onPress: beginEdit,
+                                    onPress: openEditor,
                                 },
                                 {
                                     key: "delete",
@@ -359,10 +243,6 @@ export default function ViewNotes() {
                     colors={colors}
                     noteOpen={noteOpen}
                     onToggleNote={setNoteOpen}
-                    editing={editing}
-                    draft={draft}
-                    onDraftChange={setDraft}
-                    snippets={snippets}
                     endAd={endAd}
                     adShowing={adShowing}
                     onAdShowingChange={setAdShowing}
@@ -386,7 +266,7 @@ export default function ViewNotes() {
                 <View style={{ height: insets.bottom }} />
             )}
 
-            <AddNote colors={colors} folders={folders} {...addNote.props} />
+            <ExportProgress progress={exportProgress} colors={colors} onCancel={cancelExport} />
         </View>
     );
 }

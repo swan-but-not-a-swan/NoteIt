@@ -1,9 +1,11 @@
-//! Manually reviewed since 15/09/2026
+
 
 import { Modal, Pressable, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { useFieldFocus } from "@/theme/focus";
+import { glass } from "@/theme/glass";
 import { CropperContent } from "./ThumbnailCropper";
 import { newFolderStyles as styles } from "@/theme/styles/folders.styles";
 
@@ -22,6 +24,8 @@ type Props = {
   onCropCancel: () => void;
   onCropConfirm: (croppedUri: string) => Promise<void>;
   onDelete?: () => void;
+  /** Exports the folder as it is saved, not with this dialog's unsaved edits. */
+  onExport?: () => void;
   error?: string;
   colors: ThemeColors;
   onCancel: () => void;
@@ -44,11 +48,15 @@ export default function NewFolder({
   onCropCancel,
   onCropConfirm,
   onDelete,
+  onExport,
   error,
   colors,
   onCancel,
   onSave,
 }: Props) {
+  //* before the early return below, as every hook has to be
+  const nameFocus = useFieldFocus(colors);
+
   if (cropSourceUri != null) {
     return (
       <Modal visible={visible} transparent animationType="fade" onRequestClose={onCropCancel}>
@@ -73,14 +81,31 @@ export default function NewFolder({
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               {mode === "edit" ? "Edit folder" : "New folder"}
             </Text>
-            {mode === "edit" && onDelete != null && (
-              <Pressable
-                onPress={onDelete}
-                hitSlop={8}
-                style={[styles.deleteButton, { backgroundColor: hexToRgba(colors.error, 0.15) }]}
-              >
-                <Feather name="trash-2" size={16} color={colors.error} />
-              </Pressable>
+            {mode === "edit" && (
+              <View style={styles.titleActions}>
+                {onExport != null && (
+                  <Pressable
+                    onPress={onExport}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Export folder"
+                    style={[styles.exportButton, glass(colors)]}
+                  >
+                    <Feather name="upload" size={16} color={colors.textPrimary} />
+                  </Pressable>
+                )}
+                {onDelete != null && (
+                  <Pressable
+                    onPress={onDelete}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete folder"
+                    style={[styles.deleteButton, glass(colors, { tint: colors.error })]}
+                  >
+                    <Feather name="trash-2" size={16} color={colors.error} />
+                  </Pressable>
+                )}
+              </View>
             )}
           </View>
 
@@ -112,15 +137,16 @@ export default function NewFolder({
               value={name}
               onChangeText={onNameChange}
               placeholder="Folder name"
-              placeholderTextColor={colors.stoneDim}
+              placeholderTextColor={nameFocus.placeholder}
               style={[
                 styles.input,
                 {
                   backgroundColor: colors.surface,
-                  borderColor: colors.line,
+                  borderColor: nameFocus.border,
                   color: colors.textPrimary,
                 },
               ]}
+              {...nameFocus.handlers}
             />
           </View>
 
@@ -158,11 +184,14 @@ export default function NewFolder({
           <View style={styles.buttons}>
             <Pressable
               onPress={onCancel}
-              style={[styles.button, { backgroundColor: colors.surface }]}
+              style={[styles.button, glass(colors)]}
             >
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Cancel</Text>
             </Pressable>
-            <Pressable onPress={onSave} style={[styles.button, { backgroundColor: colors.accent }]}>
+            <Pressable
+              onPress={onSave}
+              style={[styles.button, glass(colors, { tint: colors.accent, strength: "fill" })]}
+            >
               <Text style={[styles.buttonLabel, { color: colors.onAccent }]}>
                 {mode === "edit" ? "Save changes" : "Create"}
               </Text>

@@ -2,6 +2,7 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import type { FolderModel } from "@/models/FolderModel";
 import { moveNotesModalStyles as styles } from "@/theme/styles/folders.styles";
 
@@ -14,6 +15,9 @@ type Props = {
   onCancel: () => void;
   /** null means "no folder" — the gallery-only notes. */
   onSelectFolder: (folderId: string | null) => void;
+  /** Replaces the "Move N picture-notes" title — the import preview asks
+   *  where a note should go rather than moving it. */
+  title?: string;
 };
 
 // Where to put the picture-notes just picked. Every folder, plus the
@@ -26,6 +30,7 @@ export default function MoveNotesModal({
   count,
   onCancel,
   onSelectFolder,
+  title,
 }: Props) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
@@ -33,14 +38,14 @@ export default function MoveNotesModal({
         <View style={[styles.card, { backgroundColor: colors.bg, borderColor: colors.line }]}>
           <View style={styles.titleRow}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>
-              {count === 1 ? "Move 1 picture-note" : `Move ${count} picture-notes`}
+              {title ?? (count === 1 ? "Move 1 picture-note" : `Move ${count} picture-notes`)}
             </Text>
             <Pressable
               onPress={onCancel}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Cancel moving"
-              style={[styles.closeButton, { backgroundColor: colors.surface }]}
+              style={[styles.closeButton, glass(colors)]}
             >
               <Feather name="x" size={14} color={colors.textPrimary} />
             </Pressable>

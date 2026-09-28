@@ -12,7 +12,6 @@ import FoldersList from "@/components/FoldersList";
 import GalleryView from "@/components/GalleryView";
 import NewFolder from "@/components/NewFolder";
 import MoveNotesModal from "@/components/MoveNotesModal";
-import AddNote from "@/components/AddNote";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "expo-router/react-navigation";
@@ -22,11 +21,13 @@ import * as Crypto from "expo-crypto";
 import { useNavigateOnce } from "@/lib/useNavigateOnce";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { useLibrary } from "@/lib/LibraryContext";
-import { useAddNote } from "@/lib/useAddNote";
+import { BottomBarInsetContext } from "@/lib/BottomBarInset";
 import { Directory, Paths } from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
 import { deleteFileIfExists, moveAndGetImageUri, thumbnailFileValidatorAsync } from "@/lib/mediaHelper";
 import { NoteModel } from "@/models/NoteModel";
+import { useExportTransfer } from "@/lib/useExportTransfer";
+import ExportProgress from "@/components/ExportProgress";
 
 const getThumbnailDir = () => new Directory(Paths.document, "folder-thumbnails");
 
@@ -90,16 +91,17 @@ export default function Home() {
         folders,
         notes,
         tags: storedTags,
-        snippets,
         saveFoldersAsync,
         deleteFolderAsync,
         deleteNotesAsync,
         moveNotesToFolderAsync,
-        refreshNotesAndTagsAsync,
         reloadAsync,
     } = useLibrary();
 
     const [activeTab, setActiveTab] = useState<MainTab>("folders");
+    //* the tab bar's measured height: it floats over the pages, which pad their
+    //* ends by this much (see lib/BottomBarInset.ts)
+    const [barHeight, setBarHeight] = useState(0);
     const [tabDir, setTabDir] = useState<"forward" | "backward" | null>(null);
 
     //* the folder the gallery tab is scoped to, set by pressing a folder in the
@@ -326,21 +328,29 @@ export default function Home() {
         setShowNewFolder(false);
     };
 
-    //* AddNote's composition state lives in a hook so it can be presented anywhere without navigating to home.tsx
-    const addNote = useAddNote({
-        storedTags,
-        snippets,
-        //* AddNote writes through noteHelper rather than the store, so the store
-        //* re-reads the two things a save can change
-        onSaved: refreshNotesAndTagsAsync,
-    });
-
     //* the notes waiting for a folder to be picked, with what to run once they
     //* have moved — null when the picker is closed
     const [pendingMove, setPendingMove] = useState<{
         notes: NoteModel[];
         onMoved: () => void;
     } | null>(null);
+
+    // --- exporting ---------------------------------------------------------
+
+    //* notes picked in the gallery travel loose; a folder from its edit dialog
+    //* travels with its notes, so they land in a folder of the same name on the
+    //* other side
+    const { progress: exportProgress, exportAsync, cancel: cancelExport } = useExportTransfer(storedTags);
+
+    //* the folder as it is saved. The dialog closes first — like Cancel, so
+    //* edits still open in it are dropped — because iOS can't stack the export
+    //* dialog and then the share sheet on top of another modal
+    const exportEditingFolder = () => {
+        const folder = folders.find((f) => f.id === editingFolderId);
+        if (folder == null) return;
+        cancelNewFolder();
+        exportAsync(notes.filter((note) => note.folderId === folder.id), folder);
+    };
 
     const confirmDeleteNotes = (toDelete: NoteModel[]) => {
         if (toDelete.length === 0) return;
@@ -359,7 +369,7 @@ export default function Home() {
                     //* the store drops them from memory as the write lands; a
                     //* failure part-way leaves the two out of step, so resync
                     onPress: () => {
-                        deleteNotesAsync(toDelete).catch(() => reloadAsync().catch(() => {}));
+                        deleteNotesAsync(toDelete).catch(() => reloadAsync().catch(() => { }));
                     },
                 },
             ],
@@ -374,12 +384,18 @@ export default function Home() {
             await moveNotesToFolderAsync(pending.notes, folderId);
             pending.onMoved(); //* only once the move actually landed
         } catch {
-            reloadAsync().catch(() => {});
+            reloadAsync().catch(() => { });
         }
     };
 
     //* inside a folder's gallery, a new note defaults into that folder
-    const openAddNote = () => addNote.open(scopeFolderId);
+    const openAddNote = () =>
+        navigateOnce(() =>
+            router.push({
+                pathname: "/(tabs)/enter-note",
+                params: scopeFolderId != null ? { folderId: scopeFolderId } : undefined,
+            })
+        );
 
     const topBarTitle =
         activeTab === "folders" ? "Your folders" : galleryFolder != null ? galleryFolder.name : "Gallery";
@@ -407,86 +423,90 @@ export default function Home() {
                 }
             />
 
-            <GestureDetector gesture={tabSwipeGesture}>
-                <View style={styles.pager}>
-                    {activeTab === "folders" ? (
-                        <SlideInPage key="folders" dir={tabDir}>
-                            <FoldersList
-                                items={groupFoldersWithNotes(folders, notes)}
-                                colors={colors}
-                                onOpenFolder={openFolderInGallery}
-                                onEditFolder={onEditFolder}
-                                onNewFolder={openNewFolder}
-                                showAdBanner={hasPlus === false}
-                            />
-                        </SlideInPage>
-                    ) : (
-                        //* keyed by scope, so changing it remounts the page: search and
-                        //* compare picks start clean for each folder instead of carrying
-                        //* over, and leaving a folder for the gallery replays the slide
-                        <SlideInPage key={`gallery:${scopeFolderId ?? "all"}`} dir={tabDir}>
-                            <GalleryView
-                                notes={galleryNotes}
-                                tags={storedTags}
-                                folders={folders}
-                                scopeFolderId={scopeFolderId}
-                                colors={colors}
-                                onOpenNote={(note) =>
-                                    navigateOnce(() =>
-                                        router.push({
-                                            pathname: "/(tabs)/note/[id]",
-                                            //* the viewer pages within the folder, matching the grid
-                                            params: scopeFolderId != null
-                                                ? { id: note.id, folderId: scopeFolderId }
-                                                : { id: note.id },
-                                        })
-                                    )
-                                }
-                                onCompare={(ids) =>
-                                    navigateOnce(() =>
-                                        router.push({ pathname: "/(tabs)/compare", params: { ids: ids.join(",") } })
-                                    )
-                                }
-                                onDeleteNotes={confirmDeleteNotes}
-                                //* the viewer opens the note and starts editing it
-                                onEditNote={(note) =>
-                                    navigateOnce(() =>
-                                        router.push({
-                                            pathname: "/(tabs)/note/[id]",
-                                            params: scopeFolderId != null
-                                                ? { id: note.id, folderId: scopeFolderId, edit: "1" }
-                                                : { id: note.id, edit: "1" },
-                                        })
-                                    )
-                                }
-                                onMoveNotes={(notes, onMoved) => setPendingMove({ notes, onMoved })}
-                                onShowAll={() => {
-                                    //* forward, like the pill's arrow: the folder opens out into everything
-                                    setTabDir("forward");
-                                    setGalleryFolderId(null);
-                                }}
-                            />
-                        </SlideInPage>
-                    )}
-                </View>
-            </GestureDetector>
+            <BottomBarInsetContext.Provider value={barHeight}>
+                <GestureDetector gesture={tabSwipeGesture}>
+                    <View style={styles.pager}>
+                        {activeTab === "folders" ? (
+                            <SlideInPage key="folders" dir={tabDir}>
+                                <FoldersList
+                                    items={groupFoldersWithNotes(folders, notes)}
+                                    colors={colors}
+                                    onOpenFolder={openFolderInGallery}
+                                    onEditFolder={onEditFolder}
+                                    onNewFolder={openNewFolder}
+                                    showAdBanner={hasPlus === false}
+                                />
+                            </SlideInPage>
+                        ) : (
+                            //* keyed by scope, so changing it remounts the page: search and
+                            //* compare picks start clean for each folder instead of carrying
+                            //* over, and leaving a folder for the gallery replays the slide
+                            <SlideInPage key={`gallery:${scopeFolderId ?? "all"}`} dir={tabDir}>
+                                <GalleryView
+                                    notes={galleryNotes}
+                                    tags={storedTags}
+                                    folders={folders}
+                                    scopeFolderId={scopeFolderId}
+                                    colors={colors}
+                                    onOpenNote={(note) =>
+                                        navigateOnce(() =>
+                                            router.push({
+                                                pathname: "/(tabs)/note/[id]",
+                                                //* the viewer pages within the folder, matching the grid
+                                                params: scopeFolderId != null
+                                                    ? { id: note.id, folderId: scopeFolderId }
+                                                    : { id: note.id },
+                                            })
+                                        )
+                                    }
+                                    onCompare={(ids) =>
+                                        navigateOnce(() =>
+                                            router.push({ pathname: "/(tabs)/compare", params: { ids: ids.join(",") } })
+                                        )
+                                    }
+                                    onDeleteNotes={confirmDeleteNotes}
+                                    //* straight into the editor — the same screen a note is
+                                    //* written on, with this one loaded into it. No folder
+                                    //* param: an existing note brings its own
+                                    onEditNote={(note) =>
+                                        navigateOnce(() =>
+                                            router.push({
+                                                pathname: "/(tabs)/enter-note",
+                                                params: { id: note.id },
+                                            })
+                                        )
+                                    }
+                                    onMoveNotes={(notes, onMoved) => setPendingMove({ notes, onMoved })}
+                                    onExportNotes={(picked) => exportAsync(picked, null)}
+                                    onShowAll={() => {
+                                        //* forward, like the pill's arrow: the folder opens out into everything
+                                        setTabDir("forward");
+                                        setGalleryFolderId(null);
+                                    }}
+                                />
+                            </SlideInPage>
+                        )}
+                    </View>
+                </GestureDetector>
+            </BottomBarInsetContext.Provider>
 
-            <BottomTabBar
-                activeTab={activeTab}
-                onSelectTab={switchTab}
-                //* while scoped, the gallery tab shows the folder; it goes back to
-                //* "Gallery" only by returning to the folders, where switchTab clears
-                //* the scope — so a folder deleted there can't leave a ghost tab
-                galleryFolder={galleryFolder}
-                onAdd={openAddNote}
-                colors={colors}
-            />
-
-            <AddNote
-                colors={colors}
-                folders={folders}
-                {...addNote.props}
-            />
+            {/* over the pages rather than below them, so what scrolls under the
+                bar shows through it */}
+            <View
+                style={styles.barLayer}
+                onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
+            >
+                <BottomTabBar
+                    activeTab={activeTab}
+                    onSelectTab={switchTab}
+                    //* while scoped, the gallery tab shows the folder; it goes back to
+                    //* "Gallery" only by returning to the folders, where switchTab clears
+                    //* the scope — so a folder deleted there can't leave a ghost tab
+                    galleryFolder={galleryFolder}
+                    onAdd={openAddNote}
+                    colors={colors}
+                />
+            </View>
 
             <MoveNotesModal
                 visible={pendingMove != null}
@@ -512,11 +532,14 @@ export default function Home() {
                 onCropCancel={() => setCropSourceUri(null)}
                 onCropConfirm={confirmCroppedThumbnail}
                 onDelete={editingFolderId != null ? confirmDeleteFolder : undefined}
+                onExport={editingFolderId != null ? exportEditingFolder : undefined}
                 error={newFolderError}
                 colors={colors}
                 onCancel={cancelNewFolder}
                 onSave={saveNewFolderAsync}
             />
+
+            <ExportProgress progress={exportProgress} colors={colors} onCancel={cancelExport} />
         </View>
     );
 }
@@ -527,6 +550,12 @@ const styles = StyleSheet.create({
     },
     pager: {
         flex: 1,
+    },
+    barLayer: {
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
     },
     page: {
         flex: 1,

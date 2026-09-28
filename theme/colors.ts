@@ -17,29 +17,44 @@ export type ThemeColors = {
   stoneDim: string;
   line: string;
   error: string;
+  /** Drop-shadow colour for anything lifted off the canvas — the tab bar, the
+   *  gallery's select bar, folder cards. Strong on dark, where a shadow has
+   *  little room to be darker than the ground; faint on light. */
+  shadow: string;
 };
 
 // "Ember Charcoal & Archive Teal" — warmed-off-black dark theme, softened for
-// extended low-glare viewing. Ported verbatim from the web reference
-// (smkpremiere-app_1.jsx) so both platforms stay WCAG AA contrast-checked
-// from the same source of truth.
+// extended low-glare viewing.
+//
+// Re-tuned against iOS dark mode. The surfaces sit lower than the original
+// port of the web reference (#211D19 → #1A1715) so the photos, not the
+// chrome, are the brightest thing on screen — but they keep the warm cast,
+// which is what stops it reading as a generic grey app. Text goes the other
+// way: #FAF7F2 rather than #F3EAD9, because iOS labels are near-white and a
+// cream one looks dusty beside them.
+//
+// The accent and teal are lifted a step to stay clear of the darker ground
+// (the old #B87F42 loses bite on #1A1715), and the hairline is a solid warm
+// value instead of a white alpha — at 7% over a background this dark the
+// alpha version composites to roughly #2B2826 and all but disappears.
 export const DARK_THEME: ThemeColors = {
-  bg: "#211D19",
-  surface: "#2C2721",
-  surfaceHi: "#39322A",
+  bg: "#1A1715",
+  surface: "#221E1B",
+  surfaceHi: "#2E2924",
   paper: "#F3EAD9",
   paperShadow: "#E4D6BD",
   ink: "#382C21",
   tealOnPaper: "#3C5F59",
-  textPrimary: "#F3EAD9",
-  accent: "#B87F42",
-  accentSolid: "#B87F42",
-  onAccent: "#241D16",
-  teal: "#7FB0A8",
-  stone: "#AFA394",
-  stoneDim: "#998E7B",
-  line: "rgba(255,255,255,0.07)",
-  error: "#C97A6B",
+  textPrimary: "#FAF7F2",
+  accent: "#C68A4A",
+  accentSolid: "#C68A4A",
+  onAccent: "#191310",
+  teal: "#85B8AF",
+  stone: "#A8A096",
+  stoneDim: "#918776",
+  line: "#35302A",
+  error: "#DB8575",
+  shadow: "rgba(0, 0, 0, 0.6)",
 };
 
 // "Daylight Contact Sheet" — light theme, same token roles.
@@ -81,6 +96,7 @@ export const LIGHT_THEME: ThemeColors = {
   stoneDim: "#6E6E73", // tertiary label — the lightest grey still clearing 4.5:1
   line: "#D1D1D6", // iOS systemGray4 / separator
   error: "#D70015", // iOS systemRed, accessible variant
+  shadow: "rgba(0, 0, 0, 0.1)",
 };
 
 export function themeFor(mode: ThemeMode): ThemeColors {

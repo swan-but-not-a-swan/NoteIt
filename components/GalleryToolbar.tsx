@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
-import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { describeQuery, EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
 import { DATE_PRESETS, withPreset } from "@/lib/dateHelper";
 import type { FolderModel } from "@/models/FolderModel";
@@ -56,10 +57,7 @@ export default function GalleryToolbar({
           onPress={onOpenSearch}
           style={[
             styles.searchButton,
-            {
-              backgroundColor: filtering ? hexToRgba(colors.accent, 0.12) : colors.surface,
-              borderColor: filtering ? colors.accent : colors.line,
-            },
+            glass(colors, filtering ? { tint: colors.accent } : undefined),
           ]}
         >
           <Feather name="search" size={15} color={filtering ? colors.accent : colors.stoneDim} />
@@ -82,10 +80,7 @@ export default function GalleryToolbar({
           accessibilityLabel={selectMode ? "Cancel" : "Select picture-notes"}
           style={[
             styles.selectButton,
-            {
-              backgroundColor: selectMode ? hexToRgba(colors.accent, 0.12) : colors.surface,
-              borderColor: selectMode ? colors.accent : colors.line,
-            },
+            glass(colors, selectMode ? { tint: colors.accent } : undefined),
           ]}
         >
           <Feather
@@ -112,10 +107,7 @@ export default function GalleryToolbar({
               onPress={() => onQueryChange(withPreset(query, preset.id))}
               style={[
                 styles.chip,
-                {
-                  backgroundColor: active ? hexToRgba(colors.accent, 0.18) : colors.surface,
-                  borderColor: active ? colors.accent : colors.line,
-                },
+                glass(colors, active ? { tint: colors.accent } : undefined),
               ]}
             >
               <Text style={[styles.chipLabel, { color: active ? colors.accent : colors.stone }]}>
@@ -129,7 +121,7 @@ export default function GalleryToolbar({
           <View
             style={[
               styles.chip,
-              { backgroundColor: hexToRgba(colors.accent, 0.18), borderColor: colors.accent },
+              glass(colors, { tint: colors.accent }),
             ]}
           >
             <Text style={[styles.chipLabel, { color: colors.accent }]}>Custom range</Text>

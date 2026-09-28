@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
+import { glass } from "@/theme/glass";
 import { overflowMenuStyles as styles } from "@/theme/styles/app.styles";
 
 export type OverflowMenuItem = {
@@ -45,7 +46,7 @@ export default function OverflowMenu({
         hitSlop={8}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        style={[label != null ? styles.labelledTrigger : styles.trigger, { backgroundColor: colors.surface }]}
+        style={[label != null ? styles.labelledTrigger : styles.trigger, glass(colors)]}
       >
         <Feather name="more-horizontal" size={17} color={colors.textPrimary} />
         {label != null && (
@@ -87,17 +88,32 @@ export function anchorFor(
   };
 }
 
+/** Where a preview goes, given where the card went: the two sit on opposite
+ *  sides of the finger, so neither covers the other and the thing being acted
+ *  on stays in sight while the menu is read. */
+function previewAnchorFor(anchor: MenuAnchor, screenH: number): MenuAnchor {
+  return anchor.top != null
+    ? { bottom: screenH - anchor.top + 12 } //* menu opened downward, so this goes above
+    : { top: screenH - (anchor.bottom ?? 0) + 12 };
+}
+
 type CardProps = {
   colors: ThemeColors;
   items: OverflowMenuItem[];
   /** null keeps it closed. */
   anchor: MenuAnchor | null;
   onClose: () => void;
+  /** Shown over the backdrop, opposite the card — what the menu is about.
+   *  Nothing in the screen behind can paint above this modal, so anything the
+   *  menu needs to show has to come through here. */
+  preview?: ReactNode;
 };
 
 // The menu on its own, placed at an anchor rather than under a button of its
 // own — what a long press opens, where the thing pressed is the trigger.
-export function OverflowMenuCard({ colors, items, anchor, onClose }: CardProps) {
+export function OverflowMenuCard({ colors, items, anchor, onClose, preview }: CardProps) {
+  const { height: screenH } = useWindowDimensions();
+
   const runItem = (item: OverflowMenuItem) => {
     onClose();
     //* the menu's own modal is still dismissing this frame, and iOS drops a
@@ -108,6 +124,12 @@ export function OverflowMenuCard({ colors, items, anchor, onClose }: CardProps) 
   return (
     <Modal visible={anchor != null} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu" />
+
+      {anchor != null && preview != null && (
+        <View pointerEvents="box-none" style={[styles.previewSlot, previewAnchorFor(anchor, screenH)]}>
+          {preview}
+        </View>
+      )}
 
       {anchor != null && (
         <View

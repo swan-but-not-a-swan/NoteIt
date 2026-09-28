@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather/static";
+import { Pressable, ScrollView, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -18,9 +17,8 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import type { NativeAd } from "react-native-google-mobile-ads";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
 import { formatDayDate, formatShortDate } from "@/lib/date";
-import { appendSnippet, rubberBand, snapTarget } from "@/lib/noteHelper";
+import { rubberBand, snapTarget } from "@/lib/noteHelper";
 import { NoteModel, TagModel } from "../models/NoteModel";
-import { SnippetModel } from "../models/SnippetModel";
 import EndAdCard from "./EndAd";
 import FilmStrip, { filmStripMetrics } from "./FilmStrip";
 import FullscreenPhoto from "./FullscreenPhoto";
@@ -28,13 +26,16 @@ import MarkdownText from "./MarkdownText";
 import MediaThumb from "./MediaThumb";
 import { viewNoteStyles as styles } from "@/theme/styles/note.styles";
 
+// The geometry and timing below are exported for the enter-note screen, whose
+// draft card condenses its photo onto the same tile the same way.
+
 /** Dead space between two pages, so the photo arriving is visibly a separate
  *  one rather than the same photo sliding. iOS Photos uses the same trick. */
 const GUTTER = 16;
 
 /** One line of note plus its padding — what shows under the photo while the
  *  photo is the thing you're looking at. */
-const HINT_H = 46;
+export const HINT_H = 46;
 
 /** Inactive tile size for the strip while the note is open. The active tile
  *  comes out 8 larger — 96 — which is exactly what the standalone thumbnail
@@ -43,9 +44,9 @@ const NOTE_TILE = 88;
 
 /** Where the open strip's active tile lands. The photo condenses onto exactly
  *  these numbers, so the hand-off from photo to tile is invisible. */
-const TILE = filmStripMetrics(NOTE_TILE);
+export const TILE = filmStripMetrics(NOTE_TILE);
 
-const OPEN_MS = 300;
+export const OPEN_MS = 300;
 /** The strip's own fade. Short and independent of the drag: the gap opens with
  *  your finger, but the strip arriving is an event, not something you scrub. */
 const STRIP_FADE_MS = 140;
@@ -53,10 +54,10 @@ const STRIP_FADE_MS = 140;
 /** The last stretch of the condense, over which the photo hands off to the
  *  strip's own tile. Same image, same place, so the crossfade is invisible and
  *  what you see is one continuous movement. */
-const HANDOFF_FROM = 0.75;
+export const HANDOFF_FROM = 0.75;
 /** Drag this far, or throw the finger this fast, and the note commits. */
-const OPEN_DISTANCE = 55;
-const OPEN_VELOCITY = 500; // px/s
+export const OPEN_DISTANCE = 55;
+export const OPEN_VELOCITY = 500; // px/s
 
 /** The sideways snap. Slightly overdamped (zeta ~1.07), so it decelerates into
  *  place without the bounce a springier config would add — and it takes the
@@ -73,15 +74,6 @@ type Props = {
   colors: ThemeColors;
   noteOpen: boolean;
   onToggleNote: (open: boolean) => void;
-  /** True while the current note's text is being edited in place. */
-  editing: boolean;
-  /** The in-progress text. Owned by the screen, because the header's save
-   *  button lives up there and has to be able to write it. */
-  draft: string;
-  onDraftChange: (text: string) => void;
-  /** Saved snippets, offered as chips under the field while editing. Pass an
-   *  empty array (or omit) to hide the row. */
-  snippets?: SnippetModel[];
   /** A loaded ad to show as one more page after the last note, or null for
    *  none (Plus, not loaded yet, or no fill). It never gets a filmstrip tile:
    *  the strip navigates notes, and the ad isn't one. */
@@ -118,10 +110,6 @@ export default function ViewNote({
   colors,
   noteOpen,
   onToggleNote,
-  editing,
-  draft,
-  onDraftChange,
-  snippets,
   endAd = null,
   adShowing = false,
   onAdShowingChange,
@@ -253,11 +241,6 @@ export default function ViewNote({
   );
 
   const panGesture = Gesture.Pan()
-    // Both axes go away while editing, and both for the same reason: a
-    // sideways swipe would page to a different note with a half-written draft
-    // still in hand, and a downward one would close the note you are typing
-    // into. Committing or cancelling is the only way out.
-    .enabled(!editing)
     .onStart(() => {
       axis.set(null);
       dragFrom.set(offset.get());
@@ -401,16 +384,11 @@ export default function ViewNote({
                     measured={box.h > 0}
                     //* only the page you are on becomes editable — the
                     //* neighbours stay read-only renders of their own text,
-                    //* so the draft can never leak onto the wrong note
-                    editing={editing && isCurrent}
-                    draft={draft}
-                    onDraftChange={onDraftChange}
-                    snippets={snippets}
                     //* only the photo you are looking at, in picture mode: a
                     //* neighbour is half off-screen, the open note has shrunk
                     //* the photo to a tile, and editing owns every tap
                     onOpenPhoto={
-                      isCurrent && !noteOpen && !editing && note.mediaType === "image"
+                      isCurrent && !noteOpen && note.mediaType === "image"
                         ? () => setFullscreenUri(note.mediaUri)
                         : undefined
                     }
@@ -440,9 +418,7 @@ export default function ViewNote({
           height at the top of its note, so the text starts below this. */}
       <Animated.View
         style={[styles.stripLayer, stripLayerStyle]}
-        //* inert while editing for the same reason the swipe is: a tile tap
-        //* is just another way to page away from an unsaved draft
-        pointerEvents={noteOpen && !editing ? "auto" : "none"}
+        pointerEvents={noteOpen ? "auto" : "none"}
       >
         {stripMounted && <FilmStrip {...stripProps} tileSize={NOTE_TILE} showSingle />}
       </Animated.View>
@@ -471,12 +447,6 @@ type CardProps = {
   photoFull: number;
   /** False until onLayout lands, when the animated sizes would all be zero. */
   measured: boolean;
-  /** Already narrowed to this card by the parent — true only on the page
-   *  actually being edited. */
-  editing: boolean;
-  draft: string;
-  onDraftChange: (text: string) => void;
-  snippets?: SnippetModel[];
   /** Shows the photo full screen. Unset where a tap shouldn't do that. */
   onOpenPhoto?: () => void;
 };
@@ -494,10 +464,6 @@ function NoteCard({
   cardW,
   photoFull,
   measured,
-  editing,
-  draft,
-  onDraftChange,
-  snippets,
   onOpenPhoto,
 }: CardProps) {
   //* a null source keeps the hook call unconditional while spending nothing:
@@ -591,65 +557,7 @@ function NoteCard({
           </Text>
         )}
 
-        {editing ? (
-          <>
-            {/* Raw text, not MarkdownText: you edit the source, and the
-                formatting renders again the moment you commit. Same font and
-                size as the rendered note, so committing doesn't reflow the
-                text you just typed. */}
-            <TextInput
-              value={draft}
-              onChangeText={onDraftChange}
-              multiline
-              autoFocus
-              scrollEnabled={false}
-              placeholder="Write a note..."
-              placeholderTextColor={colors.stoneDim}
-              //* the surrounding ScrollView handles growth; a field that
-              //* scrolls internally would trap the gesture and hide its own
-              //* overflow inside a box the note area is already big enough for
-              style={[
-                styles.noteText,
-                styles.noteInput,
-                {
-                  color: colors.textPrimary,
-                  backgroundColor: colors.surface,
-                  borderColor: colors.accent,
-                },
-              ]}
-            />
-
-            {/* The same chip row AddNote offers, so a snippet is reachable
-                whether you are writing a note or coming back to fix one.
-                Taps land because the note ScrollView sets
-                keyboardShouldPersistTaps — otherwise the first tap would be
-                swallowed dismissing the keyboard. */}
-            {snippets != null && snippets.length > 0 && (
-              <View style={styles.snippets}>
-                {snippets.map((s) => (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => onDraftChange(appendSnippet(draft, s.text))}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Insert snippet ${s.name}`}
-                    style={[
-                      styles.snippetChip,
-                      { backgroundColor: colors.surface, borderColor: colors.line },
-                    ]}
-                  >
-                    <Feather name="star" size={11} color={colors.accent} />
-                    <Text
-                      style={[styles.snippetLabel, { color: colors.stone }]}
-                      numberOfLines={1}
-                    >
-                      {s.name}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </>
-        ) : body.length > 0 ? (
+        {body.length > 0 ? (
           <MarkdownText
             text={body}
             //* one line while it is a hint, so a long note ellipsises instead
