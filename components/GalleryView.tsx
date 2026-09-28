@@ -12,6 +12,7 @@ import type { FolderModel } from "@/models/FolderModel";
 import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import GalleryGrid from "./GalleryGrid";
 import GalleryToolbar from "./GalleryToolbar";
+import HeldNotePreview from "./HeldNotePreview";
 import OverflowMenu, { anchorFor, OverflowMenuCard, type MenuAnchor } from "./OverflowMenu";
 import * as Haptics from "expo-haptics";
 import GlassPill from "./GlassPill";
@@ -280,6 +281,9 @@ export default function GalleryView({
         colors={colors}
         anchor={held?.anchor ?? null}
         onClose={() => setHeld(null)}
+        //* the note itself, popped up over the dimmed grid — a menu of four
+        //* verbs says nothing about which note they would act on
+        preview={held != null ? <HeldNotePreview note={held.note} /> : null}
         items={[
           {
             key: "edit",

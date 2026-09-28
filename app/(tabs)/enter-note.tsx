@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActionSheetIOS,
   ActivityIndicator,
@@ -17,6 +17,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerChangeEvent } from "@react-native-community/datetimepicker";
 import * as ImagePicker from "expo-image-picker";
+import * as Clipboard from "expo-clipboard";
 import { useTheme } from "@/theme/ThemeContext";
 import { hexToRgba, LIGHT_THEME, type ThemeColors } from "@/theme/colors";
 import { glass } from "@/theme/glass";
@@ -146,6 +147,38 @@ export default function AddNoteScreen() {
   };
 
   const insertSnippet = (text: string) => {
+    setNote((current) => appendSnippet(current, text));
+  };
+
+  // Whether there is text worth offering to paste. `hasStringAsync` only
+  // reports that something is there — reading it is what raises iOS's paste
+  // banner, and that belongs to a tap, not to opening the screen.
+  const [canPaste, setCanPaste] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    Clipboard.hasStringAsync().then(
+      (has) => {
+        if (!cancelled) setCanPaste(has);
+      },
+      () => {
+        //* nothing to ask (the web preview, or a platform that refuses): leave
+        //* the chip off rather than offering something that can't work
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const pasteIntoNote = async () => {
+    const text = await Clipboard.getStringAsync();
+    //* it emptied between the check and the tap, or holds only whitespace
+    if (text.trim().length === 0) {
+      setCanPaste(false);
+      return;
+    }
+    //* appended the way a snippet is, so pasting into a half-written note
+    //* reads as another paragraph rather than running into the last word
     setNote((current) => appendSnippet(current, text));
   };
 
@@ -421,8 +454,19 @@ export default function AddNoteScreen() {
             />
           </View>
 
-          {snippets.length > 0 && (
+          {(snippets.length > 0 || canPaste) && (
             <View style={styles.snippets}>
+              {canPaste && (
+                <Pressable
+                  onPress={pasteIntoNote}
+                  accessibilityRole="button"
+                  accessibilityLabel="Paste from the clipboard"
+                  style={[styles.snippetChip, glass(colors)]}
+                >
+                  <Feather name="clipboard" size={11} color={colors.teal} />
+                  <Text style={[styles.snippetLabel, { color: colors.stone }]}>Paste</Text>
+                </Pressable>
+              )}
               {snippets.map((snippet) => (
                 <Pressable
                   key={snippet.id}
@@ -468,6 +512,8 @@ export default function AddNoteScreen() {
           onNoteChange={setNote}
           snippets={snippets}
           onInsertSnippet={insertSnippet}
+          canPaste={canPaste}
+          onPaste={pasteIntoNote}
           tags={tags}
           onRemoveTag={removeTag}
           noteOpen={noteOpen}

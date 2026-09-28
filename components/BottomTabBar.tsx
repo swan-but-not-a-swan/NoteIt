@@ -12,6 +12,7 @@ import Animated, {
 import { scheduleOnRN } from "react-native-worklets";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
 import { glass } from "@/theme/glass";
+import GlassSurface from "./GlassSurface";
 import type { FolderModel } from "@/models/FolderModel";
 import { bottomTabBarStyles as styles } from "@/theme/styles/app.styles";
 
@@ -86,13 +87,10 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
       {/* the full-width strip only holds the dock off the screen's edges; the
           pages show through everything around it */}
       <View style={[styles.dockWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : DOCK_EDGE_GAP }]}>
-        <View
-          style={[
-            styles.dock,
-            //* Liquid Glass after the iOS home-screen dock (see theme/glass.ts)
-            glass(colors, { lift: "float" }),
-          ]}
-        >
+        {/* real Liquid Glass where iOS has it, the painted one everywhere
+            else — the dock is the app's most-seen chrome, so it is the surface
+            worth spending the native material on */}
+        <GlassSurface colors={colors} lift="float" style={styles.dock}>
           <DockButton
             icon="folder"
             label="Folders"
@@ -135,7 +133,7 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
             colors={colors}
             onPress={() => onSelectTab("gallery")}
           />
-        </View>
+        </GlassSurface>
       </View>
     </GestureDetector>
   );

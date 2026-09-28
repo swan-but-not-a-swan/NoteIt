@@ -396,3 +396,18 @@ export const compareScreenStyles = StyleSheet.create({
   },
   emptyLabel: common.regular12,
 });
+
+//* components/HeldNotePreview.tsx
+export const heldNotePreviewStyles = StyleSheet.create({
+  //* placed by OverflowMenuCard, which puts it on the opposite side of the
+  //* finger from the menu itself
+  preview: {
+    position: "absolute",
+    alignSelf: "center",
+    borderRadius: 28,
+    overflow: "hidden",
+    //* it floats over a dimmed grid, so it needs a shadow deep enough to read
+    //* as lifted off it rather than printed on it
+    boxShadow: [{ offsetX: 0, offsetY: 18, blurRadius: 40, color: "rgba(0,0,0,0.5)" }],
+  },
+});

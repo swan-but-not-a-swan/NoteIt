@@ -25,7 +25,7 @@ const INNER_RIM: BoxShadowValue = {
   inset: true,
 };
 
-type GlassOptions = {
+export type GlassOptions = {
   /** Colours the glass: a control that's switched on, or a primary action. */
   tint?: string;
   /** "wash" (the default) lays the tint thinly, for a selected control whose

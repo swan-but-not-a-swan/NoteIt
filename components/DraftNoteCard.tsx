@@ -32,6 +32,10 @@ type Props = {
   onNoteChange: (text: string) => void;
   snippets: SnippetModel[];
   onInsertSnippet: (text: string) => void;
+  /** Whether the clipboard holds text worth offering. Checked by the screen,
+   *  so the chip appears in both of its states for the same reason. */
+  canPaste: boolean;
+  onPaste: () => void;
   tags: string[];
   onRemoveTag: (tag: string) => void;
   /** Owned by the screen, like the viewer's, because the header's toggle has
@@ -61,6 +65,8 @@ export default function DraftNoteCard({
   onNoteChange,
   snippets,
   onInsertSnippet,
+  canPaste,
+  onPaste,
   tags,
   onRemoveTag,
   noteOpen,
@@ -208,8 +214,19 @@ export default function DraftNoteCard({
                   />
                 </View>
 
-                {snippets.length > 0 && (
+                {(snippets.length > 0 || canPaste) && (
                   <View style={styles.snippets}>
+                    {canPaste && (
+                      <Pressable
+                        onPress={onPaste}
+                        accessibilityRole="button"
+                        accessibilityLabel="Paste from the clipboard"
+                        style={[styles.snippetChip, glass(colors)]}
+                      >
+                        <Feather name="clipboard" size={11} color={colors.teal} />
+                        <Text style={[styles.snippetLabel, { color: colors.stone }]}>Paste</Text>
+                      </Pressable>
+                    )}
                     {snippets.map((snippet) => (
                       <Pressable
                         key={snippet.id}

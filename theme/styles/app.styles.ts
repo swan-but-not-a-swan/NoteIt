@@ -219,6 +219,14 @@ export const overflowMenuStyles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   triggerLabel: common.bold12_5,
+  //* the held thing, shown over the backdrop opposite the card. Stretched
+  //* across so the preview inside can centre itself
+  previewSlot: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
   backdrop: {
     position: "absolute",
     top: 0,
