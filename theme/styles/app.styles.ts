@@ -2,12 +2,13 @@
 //* each component imports its export as `styles`; theme colours stay inline there
 
 import { StyleSheet } from "react-native";
-import { DARK_THEME, hexToRgba } from "@/theme/colors";
+import { hexToRgba, LIGHT_THEME } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
 import { common } from "@/theme/styles/common.styles";
 
-//* components/in-app-splash.tsx
-export const SPLASH_COLORS = DARK_THEME;
+//* components/in-app-splash.tsx — light, like the app's default theme and the
+//* native splash before it (app.json), so opening the app doesn't flash dark
+export const SPLASH_COLORS = LIGHT_THEME;
 
 export const splashStyles = StyleSheet.create({
   container: {
@@ -149,14 +150,13 @@ export const bottomTabBarStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  //* the lens the active tab's icon sits in
+  //* the lens the active tab's icon sits in: one for the dock, slid from the
+  //* left edge to the active tab (translateX), size and top set inline
   dockLens: {
     position: "absolute",
-    top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
     borderRadius: 23,
+    pointerEvents: "none",
   },
   //* same footprint as the 24pt Feather icons it stands in for, plus the ring
   folderThumb: {
@@ -219,6 +219,15 @@ export const overflowMenuStyles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   triggerLabel: common.bold12_5,
+  //* the layer the card hangs in: the whole screen, so an anchor's top or
+  //* bottom is measured from the screen's own edges
+  cardLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   //* with a preview, the menu stops being anchored to the finger and the two
   //* stack in the middle instead — the held thing above, the verbs under it,
   //* the way Photos lays its context menu out. Anchoring a tall preview off a

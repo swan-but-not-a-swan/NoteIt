@@ -25,7 +25,9 @@ import { flatSurface } from "@/theme/glass";
 import { exifCaptureDate, formatDayDate, toLocalISODate, todayISO } from "@/lib/date";
 import { appendSnippet, saveNoteDraftAsync, saveTagsAsync } from "@/lib/noteHelper";
 import { useLibrary } from "@/lib/LibraryContext";
+import { useEntitlements } from "@/lib/EntitlementsContext";
 import { useKeyboardHeight } from "@/lib/useKeyboardHeight";
+import { useSaveInterstitial } from "@/lib/useSaveInterstitial";
 import type { NoteMediaType, TagModel } from "@/models/NoteModel";
 import DraftNoteCard from "@/components/DraftNoteCard";
 import GlassPressable from "@/components/GlassPressable";
@@ -88,6 +90,7 @@ export default function AddNoteScreen() {
   const { id, folderId: folderParam } = useLocalSearchParams<{ id?: string; folderId?: string }>();
 
   const { notes, folders, tags: storedTags, snippets, saveNoteAsync, refreshNotesAndTagsAsync } = useLibrary();
+  const { hasPlus } = useEntitlements();
 
   //* the note being reworked, or null when this is a new one
   const editing = id != null ? notes.find((n) => n.id === id) ?? null : null;
@@ -95,6 +98,16 @@ export default function AddNoteScreen() {
   const [note, setNote] = useState("");
   const [mediaUri, setMediaUri] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<NoteMediaType | null>(null);
+
+  //* the full-screen ad after saving a note, new or edited — an image ad after
+  //* a photo, a video ad after a video. Starts loading once there's a picture
+  //* (picked, or the edited note's own), so it's ready by Save; never for a
+  //* subscriber, and not for an edit that changed nothing (saveAsync just
+  //* closes that)
+  const showSaveAdThen = useSaveInterstitial(
+    mediaUri != null ? (mediaType === "video" ? "video" : "image") : null,
+    hasPlus === false,
+  );
   const [mediaMimeType, setMediaMimeType] = useState<string | null>(null);
   const [date, setDate] = useState(todayISO());
   const [tags, setTags] = useState<string[]>([]);
@@ -363,7 +376,9 @@ export default function AddNoteScreen() {
     setSaving(false);
 
     await refreshNotesAndTagsAsync(); //* refreshes the store before navigating back
-    router.back();
+    //* the note is already saved: the ad (when one is ready) comes between
+    //* saving and landing back on the notes, and its close is what goes back
+    showSaveAdThen(() => router.back());
   };
 
   const confirmCancel = () => {
@@ -575,7 +590,6 @@ export default function AddNoteScreen() {
                 <GlassPressable
                   colors={colors}
                   tint={noteOpen ? colors.accent : undefined}
-                  strength="fill"
                   onPress={() => toggleNote(!noteOpen)}
                   hitSlop={8}
                   accessibilityRole="button"
@@ -583,7 +597,7 @@ export default function AddNoteScreen() {
                   accessibilityLabel={noteOpen ? "Show the photo" : "Show the note"}
                   style={styles.headerButton}
                 >
-                  <Feather name="file-text" size={16} color={noteOpen ? colors.onAccent : colors.textPrimary} />
+                  <Feather name="file-text" size={16} color={noteOpen ? colors.accent : colors.textPrimary} />
                 </GlassPressable>
 
                 {/* the picture is fixed once a note exists, so the menu that
@@ -641,7 +655,7 @@ export default function AddNoteScreen() {
           >
             <Feather name="image" size={30} color={colors.accent} />
             <Text style={[styles.pickLabel, { color: colors.accent }]}>Add photo or video</Text>
-            <Text style={[styles.pickHint, { color: colors.stoneDim }]}>A note needs a picture</Text>
+            <Text style={[styles.pickHint, { color: colors.stoneDim }]}>A note needs a media</Text>
           </PressableScale>
 
           {error != null && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}

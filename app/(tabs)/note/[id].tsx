@@ -169,7 +169,6 @@ export default function ViewNotes() {
                         <GlassPressable
                             colors={colors}
                             tint={noteOpen ? colors.accent : undefined}
-                            strength="fill"
                             onPress={() => setNoteOpen(!noteOpen)}
                             hitSlop={8}
                             accessibilityRole="button"
@@ -180,7 +179,7 @@ export default function ViewNotes() {
                             <Feather
                                 name="file-text"
                                 size={16}
-                                color={noteOpen ? colors.onAccent : colors.textPrimary}
+                                color={noteOpen ? colors.accent : colors.textPrimary}
                             />
                         </GlassPressable>
 

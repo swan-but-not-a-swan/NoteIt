@@ -143,7 +143,11 @@ export function OverflowMenuCard({ colors, items, anchor, onClose, preview }: Ca
       {anchor != null && (
         <Animated.View
           pointerEvents="box-none"
-          style={[preview != null ? styles.previewLayout : undefined, preview != null && risen]}
+          //* the whole screen in both modes: the card's anchor is measured from
+          //* the screen's edges, and without a size of its own this layer was
+          //* a zero-height strip at the top — a menu opening upward (More, by
+          //* the dock) then hung its card above the screen, out of sight
+          style={[styles.cardLayer, preview != null && styles.previewLayout, preview != null && risen]}
         >
           {preview}
           <View

@@ -18,7 +18,7 @@ import { configurePurchases } from "./entitlements";
 // from the moment its ad loads until the next ad replaces it.
 
 /** Where the ad sits, reported as RevenueCat's `placement`. */
-export type AdPlacement = "folders_list" | "viewer_bar" | "viewer_end";
+export type AdPlacement = "folders_list" | "viewer_bar" | "viewer_end" | "note_saved";
 
 /** One loaded ad: what RevenueCat needs to attribute its events. */
 export type TrackedAd = {

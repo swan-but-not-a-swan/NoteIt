@@ -91,11 +91,20 @@ export const NATIVE_GLASS_BASE: ViewStyle = {
   backgroundColor: "transparent",
 };
 
-/** The tint handed to GlassView: the colour itself for a primary action, a
- *  thinner layer of it for a control that's switched on. */
+/** The tint handed to GlassView. Only a primary action keeps its colour (Save,
+ *  and the buttons that do the same job), like iOS's own glass: every other
+ *  control stays clear glass, and one that's switched on shows it with a
+ *  brighter lens instead (glassSelectedLens), the way Photos lights "All". */
 export function glassTintColor(tint: string | undefined, strength: GlassOptions["strength"] = "wash") {
   if (tint == null) return undefined;
-  return strength === "fill" ? tint : hexToRgba(tint, 0.3);
+  return strength === "fill" ? tint : undefined;
+}
+
+/** The brighter lens inside a switched-on glass control, or null when there's
+ *  nothing to light: clear glass catching more light, not a colour. */
+export function glassSelectedLens(colors: ThemeColors, { tint, strength = "wash" }: GlassOptions): string | null {
+  if (tint == null || strength === "fill") return null;
+  return colors === LIGHT_THEME ? "rgba(255, 255, 255, 0.6)" : "rgba(255, 255, 255, 0.16)";
 }
 
 /**

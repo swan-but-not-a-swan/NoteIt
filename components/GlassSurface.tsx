@@ -1,7 +1,14 @@
-import { View, type ViewProps } from "react-native";
+import { StyleSheet, View, type ViewProps } from "react-native";
 import { GlassView } from "expo-glass-effect";
 import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
-import { flatSurface, glassTintColor, NATIVE_GLASS, NATIVE_GLASS_BASE, type GlassOptions } from "@/theme/glass";
+import {
+  flatSurface,
+  glassSelectedLens,
+  glassTintColor,
+  NATIVE_GLASS,
+  NATIVE_GLASS_BASE,
+  type GlassOptions,
+} from "@/theme/glass";
 
 type Props = ViewProps & GlassOptions & { colors: ThemeColors };
 
@@ -23,10 +30,13 @@ export default function GlassSurface({ colors, tint, strength = "wash", lift = "
     );
   }
 
+  //* a switched-on surface is lit, not coloured (theme/glass.ts)
+  const lens = glassSelectedLens(colors, { tint, strength });
+  const radius = StyleSheet.flatten(style)?.borderRadius;
+
   return (
     <GlassView
-      //* the tint is what separates a primary action from a plain control, so
-      //* the material itself stays "regular" and the colour does the talking
+      //* clear glass; only a primary action keeps its colour as a tint
       glassEffectStyle="regular"
       tintColor={glassTintColor(tint, strength)}
       //* the app has its own light/dark toggle, so the glass follows the theme
@@ -37,6 +47,20 @@ export default function GlassSurface({ colors, tint, strength = "wash", lift = "
       style={[NATIVE_GLASS_BASE, style]}
       {...rest}
     >
+      {lens != null && (
+        <View
+          style={{
+            position: "absolute",
+            pointerEvents: "none",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            borderRadius: radius,
+            backgroundColor: lens,
+          }}
+        />
+      )}
       {children}
     </GlassView>
   );

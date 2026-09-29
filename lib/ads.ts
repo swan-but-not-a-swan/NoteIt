@@ -11,6 +11,14 @@ const IOS_BANNER = process.env.EXPO_PUBLIC_ADMOB_BANNER_IOS;
 // one — so it gets a unit pair of its own.
 const ANDROID_NATIVE = process.env.EXPO_PUBLIC_ADMOB_NATIVE_ANDROID;
 const IOS_NATIVE = process.env.EXPO_PUBLIC_ADMOB_NATIVE_IOS;
+// The full-screen ad after a picture-note is saved. Two units per platform,
+// because the kind of ad follows the kind of note: an image (or rich-media)
+// interstitial after a photo, a video interstitial after a video. Which formats
+// a unit may serve is set on the unit in AdMob, not here.
+const ANDROID_INTERSTITIAL = process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ANDROID;
+const IOS_INTERSTITIAL = process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_IOS;
+const ANDROID_INTERSTITIAL_VIDEO = process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_VIDEO_ANDROID;
+const IOS_INTERSTITIAL_VIDEO = process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_VIDEO_IOS;
 
 // Devices allowed to receive *test* creatives from *real* ad units, as a
 // comma-separated list of the identifiers AdMob prints to the device log on
@@ -64,6 +72,28 @@ export function nativeAdUnitId(): string {
     return configured;
   }
   return TestIds.NATIVE;
+}
+
+/**
+ * The full-screen unit shown after saving a picture-note: the image unit after
+ * a photo, the video unit after a video. Same rules as the banner — Google's
+ * test units in development, and in production whenever nothing is configured.
+ */
+export function interstitialAdUnitId(kind: "image" | "video"): string {
+  //* the library types the video test unit as optional; the image one always exists
+  const test = (kind === "video" ? TestIds.INTERSTITIAL_VIDEO : undefined) ?? TestIds.INTERSTITIAL;
+  if (__DEV__) {
+    return test;
+  }
+
+  const configured =
+    kind === "video"
+      ? Platform.select({ android: ANDROID_INTERSTITIAL_VIDEO, ios: IOS_INTERSTITIAL_VIDEO })
+      : Platform.select({ android: ANDROID_INTERSTITIAL, ios: IOS_INTERSTITIAL });
+  if (configured != null && configured.trim().length > 0) {
+    return configured;
+  }
+  return test;
 }
 
 /** True while the app can only serve Google's sample creatives — no AdMob

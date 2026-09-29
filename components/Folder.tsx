@@ -4,6 +4,7 @@ import { Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import { NATIVE_GLASS } from "@/theme/glass";
 import GlassPressable from "./GlassPressable";
 import { FolderModel } from "../models/FolderModel";
 import { folderStyles as styles } from "@/theme/styles/folders.styles";
@@ -56,7 +57,9 @@ export default function Folder({ folder, count, colors, onOpen, onEdit }: Props)
 
       <GlassPressable
         colors={colors}
-        tint={folder.accent}
+        //* the folder's colour on the flat surface; clear glass on iOS 26, where
+        //* a tinted control reads as switched on (theme/glass.ts)
+        tint={NATIVE_GLASS ? undefined : folder.accent}
         onPress={onEdit}
         hitSlop={8}
         style={styles.editButton}

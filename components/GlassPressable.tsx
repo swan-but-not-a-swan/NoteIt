@@ -1,7 +1,7 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { GlassView } from "expo-glass-effect";
 import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
-import { flatSurface, glassTintColor, NATIVE_GLASS, NATIVE_GLASS_BASE, type GlassOptions } from "@/theme/glass";
+import { flatSurface, glassSelectedLens, glassTintColor, NATIVE_GLASS, NATIVE_GLASS_BASE, type GlassOptions } from "@/theme/glass";
 import PressableScale, { type PressableScaleProps } from "./PressableScale";
 
 type Props = PressableScaleProps & GlassOptions & { colors: ThemeColors };
@@ -19,6 +19,17 @@ export default function GlassPressable({ colors, tint, strength = "wash", lift =
   //* an absolute child is placed inside the border, so it's pushed back out
   //* over it to cover the whole button
   const inset = -(typeof shape.borderWidth === "number" ? shape.borderWidth : 1);
+  const layer = {
+    position: "absolute" as const,
+    pointerEvents: "none" as const,
+    top: inset,
+    left: inset,
+    right: inset,
+    bottom: inset,
+    borderRadius: shape.borderRadius,
+  };
+  //* a switched-on control is lit, not coloured (theme/glass.ts)
+  const lens = NATIVE_GLASS ? glassSelectedLens(colors, { tint, strength }) : null;
 
   return (
     <PressableScale
@@ -35,17 +46,10 @@ export default function GlassPressable({ colors, tint, strength = "wash", lift =
               glassEffectStyle="regular"
               tintColor={glassTintColor(tint, strength)}
               colorScheme={colors === LIGHT_THEME ? "light" : "dark"}
-              style={{
-                position: "absolute",
-                pointerEvents: "none",
-                top: inset,
-                left: inset,
-                right: inset,
-                bottom: inset,
-                borderRadius: shape.borderRadius,
-              }}
+              style={layer}
             />
           )}
+          {lens != null && <View style={[layer, { backgroundColor: lens }]} />}
           {typeof children === "function" ? children(state) : children}
         </>
       )}
