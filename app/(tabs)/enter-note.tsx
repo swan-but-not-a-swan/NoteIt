@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActionSheetIOS,
+  AppState,
+  BackHandler,
   ActivityIndicator,
   Alert,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
@@ -19,19 +20,29 @@ import DateTimePicker, { DateTimePickerAndroid, type DateTimePickerChangeEvent }
 import * as ImagePicker from "expo-image-picker";
 import * as Clipboard from "expo-clipboard";
 import { useTheme } from "@/theme/ThemeContext";
-import { hexToRgba, LIGHT_THEME, type ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import { LIGHT_THEME } from "@/theme/colors";
+import { flatSurface } from "@/theme/glass";
 import { exifCaptureDate, formatDayDate, toLocalISODate, todayISO } from "@/lib/date";
 import { appendSnippet, saveNoteDraftAsync, saveTagsAsync } from "@/lib/noteHelper";
 import { useLibrary } from "@/lib/LibraryContext";
+import { useKeyboardHeight } from "@/lib/useKeyboardHeight";
 import type { NoteMediaType, TagModel } from "@/models/NoteModel";
 import DraftNoteCard from "@/components/DraftNoteCard";
+import GlassPressable from "@/components/GlassPressable";
+import InputPanel, { inputPanelHeight } from "@/components/InputPanel";
+import NoteFields from "@/components/NoteFields";
 import OverflowMenu from "@/components/OverflowMenu";
+import PressableScale from "@/components/PressableScale";
+import SuggestionRow, { type SuggestionChip } from "@/components/SuggestionRow";
 import TopBar, { TopBarActions, TopBarIconButton } from "@/components/TopBar";
+import WheelPicker, { type WheelItem } from "@/components/WheelPicker";
 import { useFieldFocus } from "@/theme/focus";
 import { addNoteScreenStyles as styles } from "@/theme/styles/note.styles";
 
-type Panel = "date" | "tags" | "folder";
+/** What opens in the keyboard's place: the folder wheel, or the date picker. */
+type Picker = "folder" | "date";
+/** Which text field has the keyboard, which decides what rides on top of it. */
+type TypingField = "note" | "tags";
 type MediaSource = "camera" | "library";
 
 /** The titles behind a saved note's tag ids, in the order it stored them. The
@@ -44,6 +55,9 @@ function tagTitlesOf(tagIds: string[], storedTags: TagModel[]): string[] {
 
 const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every((tag, i) => tag === b[i]);
 
+/** A tag as the store keys it: no leading #, lower case, no outer spaces. */
+const cleanTag = (text: string) => text.trim().replace(/^#/, "").toLowerCase();
+
 // Writing a picture-note, and reworking one: the same screen, because a note
 // is the same thing before and after it is saved, and two screens drawing it
 // meant two places to fix whenever it changed.
@@ -54,6 +68,13 @@ const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every(
 // replacing it means copying a new file, rebuilding the thumbnail and clearing
 // up the old one, which is a job of its own.
 //
+// Layout (v1.2): the picture, the date line, the note, then Tags, Folder and
+// Date as fields of their own under it. Whatever takes the bottom of the screen
+// changes with what you're doing — the keyboard with snippets on top of it for
+// the note, the keyboard with saved tags on top for Tags, a folder wheel or a
+// date picker in the keyboard's place for those two. Save stays pinned under
+// all of it and only appears once there's a picture to save.
+//
 // The state lives here rather than in a hook of its own. It was a hook while
 // this was a modal that several screens opened; now that it is a route, the
 // hook's `visible`/`open`/`cancel` were three ways of saying "navigate", and
@@ -61,9 +82,9 @@ const sameTags = (a: string[], b: string[]) => a.length === b.length && a.every(
 export default function AddNoteScreen() {
   const { colors } = useTheme();
   const captionFocus = useFieldFocus(colors);
-  const tagFocus = useFieldFocus(colors);
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardHeight();
   const { id, folderId: folderParam } = useLocalSearchParams<{ id?: string; folderId?: string }>();
 
   const { notes, folders, tags: storedTags, snippets, saveNoteAsync, refreshNotesAndTagsAsync } = useLibrary();
@@ -83,10 +104,15 @@ export default function AddNoteScreen() {
   //* every await below is a chance for a second tap to start a duplicate write
   const [saving, setSaving] = useState(false);
 
-  const [panel, setPanel] = useState<Panel | null>(null);
+  const [picker, setPicker] = useState<Picker | null>(null);
+  const [typing, setTyping] = useState<TypingField | null>(null);
   const [noteOpen, setNoteOpen] = useState(true); //* the viewer's two modes, note = true, photo = false
+  //* how tall the pinned Save area is, so the fields can scroll out from under it
+  const [footerHeight, setFooterHeight] = useState(0);
 
-  //* the folder pill reflects the folder this was opened from on the first
+  //* whichever scroll view holds the fields: the empty state's, or the draft card's
+  const scrollRef = useRef<ScrollView>(null);
+  //* the folder field reflects the folder this was opened from on the first
   //* render, rather than a frame later
   const [folderApplied, setFolderApplied] = useState(false);
   if (folderApplied === false) {
@@ -113,7 +139,6 @@ export default function AddNoteScreen() {
   }
 
   const folder = folders.find((f) => f.id === folderId) ?? null;
-  const canSave = mediaUri != null && !saving;
 
   //* what a cancel would throw away: everything for a new note, and whatever
   //* differs from what was stored for one being reworked
@@ -125,25 +150,24 @@ export default function AddNoteScreen() {
         !sameTags(tags, tagTitlesOf(editing.tagIds, storedTags))
       : mediaUri != null || note.trim().length > 0 || tags.length > 0;
 
+  const hasTag = (title: string) => tags.some((t) => t.toLowerCase() === title.toLowerCase());
+
   const commitTag = () => {
-    const clean = tagInput.trim().replace(/^#/, "").toLowerCase();
+    const clean = cleanTag(tagInput);
     if (clean.length > 0) {
       setTags((current) => (current.some((t) => t.toLowerCase() === clean) ? current : [...current, clean]));
     }
     setTagInput("");
   };
 
-  const removeTag = (tag: string) => {
-    setTags((current) => current.filter((t) => t !== tag));
+  //* a saved tag picked from the row on the keyboard
+  const addTag = (title: string) => {
+    setTags((current) => (current.some((t) => t.toLowerCase() === title.toLowerCase()) ? current : [...current, title]));
+    setTagInput("");
   };
 
-  const toggleStoredTag = (tag: TagModel) => {
-    const title = tag.title.toLowerCase();
-    setTags((current) =>
-      current.some((t) => t.toLowerCase() === title) //* adds or removes the tag from the note's list of tags
-        ? current.filter((t) => t.toLowerCase() !== title)
-        : [...current, tag.title],
-    );
+  const removeTag = (tag: string) => {
+    setTags((current) => current.filter((t) => t !== tag));
   };
 
   const insertSnippet = (text: string) => {
@@ -156,17 +180,31 @@ export default function AddNoteScreen() {
   const [canPaste, setCanPaste] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    Clipboard.hasStringAsync().then(
-      (has) => {
-        if (!cancelled) setCanPaste(has);
-      },
-      () => {
-        //* nothing to ask (the web preview, or a platform that refuses): leave
-        //* the chip off rather than offering something that can't work
-      },
-    );
+
+    const check = () => {
+      Clipboard.hasStringAsync().then(
+        (has) => {
+          if (!cancelled) setCanPaste(has);
+        },
+        () => {
+          //* nothing to ask (the web preview, or a platform that refuses):
+          //* leave the chip off rather than offering something that can't work
+        },
+      );
+    };
+
+    check();
+    //* and again whenever the app comes back to the front. Copying happens in
+    //* another app — a browser, a chat — so the clipboard almost always fills
+    //* while this screen is in the background, and a check that only ran on
+    //* mount would leave the chip hidden exactly when it is wanted.
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") check();
+    });
+
     return () => {
       cancelled = true;
+      sub.remove();
     };
   }, []);
 
@@ -189,6 +227,9 @@ export default function AddNoteScreen() {
       setError("Photo/video preview isn't supported in the web preview — test this on a device or simulator.");
       return;
     }
+
+    Keyboard.dismiss();
+    setPicker(null);
 
     if (Platform.OS === "ios") {
       ActionSheetIOS.showActionSheetWithOptions(
@@ -242,6 +283,8 @@ export default function AddNoteScreen() {
     if (result.canceled) return;
 
     const asset = result.assets[0];
+    //* the draft card mounts with this and puts the cursor in the note
+    setNoteOpen(true);
     setMediaUri(asset.uri);
     //* checks whether the media is image or video
     setMediaType(asset.type === "video" || asset.mimeType?.startsWith("video/") === true ? "video" : "image");
@@ -260,26 +303,30 @@ export default function AddNoteScreen() {
     setDate(toLocalISODate(selectedDate));
   };
 
-  const pressDate = () => {
-    if (Platform.OS === "web") {
+  //* Android has a native dialog, so it's opened imperatively rather than as a
+  //* panel; iOS gets the wheel in the keyboard's place
+  const openPicker = (next: Picker) => {
+    //* the folder wheel is JS and works anywhere; the date picker is native
+    if (next === "date" && Platform.OS === "web") {
       setError("Date picker isn't supported in the web preview — test this on a device or simulator.");
       return;
     }
+    Keyboard.dismiss();
 
-    //* android has a native dialog, so we open it imperatively and don't render the component at all
-    DateTimePickerAndroid.open({
-      value: new Date(`${date}T00:00:00`),
-      mode: "date",
-      onValueChange: onChangeDate,
-    });
+    if (next === "date" && Platform.OS === "android") {
+      setPicker(null);
+      DateTimePickerAndroid.open({
+        value: new Date(`${date}T00:00:00`),
+        mode: "date",
+        onValueChange: onChangeDate,
+      });
+      return;
+    }
+    setPicker((current) => (current === next ? null : next));
   };
 
   const saveAsync = async () => {
-    if (saving) return;
-    if (mediaUri == null) {
-      setError("Add a photo or video first.");
-      return;
-    }
+    if (saving || mediaUri == null) return;
 
     //* an untouched note would still cost a write, so treat saving one as the
     //* cancel it effectively is
@@ -338,15 +385,23 @@ export default function AddNoteScreen() {
     );
   };
 
-  const togglePanel = (next: Panel) => {
-    if (next === "date" && Platform.OS === "android") //* Andrioid has native date picker so the pill opens it instead of a panel
-    {
-      setPanel(null);
-      pressDate();
-      return;
-    }
-    setPanel((current) => (current === next ? null : next)); //* iOS gets the inline calendar, where the note stays visible
-  };
+  // Android's own back gesture leaves the same way the X does, so it has to
+  // ask the same question. Without this a picked photo and everything written
+  // about it went in one swipe, with nothing said. An open picker goes first,
+  // the way back closes the keyboard before it leaves a screen.
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (picker != null) {
+        setPicker(null);
+        return true;
+      }
+      if (!dirty) return false; //* nothing to lose: let the back happen
+      confirmCancel();
+      return true; //* handled — the alert decides what happens next
+    });
+    return () => sub.remove();
+  });
 
   const toggleNote = (next: boolean) => {
     if (next === false) Keyboard.dismiss(); //* dismiss the keyboard when switching to the photo view
@@ -361,11 +416,155 @@ export default function AddNoteScreen() {
     setNoteOpen(true);
   };
 
+  //* a text field taking the keyboard closes whichever picker was open
+  const startTyping = (field: TypingField) => {
+    setTyping(field);
+    setPicker(null);
+  };
+  const stopTyping = (field: TypingField) => {
+    setTyping((current) => (current === field ? null : current));
+  };
+
+  // What covers the bottom of the screen right now, so the fields can scroll
+  // clear of it: the keyboard, a picker, or just Save.
+  const bottomCover = Math.max(
+    mediaUri != null ? footerHeight : insets.bottom,
+    typing != null ? keyboard.height : 0,
+    picker != null ? inputPanelHeight(insets.bottom) : 0,
+  );
+  const bottomInset = bottomCover + 16;
+  //* the draft card already ends where Save begins, so it only needs room for
+  //* whatever reaches higher than Save — the keyboard, a picker
+  const cardInset = Math.max(bottomCover - footerHeight, 0) + 16;
+
+  // A picker opening scrolls to the end, where the fields are, so the one
+  // being changed stays in sight above it. Waits a frame for the new padding.
+  useEffect(() => {
+    if (picker == null) return;
+    const frame = requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [picker, bottomInset]);
+
+  // The focused field and the chips under it are one block, and while a
+  // keyboard is docked the scroll sets that block's bottom edge on the
+  // keyboard's top edge — so the chips read as sitting on the keyboard, the
+  // way the old floating row did, but stay under their field when there's no
+  // keyboard on screen at all (a hardware one, Gboard's floating toolbar).
+  // Measured in the window rather than worked out from layout, because the
+  // block lives in a different scroll view before and after the picture.
+  // Re-runs when the block changes size: a note growing a line, a tag added.
+  const noteBlockRef = useRef<View>(null);
+  const tagsBlockRef = useRef<View>(null);
+  const scrollOffset = useRef(0);
+  const [blockLayouts, setBlockLayouts] = useState(0);
+  const onBlockLayout = () => setBlockLayouts((n) => n + 1);
+  const { height: windowHeight } = useWindowDimensions();
+  useEffect(() => {
+    if (typing == null || keyboard.height <= 0) return;
+    const block = typing === "tags" ? tagsBlockRef.current : noteBlockRef.current;
+    if (block == null) return;
+    const frame = requestAnimationFrame(() => {
+      block.measureInWindow((_x, y, _width, height) => {
+        const keyboardTop = windowHeight - keyboard.height;
+        //* a little air between the chips and the keys
+        const overshoot = y + height + 8 - keyboardTop;
+        if (Math.abs(overshoot) < 2) return;
+        scrollRef.current?.scrollTo({ y: Math.max(0, scrollOffset.current + overshoot), animated: true });
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [typing, keyboard.height, windowHeight, blockLayouts]);
+
+  const folderItems: WheelItem[] = [
+    { key: "none", label: "No folder" },
+    ...folders.map((f) => ({ key: f.id, label: f.name, swatch: f.accent })),
+  ];
+  const folderIndex = folderId == null ? 0 : folders.findIndex((f) => f.id === folderId) + 1;
+
+  //* the chips under the focused field: saved tags for Tags, snippets for the note
+  const typed = cleanTag(tagInput);
+  const tagChips: SuggestionChip[] = storedTags
+    .filter((tag) => !hasTag(tag.title))
+    .filter((tag) => typed.length === 0 || tag.title.toLowerCase().includes(typed))
+    .map((tag) => ({ key: tag.id, label: `#${tag.title}`, onPress: () => addTag(tag.title) }));
+  if (typed.length > 0 && !hasTag(typed) && !storedTags.some((tag) => tag.title.toLowerCase() === typed)) {
+    tagChips.push({
+      key: "create",
+      label: `Create #${typed}`,
+      icon: "plus",
+      iconColor: colors.teal,
+      create: true,
+      onPress: commitTag,
+    });
+  }
+  const snippetChips: SuggestionChip[] = [
+    ...(canPaste
+      ? [{
+          key: "paste",
+          label: "Paste",
+          icon: "clipboard" as const,
+          iconColor: colors.teal,
+          accessibilityLabel: "Paste from the clipboard",
+          onPress: pasteIntoNote,
+        }]
+      : []),
+    ...snippets.map((snippet) => ({
+      key: snippet.id,
+      label: snippet.name,
+      icon: "star" as const,
+      iconColor: colors.accent,
+      accessibilityLabel: `Insert snippet ${snippet.name}`,
+      onPress: () => insertSnippet(snippet.text),
+    })),
+  ];
+
+  const tagSuggestions = (
+    <SuggestionRow
+      colors={colors}
+      chips={tagChips}
+      accessibilityLabel="Saved tags"
+      emptyLabel={typed.length > 0 ? "No saved tags match" : "No saved tags yet — type one and press return"}
+    />
+  );
+  const noteSuggestions = (
+    <SuggestionRow
+      colors={colors}
+      chips={snippetChips}
+      accessibilityLabel="Snippets"
+      emptyLabel="No snippets yet — add them in Settings"
+    />
+  );
+
+  const fields = (
+    <NoteFields
+      colors={colors}
+      tags={tags}
+      onRemoveTag={removeTag}
+      tagInput={tagInput}
+      onTagInputChange={setTagInput}
+      onSubmitTag={commitTag}
+      onTagsFocus={() => startTyping("tags")}
+      //* whatever was left typed becomes a tag, as it did before
+      onTagsBlur={() => {
+        stopTyping("tags");
+        commitTag();
+      }}
+      tagsFocused={typing === "tags"}
+      tagSuggestions={tagSuggestions}
+      tagsBlockRef={tagsBlockRef}
+      onTagsBlockLayout={onBlockLayout}
+      folderName={folder?.name ?? null}
+      folderAccent={folder?.accent ?? null}
+      folderOpen={picker === "folder"}
+      onPressFolder={() => openPicker("folder")}
+      dateLabel={formatDayDate(date)}
+      dateOpen={picker === "date"}
+      onPressDate={() => openPicker("date")}
+    />
+  );
+
   return (
-    <KeyboardAvoidingView
-      style={[styles.screen, { backgroundColor: colors.bg }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={[styles.screen, { backgroundColor: colors.bg }]}>
       <TopBar
         title={editing != null ? "Edit note" : "New note"}
         colors={colors}
@@ -373,19 +572,19 @@ export default function AddNoteScreen() {
           <TopBarActions>
             {mediaUri != null && (
               <>
-                <Pressable
+                <GlassPressable
+                  colors={colors}
+                  tint={noteOpen ? colors.accent : undefined}
+                  strength="fill"
                   onPress={() => toggleNote(!noteOpen)}
                   hitSlop={8}
                   accessibilityRole="button"
                   accessibilityState={{ selected: noteOpen }}
                   accessibilityLabel={noteOpen ? "Show the photo" : "Show the note"}
-                  style={[
-                    styles.headerButton,
-                    glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
-                  ]}
+                  style={styles.headerButton}
                 >
                   <Feather name="file-text" size={16} color={noteOpen ? colors.onAccent : colors.textPrimary} />
-                </Pressable>
+                </GlassPressable>
 
                 {/* the picture is fixed once a note exists, so the menu that
                     swaps it belongs only to a new one */}
@@ -423,323 +622,151 @@ export default function AddNoteScreen() {
 
       {mediaUri == null ? (
         <ScrollView
-          contentContainerStyle={styles.body}
+          ref={scrollRef}
+          contentContainerStyle={[styles.body, { paddingBottom: bottomInset }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          onScroll={(e) => {
+            scrollOffset.current = e.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={16}
         >
-          <Pressable
+          {/* flat, never glass: it's the page's empty slot, not a control
+              floating over it */}
+          <PressableScale
             onPress={chooseMediaSource}
             accessibilityRole="button"
-            style={[styles.pickButton, glass(colors)]}
+            style={[styles.pickButton, flatSurface(colors), { borderStyle: "dashed" }]}
           >
             <Feather name="image" size={30} color={colors.accent} />
             <Text style={[styles.pickLabel, { color: colors.accent }]}>Add photo or video</Text>
             <Text style={[styles.pickHint, { color: colors.stoneDim }]}>A note needs a picture</Text>
-          </Pressable>
+          </PressableScale>
+
+          {error != null && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
 
           <Text style={[styles.dateLine, { color: colors.stoneDim }]}>{formatDayDate(date)}</Text>
 
-          <View style={[styles.captionBox, { borderBottomColor: captionFocus.border }]}>
-            <TextInput
-              value={note}
-              onChangeText={setNote}
-              placeholder="What's happening…"
-              placeholderTextColor={captionFocus.placeholder}
-              multiline
-              textAlignVertical="top"
-              accessibilityLabel="Note"
-              style={[styles.caption, { color: colors.textPrimary }]}
-              {...captionFocus.handlers}
-            />
+          {/* the note and its snippet chips, one block lined up with the
+              keyboard while the note has it */}
+          <View ref={noteBlockRef} onLayout={onBlockLayout} style={styles.noteBlock}>
+            <View style={[styles.captionBox, { borderBottomColor: captionFocus.border }]}>
+              <TextInput
+                value={note}
+                onChangeText={setNote}
+                placeholder="What's happening…"
+                placeholderTextColor={captionFocus.placeholder}
+                multiline
+                textAlignVertical="top"
+                accessibilityLabel="Note"
+                style={[styles.caption, { color: colors.textPrimary }]}
+                onFocus={() => {
+                  captionFocus.handlers.onFocus();
+                  startTyping("note");
+                }}
+                onBlur={() => {
+                  captionFocus.handlers.onBlur();
+                  stopTyping("note");
+                }}
+              />
+            </View>
+            {typing === "note" && noteSuggestions}
           </View>
 
-          {(snippets.length > 0 || canPaste) && (
-            <View style={styles.snippets}>
-              {canPaste && (
-                <Pressable
-                  onPress={pasteIntoNote}
-                  accessibilityRole="button"
-                  accessibilityLabel="Paste from the clipboard"
-                  style={[styles.snippetChip, glass(colors)]}
-                >
-                  <Feather name="clipboard" size={11} color={colors.teal} />
-                  <Text style={[styles.snippetLabel, { color: colors.stone }]}>Paste</Text>
-                </Pressable>
-              )}
-              {snippets.map((snippet) => (
-                <Pressable
-                  key={snippet.id}
-                  onPress={() => insertSnippet(snippet.text)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Insert snippet ${snippet.name}`}
-                  style={[styles.snippetChip, glass(colors)]}
-                >
-                  <Feather name="star" size={11} color={colors.accent} />
-                  <Text style={[styles.snippetLabel, { color: colors.stone }]} numberOfLines={1}>
-                    {snippet.name}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-
-          {tags.length > 0 && (
-            <View style={styles.tagRow}>
-              {tags.map((tag) => (
-                <View key={tag} style={[styles.tagPill, { backgroundColor: hexToRgba(colors.teal, 0.16) }]}>
-                  <Text style={[styles.tagLabel, { color: colors.teal }]}>#{tag}</Text>
-                  <Pressable
-                    onPress={() => removeTag(tag)}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove tag ${tag}`}
-                  >
-                    <Feather name="x" size={11} color={colors.teal} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
+          {fields}
         </ScrollView>
       ) : (
-        <DraftNoteCard
-          colors={colors}
-          mediaUri={mediaUri}
-          mediaType={mediaType}
-          date={date}
-          note={note}
-          onNoteChange={setNote}
-          snippets={snippets}
-          onInsertSnippet={insertSnippet}
-          canPaste={canPaste}
-          onPaste={pasteIntoNote}
-          tags={tags}
-          onRemoveTag={removeTag}
-          noteOpen={noteOpen}
-          onToggleNote={toggleNote}
-        />
-      )}
-
-      {panel === "date" && Platform.OS === "ios" && (
-        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.panelLabel, { color: colors.stoneDim }]}>The day it happened</Text>
-          <View style={styles.dateRow}>
-            <Feather name="calendar" size={15} color={colors.stone} />
-            <CompactDatePicker date={date} colors={colors} onChange={setDate} />
-          </View>
-        </View>
-      )}
-
-      {panel === "tags" && (
-        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.panelLabel, { color: colors.stoneDim }]}>Tag it</Text>
-          <View style={[styles.tagInputRow, glass(colors), { borderColor: tagFocus.border }]}>
-            <Feather name="hash" size={13} color={tagFocus.focused ? colors.stone : colors.stoneDim} />
-            <TextInput
-              value={tagInput}
-              onChangeText={setTagInput}
-              onSubmitEditing={commitTag}
-              placeholder="Add a tag, press enter"
-              placeholderTextColor={tagFocus.placeholder}
-              autoCapitalize="none"
-              style={[styles.tagInput, { color: colors.textPrimary }]}
-              onFocus={tagFocus.handlers.onFocus}
-              //* composed by hand: this field already commits the tag on blur,
-              //* and spreading the focus handlers over it would drop that
-              onBlur={() => {
-                tagFocus.handlers.onBlur();
-                commitTag();
-              }}
-            />
-          </View>
-          {storedTags.length > 0 && (
-            <View style={styles.panelChips}>
-              {storedTags.map((tag) => {
-                const title = tag.title.toLowerCase();
-                const selected = tags.some((t) => t.toLowerCase() === title);
-                return (
-                  <Pressable
-                    key={tag.id}
-                    onPress={() => toggleStoredTag(tag)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: selected }}
-                    accessibilityLabel={`Tag ${tag.title}`}
-                    style={[
-                      styles.panelChip,
-                      glass(colors, selected ? { tint: colors.teal } : undefined),
-                    ]}
-                  >
-                    <Text style={[styles.panelChipLabel, { color: selected ? colors.teal : colors.stone }]}>
-                      #{tag.title}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          )}
-        </View>
-      )}
-
-      {panel === "folder" && (
-        <View style={[styles.panel, { backgroundColor: colors.surface, borderColor: colors.line }]}>
-          <Text style={[styles.panelLabel, { color: colors.stoneDim }]}>Put it in</Text>
-          <View style={styles.panelChips} accessibilityRole="radiogroup" accessibilityLabel="Folder">
-            <Pressable
-              onPress={() => setFolderId(null)}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: folderId === null }}
-              style={[
-                styles.panelChip,
-                glass(colors, folderId === null ? { tint: colors.accent } : undefined),
-                folderId !== null && { borderStyle: "dashed" },
-              ]}
-            >
-              <Text style={[styles.panelChipLabel, { color: folderId === null ? colors.accent : colors.stone }]}>
-                No folder
-              </Text>
-            </Pressable>
-            {folders.map((f) => {
-              const selected = folderId === f.id;
-              return (
-                <Pressable
-                  key={f.id}
-                  onPress={() => setFolderId(f.id)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selected }}
-                  style={[
-                    styles.panelChip,
-                    glass(colors, selected ? { tint: colors.accent } : undefined),
-                  ]}
-                >
-                  <Text style={[styles.panelChipLabel, { color: selected ? colors.accent : colors.stone }]}>
-                    {f.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      )}
-
-      <View style={styles.footPills}>
-        <FootPill
-          icon="calendar"
-          label="Day & date"
-          active={panel === "date"}
-          tint={colors.accent}
-          colors={colors}
-          onPress={() => togglePanel("date")}
-        />
-        <FootPill
-          icon="tag"
-          label={tags.length === 0 ? "Tags" : `${tags.length} tag${tags.length === 1 ? "" : "s"}`}
-          active={panel === "tags" || tags.length > 0}
-          tint={colors.teal}
-          colors={colors}
-          onPress={() => togglePanel("tags")}
-        />
-        <FootPill
-          icon="folder"
-          label={folder?.name ?? "Folder"}
-          active={panel === "folder" || folder != null}
-          tint={colors.accent}
-          colors={colors}
-          onPress={() => togglePanel("folder")}
-        />
-      </View>
-
-      {error != null && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
-
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 18 }]}>
-        <Pressable
-          onPress={saveAsync}
-          disabled={!canSave}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canSave, busy: saving }}
-          accessibilityHint={mediaUri == null ? "Add a photo or video first" : undefined}
-          style={[
-            styles.saveButton,
-            glass(colors, mediaUri == null ? undefined : { tint: colors.accent, strength: "fill" }),
-            saving && { opacity: 0.7 },
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.onAccent} />
-          ) : (
-            <Feather name="check" size={17} color={mediaUri == null ? colors.stoneDim : colors.onAccent} />
-          )}
-          <Text
-            style={[styles.saveLabel, { color: mediaUri == null ? colors.stoneDim : colors.onAccent }]}
+        //* ends where the pinned Save area begins: in photo mode the picture
+        //* fills the card, and its bottom (the note's one-line hint) would
+        //* otherwise sit behind Save
+        <View style={[styles.draftArea, { marginBottom: footerHeight }]}>
+          <DraftNoteCard
+            colors={colors}
+            mediaUri={mediaUri}
+            mediaType={mediaType}
+            date={date}
+            note={note}
+            onNoteChange={setNote}
+            onNoteFocus={() => startTyping("note")}
+            onNoteBlur={() => stopTyping("note")}
+            scrollRef={scrollRef}
+            bottomInset={cardInset}
+            noteSuggestions={noteSuggestions}
+            noteBlockRef={noteBlockRef}
+            onNoteBlockLayout={onBlockLayout}
+            onScrollOffset={(y) => {
+              scrollOffset.current = y;
+            }}
+            noteOpen={noteOpen}
+            onToggleNote={toggleNote}
           >
-            {saving ? "Saving…" : editing != null ? "Save changes" : "Save note"}
+            {fields}
+          </DraftNoteCard>
+        </View>
+      )}
+
+      {/* stationary: pinned to the bottom, and only once there's a picture to
+          save. The keyboard and the pickers rise over it rather than carry it */}
+      {mediaUri != null && (
+        <View
+          style={[styles.footer, { paddingBottom: insets.bottom + 18, backgroundColor: colors.bg }]}
+          onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+        >
+          {error != null && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
+          <GlassPressable
+            colors={colors}
+            tint={colors.accent}
+            strength="fill"
+            onPress={saveAsync}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: saving, busy: saving }}
+            style={[styles.saveButton, saving && { opacity: 0.7 }]}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={colors.onAccent} />
+            ) : (
+              <Feather name="check" size={17} color={colors.onAccent} />
+            )}
+            <Text style={[styles.saveLabel, { color: colors.onAccent }]}>
+              {saving ? "Saving…" : editing != null ? "Save changes" : "Save note"}
+            </Text>
+          </GlassPressable>
+          <Text style={[styles.footnote, { color: colors.stoneDim }]}>
+            Saving takes you back to your notes. Ads keep NoteIt free.
           </Text>
-        </Pressable>
-        <Text style={[styles.footnote, { color: colors.stoneDim }]}>
-          Saving takes you back to your notes. Ads keep NoteIt free.
-        </Text>
-      </View>
-    </KeyboardAvoidingView>
-  );
-}
+        </View>
+      )}
 
-type FootPillProps = {
-  icon: "calendar" | "tag" | "folder";
-  label: string;
-  active: boolean;
-  tint: string;
-  colors: ThemeColors;
-  onPress: () => void;
-};
+      {picker === "folder" && (
+        <InputPanel title="Folder" colors={colors} onDone={() => setPicker(null)}>
+          <WheelPicker
+            items={folderItems}
+            selectedIndex={folderIndex}
+            onChange={(index) => setFolderId(index === 0 ? null : folders[index - 1].id)}
+            colors={colors}
+          />
+        </InputPanel>
+      )}
 
-function FootPill({ icon, label, active, tint, colors, onPress }: FootPillProps) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityState={{ expanded: active }}
-      style={[
-        styles.footPill,
-        glass(colors, active ? { tint } : undefined),
-      ]}
-    >
-      <Feather name={icon} size={14} color={active ? tint : colors.stone} />
-      <Text style={[styles.footPillLabel, { color: active ? tint : colors.stone }]} numberOfLines={1}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-type CompactDatePickerProps = {
-  date: string;
-  colors: ThemeColors;
-  onChange: (date: string) => void;
-};
-
-//* iOS only
-function CompactDatePicker({ date, colors, onChange }: CompactDatePickerProps) {
-  const [value, setValue] = useState(() => new Date(`${date}T00:00:00`));
-
-  //* default date for the picker is the day the picture was taken
-  const [shownDate, setShownDate] = useState(date);
-  if (shownDate !== date) //* adjusts during render to match the external date prop
-  {
-    setShownDate(date);
-    setValue(new Date(`${date}T00:00:00`));
-  }
-
-  return (
-    <DateTimePicker
-      value={value}
-      mode="date"
-      display="compact"
-      themeVariant={colors === LIGHT_THEME ? "light" : "dark"}
-      accentColor={colors.accent}
-      onValueChange={(_event, selectedDate) => {
-        setValue(selectedDate);
-        onChange(toLocalISODate(selectedDate));
-      }}
-    />
+      {picker === "date" && Platform.OS === "ios" && (
+        <InputPanel
+          title="Date"
+          colors={colors}
+          onDone={() => setPicker(null)}
+          leading={{ label: "Today", onPress: () => setDate(todayISO()) }}
+        >
+          <DateTimePicker
+            value={new Date(`${date}T00:00:00`)}
+            mode="date"
+            display="spinner"
+            themeVariant={colors === LIGHT_THEME ? "light" : "dark"}
+            textColor={colors.textPrimary}
+            onValueChange={onChangeDate}
+          />
+        </InputPanel>
+      )}
+    </View>
   );
 }

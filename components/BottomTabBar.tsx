@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,8 +11,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import { flatSurface } from "@/theme/glass";
 import GlassSurface from "./GlassSurface";
+import PressableScale from "./PressableScale";
 import type { FolderModel } from "@/models/FolderModel";
 import { bottomTabBarStyles as styles } from "@/theme/styles/app.styles";
 
@@ -108,17 +109,19 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
               </View>
             </Animated.View>
 
-            <Pressable onPress={onAdd} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add a picture-note">
+            <PressableScale onPress={onAdd} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add a picture-note">
               <Animated.View
                 style={[
                   styles.addButton,
                   addButtonStyle,
-                  glass(colors, { tint: colors.accent, strength: "fill" }),
+                  //* flat even on iOS 26: it sits on the dock's glass, and glass can't
+                  //* sample glass — a solid primary button on it, the way iOS draws one
+                  flatSurface(colors, { tint: colors.accent, strength: "fill" }),
                 ]}
               >
                 <Feather name="plus" size={25} color={colors.onAccent} />
               </Animated.View>
-            </Pressable>
+            </PressableScale>
           </View>
 
           <DockButton
@@ -154,7 +157,7 @@ type DockButtonProps = {
 //* tab you're on is marked by a soft lens of the accent behind its icon
 function DockButton({ icon, iconNode, label, active, colors, onPress }: DockButtonProps) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       hitSlop={8}
       style={styles.dockSlot}
@@ -171,7 +174,7 @@ function DockButton({ icon, iconNode, label, active, colors, onPress }: DockButt
         />
         {iconNode ?? <Feather name={icon} size={24} color={active ? colors.accent : colors.stone} />}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 

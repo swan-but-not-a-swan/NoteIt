@@ -11,7 +11,7 @@ import {
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { useFieldFocus } from "@/theme/focus";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import { newSnippetStyles as styles } from "@/theme/styles/settings.styles";
 
 type Props = {
@@ -84,19 +84,17 @@ export default function NewSnippet({
               {mode === "edit" ? "Edit snippet" : "Write the snippet"}
             </Text>
             {onDelete != null && (
-              <Pressable
+              <GlassPressable
+                colors={colors}
+                tint={colors.error}
                 onPress={onDelete}
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel="Delete snippet"
-                style={({ pressed }) => [
-                  styles.deleteButton,
-                  glass(colors, { tint: colors.error }),
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
+                style={styles.deleteButton}
               >
                 <Feather name="trash-2" size={16} color={colors.error} />
-              </Pressable>
+              </GlassPressable>
             )}
           </View>
 
@@ -160,28 +158,24 @@ export default function NewSnippet({
           {error != null && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
 
           <View style={styles.buttons}>
-            <Pressable
+            <GlassPressable
+              colors={colors}
               onPress={onCancel}
-              style={({ pressed }) => [
-                styles.button,
-                glass(colors),
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
+              style={styles.button}
             >
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Cancel</Text>
-            </Pressable>
-            <Pressable
+            </GlassPressable>
+            <GlassPressable
+              colors={colors}
+              tint={colors.accent}
+              strength="fill"
               onPress={onSave}
-              style={({ pressed }) => [
-                styles.button,
-                glass(colors, { tint: colors.accent, strength: "fill" }),
-                { opacity: pressed ? 0.75 : 1 },
-              ]}
+              style={styles.button}
             >
               <Text style={[styles.buttonLabel, { color: colors.onAccent }]}>
                 {mode === "edit" ? "Save changes" : "Save snippet"}
               </Text>
-            </Pressable>
+            </GlassPressable>
           </View>
           </Pressable>
         </Pressable>

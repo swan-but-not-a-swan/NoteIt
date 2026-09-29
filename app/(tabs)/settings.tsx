@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Keyboard, ScrollView, Text, TextInput, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useRouter } from "expo-router";
 import * as Crypto from "expo-crypto";
 import type { ThemeColors, ThemeMode } from "@/theme/colors";
 import { useTheme } from "@/theme/ThemeContext";
 import { useFieldFocus } from "@/theme/focus";
-import { glass } from "@/theme/glass";
+import { flatSurface } from "@/theme/glass";
+import GlassPressable from "@/components/GlassPressable";
+import GlassSurface from "@/components/GlassSurface";
+import PressableScale from "@/components/PressableScale";
 import TopBar, { TopBarIconButton } from "@/components/TopBar";
 import NewSnippet from "@/components/NewSnippet";
 import SendFeedback from "@/components/SendFeedback";
@@ -44,14 +47,14 @@ function AppearanceToggle({
     onSelect: (mode: ThemeMode) => void;
 }) {
     return (
-        <View style={[styles.segment, glass(colors)]}>
+        <GlassSurface colors={colors} style={styles.segment}>
             {THEME_OPTIONS.map((option) => {
                 const active = mode === option.id;
                 //* the active pill is the only filled surface in the row, so
                 //* everything else has to read against the plain background
                 const tint = active ? colors.onAccent : colors.stone;
                 return (
-                    <Pressable
+                    <PressableScale
                         key={option.id}
                         onPress={() => onSelect(option.id)}
                         accessibilityRole="button"
@@ -61,17 +64,19 @@ function AppearanceToggle({
                             styles.segmentItem,
                             //* the idle side keeps a clear rim of the same width, so
                             //* switching doesn't shift its contents by a pixel
+                            //* flat even on iOS 26: it sits on the segment's glass,
+                            //* and glass can't sample glass
                             active
-                                ? glass(colors, { tint: colors.accentSolid, strength: "fill" })
+                                ? flatSurface(colors, { tint: colors.accentSolid, strength: "fill" })
                                 : { borderWidth: 1, borderColor: "transparent" },
                         ]}
                     >
                         <Feather name={option.icon} size={15} color={tint} />
                         <Text style={[styles.segmentLabel, { color: tint }]}>{option.label}</Text>
-                    </Pressable>
+                    </PressableScale>
                 );
             })}
-        </View>
+        </GlassSurface>
     );
 }
 
@@ -103,7 +108,8 @@ function PlusRow({ colors }: { colors: ThemeColors }) {
                   : `Cancelled. Plus stays on until ${until(plus.expiresAt)}.`;
 
     return (
-        <Pressable
+        <GlassPressable
+            colors={colors}
             onPress={() => {
                 if (hasPlus === true) {
                     void openCustomerCenter();
@@ -113,11 +119,7 @@ function PlusRow({ colors }: { colors: ThemeColors }) {
             }}
             accessibilityRole="button"
             accessibilityLabel="NoteIt Plus"
-            style={({ pressed }) => [
-                styles.plusRow,
-                glass(colors),
-                { opacity: pressed ? 0.85 : 1 },
-            ]}
+            style={styles.plusRow}
         >
             <View style={[styles.plusBadge, { backgroundColor: colors.accent }]}>
                 <Feather name="star" size={16} color={colors.onAccent} />
@@ -127,7 +129,7 @@ function PlusRow({ colors }: { colors: ThemeColors }) {
                 <Text style={[styles.plusSubtitle, { color: colors.stone }]}>{subtitle}</Text>
             </View>
             <Feather name="chevron-right" size={18} color={colors.stoneDim} />
-        </Pressable>
+        </GlassPressable>
     );
 }
 
@@ -331,16 +333,13 @@ export default function Settings() {
                             there is one place a snippet is changed rather than
                             a trash icon here and a form somewhere else. */}
                         {snippets.map((snippet) => (
-                            <Pressable
+                            <GlassPressable
                                 key={snippet.id}
+                                colors={colors}
                                 onPress={() => startEditingSnippet(snippet)}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Edit snippet ${snippet.name}`}
-                                style={({ pressed }) => [
-                                    styles.snippetRow,
-                                    glass(colors),
-                                    { opacity: pressed ? 0.7 : 1 },
-                                ]}
+                                style={styles.snippetRow}
                             >
                                 <Feather name="star" size={14} color={colors.accent} />
                                 {/* Name leads, body follows in one dimmer line.
@@ -364,7 +363,7 @@ export default function Settings() {
                                     />
                                 </View>
                                 <Feather name="chevron-right" size={16} color={colors.stoneDim} />
-                            </Pressable>
+                            </GlassPressable>
                         ))}
                         {snippets.length === 0 && (
                             <Text style={[styles.emptyLabel, { color: colors.stoneDim }]}>No snippets yet.</Text>
@@ -384,7 +383,10 @@ export default function Settings() {
                             ]}
                             {...snippetNameFocus.handlers}
                         />
-                        <Pressable
+                        <GlassPressable
+                            colors={colors}
+                            tint={colors.accent}
+                            strength="fill"
                             onPress={startWritingSnippet}
                             //* dimmed and inert without a name, rather than a
                             //* live button that silently does nothing
@@ -392,14 +394,10 @@ export default function Settings() {
                             accessibilityRole="button"
                             accessibilityLabel="Write this snippet"
                             accessibilityState={{ disabled: !canAddSnippet }}
-                            style={({ pressed }) => [
-                                styles.addButton,
-                                glass(colors, { tint: colors.accent, strength: "fill" }),
-                                { opacity: !canAddSnippet ? 0.4 : pressed ? 0.75 : 1 },
-                            ]}
+                            style={[styles.addButton, { opacity: canAddSnippet ? 1 : 0.4 }]}
                         >
                             <Text style={[styles.addButtonLabel, { color: colors.onAccent }]}>Add</Text>
-                        </Pressable>
+                        </GlassPressable>
                     </View>
                 </View>
             </ScrollView>

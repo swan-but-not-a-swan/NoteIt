@@ -1,8 +1,8 @@
-import { Pressable, Text } from "react-native";
+import { Text } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
 import { glassPillStyles as styles } from "@/theme/styles/app.styles";
+import GlassPressable from "./GlassPressable";
 
 type Props = {
   label: string;
@@ -15,26 +15,22 @@ type Props = {
 };
 
 // A floating pill in the Liquid Glass style, for a control that sits over
-// scrolling content rather than inside a bar.
-//
-// The material is the app's shared glass (theme/glass.ts), which explains why
-// it is drawn rather than real.
+// scrolling content rather than inside a bar. Real glass on iOS 26, the flat
+// floating surface everywhere else (see GlassPressable).
 export default function GlassPill({ label, trailingIcon, onPress, colors, accessibilityLabel }: Props) {
   return (
-    <Pressable
+    <GlassPressable
+      colors={colors}
+      //* floating over the grid, like the tab bar's dock
+      lift="float"
       onPress={onPress}
       hitSlop={6}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      style={({ pressed }) => [
-        styles.pill,
-        //* floating over the grid, like the tab bar's dock
-        glass(colors, { lift: "float" }),
-        pressed && { opacity: 0.8 },
-      ]}
+      style={styles.pill}
     >
       <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
       {trailingIcon != null && <Feather name={trailingIcon} size={15} color={colors.textPrimary} />}
-    </Pressable>
+    </GlassPressable>
   );
 }

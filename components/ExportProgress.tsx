@@ -1,6 +1,7 @@
-import { Modal, Pressable, Text, View } from "react-native";
+import { Modal, Text, View } from "react-native";
 import type { ThemeColors } from "@/theme/colors";
 import { exportProgressStyles as styles } from "@/theme/styles/transfer.styles";
+import PressableScale from "./PressableScale";
 
 type Props = {
   /** Files written so far out of the total, or null when nothing is exporting. */
@@ -31,13 +32,13 @@ export default function ExportProgress({ progress, colors, onCancel }: Props) {
               : "Getting the files ready"}
           </Text>
 
-          <Pressable
+          <PressableScale
             onPress={onCancel}
             accessibilityRole="button"
             style={({ pressed }) => [styles.button, { backgroundColor: colors.surface, opacity: pressed ? 0.7 : 1 }]}
           >
             <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Cancel</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       </View>
     </Modal>

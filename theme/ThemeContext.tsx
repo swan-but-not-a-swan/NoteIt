@@ -4,10 +4,11 @@ import * as SystemUI from "expo-system-ui";
 import { themeFor, type ThemeColors, type ThemeMode } from "./colors";
 import { getThemeModeFromStorageAsync, setThemeModeToStorageAsync } from "@/persistence/FileStorage";
 
-/** The app's default when nothing has ever been chosen. The palette was
- *  designed dark-first (see colors.ts), so an unconfigured install should
- *  look the way the app was drawn. */
-const DEFAULT_MODE: ThemeMode = "dark";
+/** The app's default when nothing has ever been chosen: light, from v1.2.
+ *  Dark stays one tap away in Settings, and a choice someone has already made
+ *  is read back from storage below, so it's only installs that never picked a
+ *  theme that start light. */
+const DEFAULT_MODE: ThemeMode = "light";
 
 type ThemeContextValue = {
   mode: ThemeMode;

@@ -14,7 +14,6 @@ export default function TabsLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="home" />
       <Stack.Screen name="settings" />
-      <Stack.Screen name="folder/[id]" />
       <Stack.Screen name="compare" />
       {/* A full screen, not a sheet — but it keeps the slide-up the old
           AddNote modal had, since that is what starting a note feels like.

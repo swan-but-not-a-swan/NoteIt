@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Alert, Modal, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Modal, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "@/theme/ThemeContext";
-import { glass } from "@/theme/glass";
+import { flatSurface } from "@/theme/glass";
+import GlassPressable from "@/components/GlassPressable";
+import PressableScale from "@/components/PressableScale";
+import GlassSurface from "@/components/GlassSurface";
 import { hexToRgba } from "@/theme/colors";
 import TopBar from "@/components/TopBar";
 import GalleryGrid from "@/components/GalleryGrid";
@@ -170,15 +173,16 @@ export default function ImportPreview() {
                 title={title}
                 colors={colors}
                 right={
-                    <Pressable
+                    <GlassPressable
+                        colors={colors}
                         onPress={close}
                         hitSlop={8}
                         accessibilityRole="button"
                         accessibilityLabel="Close without adding"
-                        style={[styles.headerButton, glass(colors)]}
+                        style={styles.headerButton}
                     >
                         <Feather name="x" size={17} color={colors.textPrimary} />
-                    </Pressable>
+                    </GlassPressable>
                 }
             />
 
@@ -253,14 +257,13 @@ export default function ImportPreview() {
                         onLayout={(e) => setBarHeight(e.nativeEvent.layout.height)}
                     >
                         {!isFolder && (
-                            <Pressable
+                            <GlassPressable
+                                colors={colors}
+                                lift="float"
                                 onPress={() => setPickingFolder(true)}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Add to ${targetFolder?.name ?? "the gallery only"}. Change`}
-                                style={[
-                                    styles.destination,
-                                    glass(colors, { lift: "float" }),
-                                ]}
+                                style={styles.destination}
                             >
                                 <Text style={[styles.destinationHint, { color: colors.stone }]}>Add to</Text>
                                 {targetFolder != null ? (
@@ -275,18 +278,20 @@ export default function ImportPreview() {
                                     {targetFolder?.name ?? "Gallery only"}
                                 </Text>
                                 <Feather name="chevron-down" size={16} color={colors.stone} />
-                            </Pressable>
+                            </GlassPressable>
                         )}
-                        <View style={[styles.bar, glass(colors, { lift: "float" })]}>
-                            <Pressable
+                        <GlassSurface colors={colors} lift="float" style={styles.bar}>
+                            {/* the buttons on the bar draw flat even on iOS 26:
+                                glass can't sample glass */}
+                            <PressableScale
                                 onPress={close}
                                 disabled={adding}
                                 accessibilityRole="button"
-                                style={[styles.barButton, glass(colors), { opacity: adding ? 0.5 : 1 }]}
+                                style={[styles.barButton, flatSurface(colors), { opacity: adding ? 0.5 : 1 }]}
                             >
                                 <Text style={[styles.barButtonLabel, { color: colors.textPrimary }]}>Discard</Text>
-                            </Pressable>
-                            <Pressable
+                            </PressableScale>
+                            <PressableScale
                                 onPress={addAsync}
                                 disabled={adding}
                                 accessibilityRole="button"
@@ -294,7 +299,7 @@ export default function ImportPreview() {
                                 style={[
                                     styles.barButton,
                                     styles.barButtonPrimary,
-                                    glass(colors, { tint: colors.accentSolid, strength: "fill" }),
+                                    flatSurface(colors, { tint: colors.accentSolid, strength: "fill" }),
                                 ]}
                             >
                                 {adding ? (
@@ -307,8 +312,8 @@ export default function ImportPreview() {
                                         </Text>
                                     </>
                                 )}
-                            </Pressable>
-                        </View>
+                            </PressableScale>
+                        </GlassSurface>
                     </View>
                 </>
             )}
@@ -328,23 +333,23 @@ export default function ImportPreview() {
                         colors={colors}
                         onBack={() => setOpenIndex(null)}
                         right={
-                            <Pressable
+                            <GlassPressable
+                                colors={colors}
+                                tint={noteOpen ? colors.accent : undefined}
+                                strength="fill"
                                 onPress={() => setNoteOpen(!noteOpen)}
                                 hitSlop={8}
                                 accessibilityRole="button"
                                 accessibilityState={{ selected: noteOpen }}
                                 accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
-                                style={[
-                                    styles.headerButton,
-                                    glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
-                                ]}
+                                style={styles.headerButton}
                             >
                                 <Feather
                                     name="file-text"
                                     size={16}
                                     color={noteOpen ? colors.onAccent : colors.textPrimary}
                                 />
-                            </Pressable>
+                            </GlassPressable>
                         }
                     />
                     {openIndex != null && (

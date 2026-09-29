@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Modal, Pressable } from "react-native";
+import { Modal } from "react-native";
 import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,6 +15,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { fullscreenPhotoStyles as styles } from "@/theme/styles/note.styles";
+import PressableScale from "./PressableScale";
 
 type Props = {
   /** The photo to show, or null when closed. */
@@ -295,7 +296,7 @@ function PhotoViewer({ uri, onClose }: { uri: string; onClose: () => void }) {
         </GestureDetector>
 
         <Animated.View style={[styles.closeWrap, { top: insets.top + 10 }, chromeStyle]}>
-          <Pressable
+          <PressableScale
             onPress={fadeOutThenClose}
             hitSlop={10}
             accessibilityRole="button"
@@ -303,7 +304,7 @@ function PhotoViewer({ uri, onClose }: { uri: string; onClose: () => void }) {
             style={styles.closeButton}
           >
             <Feather name="x" size={18} color="#FFFFFF" />
-          </Pressable>
+          </PressableScale>
         </Animated.View>
       </GestureHandlerRootView>
     </Modal>

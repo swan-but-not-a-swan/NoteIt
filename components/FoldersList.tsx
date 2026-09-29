@@ -1,9 +1,9 @@
 //! Manually reviewed since 16/09/2026
 
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import Folder from "./Folder";
 import AdBannerStrip from "./AdBannerStrip";
 import { FolderModel } from "../models/FolderModel";
@@ -48,14 +48,15 @@ export default function FolderList({
         </View>
       ))}
 
-      <Pressable
+      <GlassPressable
+        colors={colors}
         onPress={onNewFolder}
         //* glass, with the dashed rim that says "an empty slot" kept
-        style={[styles.newFolder, glass(colors)]}
+        style={styles.newFolder}
       >
         <Feather name="folder-plus" size={17} color={colors.stone} />
         <Text style={[styles.newFolderLabel, { color: colors.stone }]}>New folder</Text>
-      </Pressable>
+      </GlassPressable>
 
       {showAdBanner && <AdBannerStrip colors={colors} />}
     </ScrollView>

@@ -1,11 +1,11 @@
 //! Manually reviewed since 16/09/2026
 
 import type { ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import { topBarStyles as styles } from "@/theme/styles/app.styles";
 
 type Props = {
@@ -51,15 +51,16 @@ type TopBarIconButtonProps = {
 // the right-hand slot gets the same size and tint as the back arrow.
 export function TopBarIconButton({ icon, accessibilityLabel, colors, onPress }: TopBarIconButtonProps) {
   return (
-    <Pressable
+    <GlassPressable
+      colors={colors}
       onPress={onPress}
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      style={[styles.iconButton, glass(colors)]}
+      style={styles.iconButton}
     >
       <Feather name={icon} size={17} color={colors.textPrimary} />
-    </Pressable>
+    </GlassPressable>
   );
 }
 
@@ -75,14 +76,15 @@ type SettingsButtonProps = {
 
 export function SettingsButton({ colors, onPress }: SettingsButtonProps) {
   return (
-    <Pressable
+    <GlassPressable
+      colors={colors}
       onPress={onPress}
       hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel="Settings"
-      style={[styles.iconButton, glass(colors)]}
+      style={styles.iconButton}
     >
       <Feather name="settings" size={17} color={colors.textPrimary} />
-    </Pressable>
+    </GlassPressable>
   );
 }

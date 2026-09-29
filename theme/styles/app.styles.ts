@@ -219,13 +219,35 @@ export const overflowMenuStyles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   triggerLabel: common.bold12_5,
-  //* the held thing, shown over the backdrop opposite the card. Stretched
-  //* across so the preview inside can centre itself
-  previewSlot: {
+  //* with a preview, the menu stops being anchored to the finger and the two
+  //* stack in the middle instead — the held thing above, the verbs under it,
+  //* the way Photos lays its context menu out. Anchoring a tall preview off a
+  //* finger near the top or bottom put the card on top of it.
+  previewLayout: {
     position: "absolute",
+    top: 0,
     left: 0,
     right: 0,
+    bottom: 0,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    paddingVertical: 40,
+  },
+  //* only while a preview is up: the grid behind has to recede for the note to
+  //* read as lifted out of it
+  backdropDim: {
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  //* in that stacked layout the card sits in the flow, not pinned to a corner,
+  //* and widens to sit under the picture rather than beside nothing
+  cardInFlow: {
+    position: "relative",
+    top: undefined,
+    bottom: undefined,
+    left: undefined,
+    right: undefined,
+    minWidth: "58%",
   },
   backdrop: {
     position: "absolute",
