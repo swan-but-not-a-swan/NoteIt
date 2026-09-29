@@ -5,9 +5,10 @@ import { Image } from "expo-image";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
 import { useFieldFocus } from "@/theme/focus";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import { CropperContent } from "./ThumbnailCropper";
 import { newFolderStyles as styles } from "@/theme/styles/folders.styles";
+import PressableScale from "./PressableScale";
 
 type Props = {
   visible: boolean;
@@ -84,26 +85,29 @@ export default function NewFolder({
             {mode === "edit" && (
               <View style={styles.titleActions}>
                 {onExport != null && (
-                  <Pressable
+                  <GlassPressable
+                    colors={colors}
                     onPress={onExport}
                     hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel="Export folder"
-                    style={[styles.exportButton, glass(colors)]}
+                    style={styles.exportButton}
                   >
                     <Feather name="upload" size={16} color={colors.textPrimary} />
-                  </Pressable>
+                  </GlassPressable>
                 )}
                 {onDelete != null && (
-                  <Pressable
+                  <GlassPressable
+                    colors={colors}
+                    tint={colors.error}
                     onPress={onDelete}
                     hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel="Delete folder"
-                    style={[styles.deleteButton, glass(colors, { tint: colors.error })]}
+                    style={styles.deleteButton}
                   >
                     <Feather name="trash-2" size={16} color={colors.error} />
-                  </Pressable>
+                  </GlassPressable>
                 )}
               </View>
             )}
@@ -115,7 +119,7 @@ export default function NewFolder({
               { marginBottom: thumbnailUri != null && onRemoveThumbnail != null ? 6 : 18 },
             ]}
           >
-            <Pressable
+            <PressableScale
               onPress={onPickThumbnail}
               style={[styles.preview, { backgroundColor: thumbnailUri != null ? colors.surfaceHi : color }]}
             >
@@ -132,7 +136,7 @@ export default function NewFolder({
               >
                 <Feather name="camera" size={11} color={colors.onAccent} />
               </View>
-            </Pressable>
+            </PressableScale>
             <TextInput
               value={name}
               onChangeText={onNameChange}
@@ -151,12 +155,12 @@ export default function NewFolder({
           </View>
 
           {thumbnailUri != null && onRemoveThumbnail != null && (
-            <Pressable onPress={onRemoveThumbnail} style={styles.removeThumbnail} hitSlop={6}>
+            <PressableScale onPress={onRemoveThumbnail} style={styles.removeThumbnail} hitSlop={6}>
               <Feather name="x" size={11} color={colors.stoneDim} />
               <Text style={[styles.removeThumbnailLabel, { color: colors.stoneDim }]}>
                 Remove photo
               </Text>
-            </Pressable>
+            </PressableScale>
           )}
 
           <Text style={[styles.label, { color: colors.stoneDim }]}>Colour</Text>
@@ -164,7 +168,7 @@ export default function NewFolder({
             {swatches.map((sw) => {
               const selected = sw === color;
               return (
-                <Pressable
+                <PressableScale
                   key={sw}
                   onPress={() => onColorChange(sw)}
                   style={[
@@ -182,20 +186,24 @@ export default function NewFolder({
           {error != null && <Text style={[styles.error, { color: colors.error }]}>{error}</Text>}
 
           <View style={styles.buttons}>
-            <Pressable
+            <GlassPressable
+              colors={colors}
               onPress={onCancel}
-              style={[styles.button, glass(colors)]}
+              style={styles.button}
             >
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Cancel</Text>
-            </Pressable>
-            <Pressable
+            </GlassPressable>
+            <GlassPressable
+              colors={colors}
+              tint={colors.accent}
+              strength="fill"
               onPress={onSave}
-              style={[styles.button, glass(colors, { tint: colors.accent, strength: "fill" })]}
+              style={styles.button}
             >
               <Text style={[styles.buttonLabel, { color: colors.onAccent }]}>
                 {mode === "edit" ? "Save changes" : "Create"}
               </Text>
-            </Pressable>
+            </GlassPressable>
           </View>
         </Pressable>
       </Pressable>

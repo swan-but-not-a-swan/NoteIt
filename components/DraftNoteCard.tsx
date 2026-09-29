@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode, type Ref } from "react";
 import { Pressable, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
-import { Feather } from "@react-native-vector-icons/feather/static";
 import { Image } from "expo-image";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -12,12 +11,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { hexToRgba, type ThemeColors } from "@/theme/colors";
+import type { ThemeColors } from "@/theme/colors";
 import { useFieldFocus } from "@/theme/focus";
-import { glass } from "@/theme/glass";
 import { formatDayDate, formatShortDate } from "@/lib/date";
 import { NoteMediaType } from "../models/NoteModel";
-import { SnippetModel } from "../models/SnippetModel";
 import FullscreenPhoto from "./FullscreenPhoto";
 import MarkdownText from "./MarkdownText";
 import { HANDOFF_FROM, HINT_H, OPEN_DISTANCE, OPEN_MS, OPEN_VELOCITY, TILE } from "./ViewNote";
@@ -30,14 +27,28 @@ type Props = {
   date: string;
   note: string;
   onNoteChange: (text: string) => void;
-  snippets: SnippetModel[];
-  onInsertSnippet: (text: string) => void;
-  /** Whether the clipboard holds text worth offering. Checked by the screen,
-   *  so the chip appears in both of its states for the same reason. */
-  canPaste: boolean;
-  onPaste: () => void;
-  tags: string[];
-  onRemoveTag: (tag: string) => void;
+  /** Tell the screen the note has the keyboard, so the row on top of it offers
+   *  snippets. */
+  onNoteFocus: () => void;
+  onNoteBlur: () => void;
+  /** Drawn under the note while it's open — the screen's Tags, Folder and
+   *  Date fields. */
+  children?: ReactNode;
+  /** The note's scroll view, so the screen can bring its fields into view
+   *  above the keyboard or a picker. */
+  scrollRef?: Ref<ScrollView>;
+  /** Room left under the fields for whatever covers the bottom of the screen:
+   *  the Save button, the keyboard, a picker. */
+  bottomInset: number;
+  /** Snippets and Paste (a SuggestionRow), drawn under the note while the
+   *  screen says the note has focus. */
+  noteSuggestions?: ReactNode;
+  /** The note and its chips as one block, so the screen can line the block up
+   *  with the keyboard's top edge. */
+  noteBlockRef?: Ref<View>;
+  onNoteBlockLayout?: () => void;
+  /** How far the note is scrolled, for that same lining-up. */
+  onScrollOffset?: (y: number) => void;
   /** Owned by the screen, like the viewer's, because the header's toggle has
    *  to be able to flip it too. */
   noteOpen: boolean;
@@ -63,12 +74,15 @@ export default function DraftNoteCard({
   date,
   note,
   onNoteChange,
-  snippets,
-  onInsertSnippet,
-  canPaste,
-  onPaste,
-  tags,
-  onRemoveTag,
+  onNoteFocus,
+  onNoteBlur,
+  children,
+  scrollRef,
+  bottomInset,
+  noteSuggestions,
+  noteBlockRef,
+  onNoteBlockLayout,
+  onScrollOffset,
   noteOpen,
   onToggleNote,
 }: Props) {
@@ -155,6 +169,14 @@ export default function DraftNoteCard({
 
   const pillAnimated = useAnimatedStyle(() => ({ opacity: 1 - open.get() }));
 
+  //* the band the tile sits in, solid while the note is open. The tile is
+  //* pinned, not part of the scroll, so without this the note scrolling up —
+  //* iOS does it on its own to keep the cursor in view, the fields do it to
+  //* clear the keyboard — slid visibly under and around the tile
+  const bandAnimated = useAnimatedStyle(() => ({
+    opacity: interpolate(open.get(), [HANDOFF_FROM, 1], [0, 1], Extrapolation.CLAMP),
+  }));
+
   const spacerAnimated = useAnimatedStyle(() => ({
     height: interpolate(open.get(), [0, 1], [photoFull, TILE.height]),
   }));
@@ -173,14 +195,18 @@ export default function DraftNoteCard({
           }}
         >
           <ScrollView
+            ref={scrollRef}
             style={styles.noteArea}
-            contentContainerStyle={styles.noteContent}
+            contentContainerStyle={[styles.noteContent, { paddingBottom: bottomInset }]}
             //* same rule as the viewer: nothing to scroll while it's a hint,
             //* so the pull underneath keeps the whole surface
             scrollEnabled={noteOpen}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            onScroll={(e) => scrollY.set(e.nativeEvent.contentOffset.y)}
+            onScroll={(e) => {
+              scrollY.set(e.nativeEvent.contentOffset.y);
+              onScrollOffset?.(e.nativeEvent.contentOffset.y);
+            }}
             scrollEventThrottle={16}
           >
             <Animated.View style={spacerAnimated} />
@@ -193,74 +219,38 @@ export default function DraftNoteCard({
 
                 {/* the viewer's type, so the note reads the same before and
                     after it's saved; a ruled line rather than a box, because
-                    this is somewhere to write rather than a note being fixed */}
-                <View style={[styles.captionBox, { borderBottomColor: noteFocus.border }]}>
-                  <TextInput
-                    value={note}
-                    onChangeText={onNoteChange}
-                    placeholder="What's happening…"
-                    placeholderTextColor={noteFocus.placeholder}
-                    multiline
-                    scrollEnabled={false}
-                    textAlignVertical="top"
-                    autoFocus={focusOnMount}
-                    accessibilityLabel="Note"
-                    style={[styles.noteText, styles.caption, { color: colors.textPrimary }]}
-                    onFocus={() => {
-                      setFocusOnMount(false);
-                      noteFocus.handlers.onFocus();
-                    }}
-                    onBlur={noteFocus.handlers.onBlur}
-                  />
+                    this is somewhere to write rather than a note being fixed.
+                    It and its chips are one block the screen lines up with
+                    the keyboard */}
+                <View ref={noteBlockRef} onLayout={onNoteBlockLayout} style={styles.noteBlock}>
+                  <View style={[styles.captionBox, { borderBottomColor: noteFocus.border }]}>
+                    <TextInput
+                      value={note}
+                      onChangeText={onNoteChange}
+                      placeholder="What's happening…"
+                      placeholderTextColor={noteFocus.placeholder}
+                      multiline
+                      scrollEnabled={false}
+                      textAlignVertical="top"
+                      autoFocus={focusOnMount}
+                      accessibilityLabel="Note"
+                      style={[styles.noteText, styles.caption, { color: colors.textPrimary }]}
+                      onFocus={() => {
+                        setFocusOnMount(false);
+                        noteFocus.handlers.onFocus();
+                        onNoteFocus();
+                      }}
+                      onBlur={() => {
+                        noteFocus.handlers.onBlur();
+                        onNoteBlur();
+                      }}
+                    />
+                  </View>
+                  {noteFocus.focused && noteSuggestions}
                 </View>
 
-                {(snippets.length > 0 || canPaste) && (
-                  <View style={styles.snippets}>
-                    {canPaste && (
-                      <Pressable
-                        onPress={onPaste}
-                        accessibilityRole="button"
-                        accessibilityLabel="Paste from the clipboard"
-                        style={[styles.snippetChip, glass(colors)]}
-                      >
-                        <Feather name="clipboard" size={11} color={colors.teal} />
-                        <Text style={[styles.snippetLabel, { color: colors.stone }]}>Paste</Text>
-                      </Pressable>
-                    )}
-                    {snippets.map((snippet) => (
-                      <Pressable
-                        key={snippet.id}
-                        onPress={() => onInsertSnippet(snippet.text)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Insert snippet ${snippet.name}`}
-                        style={[styles.snippetChip, glass(colors)]}
-                      >
-                        <Feather name="star" size={11} color={colors.accent} />
-                        <Text style={[styles.snippetLabel, { color: colors.stone }]} numberOfLines={1}>
-                          {snippet.name}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
-
-                {tags.length > 0 && (
-                  <View style={styles.tagsRow}>
-                    {tags.map((tag) => (
-                      <View key={tag} style={[styles.tagPill, { backgroundColor: hexToRgba(colors.teal, 0.16) }]}>
-                        <Text style={[styles.tagLabel, { color: colors.teal }]}>#{tag}</Text>
-                        <Pressable
-                          onPress={() => onRemoveTag(tag)}
-                          hitSlop={6}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Remove tag ${tag}`}
-                        >
-                          <Feather name="x" size={11} color={colors.teal} />
-                        </Pressable>
-                      </View>
-                    ))}
-                  </View>
-                )}
+                {/* the screen's Tags, Folder and Date fields */}
+                {children}
               </>
             ) : (
               <Pressable onPress={() => onToggleNote(true)} accessibilityRole="button" accessibilityLabel="Show the note">
@@ -278,6 +268,10 @@ export default function DraftNoteCard({
               </Pressable>
             )}
           </ScrollView>
+
+          <Animated.View
+            style={[styles.tileBand, { height: TILE.height, backgroundColor: colors.bg }, bandAnimated]}
+          />
 
           {/* after the note so it paints over it, as in the viewer */}
           <Animated.View style={[styles.photo, measured || noteOpen ? photoAnimated : styles.photoFill]}>

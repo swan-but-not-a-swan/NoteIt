@@ -1,9 +1,9 @@
 
-import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Text, useWindowDimensions, View } from "react-native";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Alert, Text, useWindowDimensions, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import { useEntitlements } from "@/lib/EntitlementsContext";
 import { FREE_COMPARE_LIMIT, PLUS_ON_SALE } from "@/lib/entitlements";
 import { EMPTY_QUERY, filterNotes, isEmptyQuery } from "@/lib/noteHelper";
@@ -12,7 +12,8 @@ import type { FolderModel } from "@/models/FolderModel";
 import type { NoteQuery, QueryCombine } from "@/models/NoteQueryModel";
 import GalleryGrid from "./GalleryGrid";
 import GalleryToolbar from "./GalleryToolbar";
-import HeldNotePreview from "./HeldNotePreview";
+import type { ImageRef } from "expo-image";
+import HeldNotePreview, { HeldImageLoader } from "./HeldNotePreview";
 import OverflowMenu, { anchorFor, OverflowMenuCard, type MenuAnchor } from "./OverflowMenu";
 import * as Haptics from "expo-haptics";
 import GlassPill from "./GlassPill";
@@ -96,8 +97,17 @@ export default function GalleryView({
     setSelectedIds((ids) => (ids.includes(id) ? ids : [...ids, id]));
   }, []);
 
+  //* the selection as of the last render, read by the toggle below. Reading
+  //* it through a ref keeps the toggle the same function across picks, so the
+  //* grid's memoised tiles don't all re-render every time one is picked
+  const selectedIdsRef = useRef(selectedIds);
+  useLayoutEffect(() => {
+    selectedIdsRef.current = selectedIds;
+  });
+
   const toggleNoteSelected = useCallback(
     (note: NoteModel) => {
+      const selectedIds = selectedIdsRef.current;
       if (selectedIds.includes(note.id)) 
       { //* removes the note to compare if pressed again
         setSelectedIds((ids) => ids.filter((id) => id !== note.id));
@@ -127,7 +137,7 @@ export default function GalleryView({
       }
       addSelectedId(note.id);
     },
-    [selectedIds, hasPlus, openPaywall, addSelectedId],
+    [hasPlus, openPaywall, addSelectedId],
   );
 
   const startCompare = useCallback(() => {
@@ -152,6 +162,11 @@ export default function GalleryView({
 
   //* the note whose tile is being held, and where to put its menu
   const [held, setHeld] = useState<{ note: NoteModel; anchor: MenuAnchor } | null>(null);
+  //* the held note's thumbnail once its shape is known (null: it couldn't be
+  //* loaded). The menu waits for it, so the picture and the card rise together
+  //* instead of the picture landing late and shoving the card down
+  const [heldImage, setHeldImage] = useState<{ noteId: string; image: ImageRef | null } | null>(null);
+  const heldReady = held != null && heldImage?.noteId === held.note.id;
 
   const onLongPressNote = useCallback(
     (note: NoteModel, point: { x: number; y: number }) => {
@@ -255,35 +270,44 @@ export default function GalleryView({
               },
             ]}
           />
-          <Pressable
+          <GlassPressable
+            colors={colors}
+            tint={canCompare ? colors.accent : undefined}
+            strength="fill"
             onPress={startCompare}
             disabled={!canCompare}
             accessibilityRole="button"
             accessibilityLabel={`Compare ${selectedIds.length} notes`}
             accessibilityState={{ disabled: !canCompare }}
             accessibilityHint={canCompare ? undefined : "Pick at least two notes"}
-            style={[
-              styles.compareGo,
-              glass(colors, canCompare ? { tint: colors.accent, strength: "fill" } : undefined),
-            ]}
+            style={styles.compareGo}
           >
             <Feather name="columns" size={15} color={canCompare ? colors.onAccent : colors.stoneDim} />
             <Text style={[styles.compareGoLabel, { color: canCompare ? colors.onAccent : colors.stoneDim }]}>
               Compare{selectedIds.length > 0 ? ` (${selectedIds.length})` : ""}
             </Text>
-          </Pressable>
+          </GlassPressable>
         </View>
       )}
 
       {/* the held tile's own menu: one note, and the four things worth doing
           to it without opening it first */}
+      {held != null && (
+        <HeldImageLoader
+          key={held.note.id}
+          uri={held.note.thumbnailUri}
+          onReady={(image) => setHeldImage({ noteId: held.note.id, image })}
+        />
+      )}
       <OverflowMenuCard
         colors={colors}
-        anchor={held?.anchor ?? null}
+        anchor={heldReady ? held.anchor : null}
         onClose={() => setHeld(null)}
         //* the note itself, popped up over the dimmed grid — a menu of four
         //* verbs says nothing about which note they would act on
-        preview={held != null ? <HeldNotePreview note={held.note} /> : null}
+        preview={
+          heldReady && heldImage?.image != null ? <HeldNotePreview note={held.note} image={heldImage.image} /> : null
+        }
         items={[
           {
             key: "edit",

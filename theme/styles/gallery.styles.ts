@@ -401,13 +401,11 @@ export const compareScreenStyles = StyleSheet.create({
 export const heldNotePreviewStyles = StyleSheet.create({
   //* placed by OverflowMenuCard, which puts it on the opposite side of the
   //* finger from the menu itself
+  //* no shadow and no rim: the dimmed grid behind is what sets the picture
+  //* apart, exactly as it does in Photos. A shadow on top of that reads as a
+  //* card holding a photo rather than the photo itself
   preview: {
-    position: "absolute",
-    alignSelf: "center",
     borderRadius: 28,
     overflow: "hidden",
-    //* it floats over a dimmed grid, so it needs a shadow deep enough to read
-    //* as lifted off it rather than printed on it
-    boxShadow: [{ offsetX: 0, offsetY: 18, blurRadius: 40, color: "rgba(0,0,0,0.5)" }],
   },
 });

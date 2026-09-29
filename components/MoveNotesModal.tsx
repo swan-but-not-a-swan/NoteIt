@@ -2,7 +2,7 @@ import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import type { FolderModel } from "@/models/FolderModel";
 import { moveNotesModalStyles as styles } from "@/theme/styles/folders.styles";
 
@@ -40,15 +40,16 @@ export default function MoveNotesModal({
             <Text style={[styles.title, { color: colors.textPrimary }]}>
               {title ?? (count === 1 ? "Move 1 picture-note" : `Move ${count} picture-notes`)}
             </Text>
-            <Pressable
+            <GlassPressable
+              colors={colors}
               onPress={onCancel}
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel="Cancel moving"
-              style={[styles.closeButton, glass(colors)]}
+              style={styles.closeButton}
             >
               <Feather name="x" size={14} color={colors.textPrimary} />
-            </Pressable>
+            </GlassPressable>
           </View>
 
           {/* capped, so a long folder list scrolls inside the dialog rather

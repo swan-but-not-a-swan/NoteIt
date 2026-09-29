@@ -5,6 +5,7 @@ import { fonts } from "@/theme/fonts";
 import { hexToRgba } from "@/theme/colors";
 import { formatDayDate } from "@/lib/date";
 import type { ExportedPayload } from "@/models/ExportModel";
+import PressableScale from "./PressableScale";
 
 type Props = {
   visible: boolean;
@@ -98,7 +99,7 @@ export default function ImportSummary({
           )}
 
           <View style={styles.buttons}>
-            <Pressable
+            <PressableScale
               onPress={onCancel}
               disabled={busy}
               style={({ pressed }) => [
@@ -109,10 +110,10 @@ export default function ImportSummary({
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>
                 {error != null ? "Close" : "Cancel"}
               </Text>
-            </Pressable>
+            </PressableScale>
 
             {error == null && (
-              <Pressable
+              <PressableScale
                 onPress={onConfirm}
                 //* nothing to confirm until the manifest has been read, and a
                 //* second tap mid-write would import the same file twice
@@ -130,7 +131,7 @@ export default function ImportSummary({
                 ) : (
                   <Text style={[styles.buttonLabel, { color: colors.onAccent }]}>Import</Text>
                 )}
-              </Pressable>
+              </PressableScale>
             )}
           </View>
         </Pressable>

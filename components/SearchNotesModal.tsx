@@ -13,7 +13,9 @@ import Animated, { SlideInUp } from "react-native-reanimated";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { LIGHT_THEME, type ThemeColors } from "@/theme/colors";
 import { useFieldFocus } from "@/theme/focus";
-import { glass } from "@/theme/glass";
+import { flatSurface } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
+import GlassSurface from "./GlassSurface";
 import { formatDayDate, todayISO } from "@/lib/date";
 import { EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
 import { withRange } from "@/lib/dateHelper";
@@ -21,6 +23,7 @@ import { TagModel } from "../models/NoteModel";
 import type { FolderModel } from "@/models/FolderModel";
 import { UNFILED, type NoteQuery } from "@/models/NoteQueryModel";
 import { searchNotesModalStyles as styles } from "@/theme/styles/gallery.styles";
+import PressableScale from "./PressableScale";
 
 type Props = {
   visible: boolean;
@@ -96,14 +99,15 @@ export default function SearchNotesModal({
         >
           <View style={styles.header}>
             <Text style={[styles.title, { color: colors.textPrimary }]}>Search picture-notes</Text>
-            <Pressable
+            <GlassPressable
+              colors={colors}
               onPress={onClose}
               hitSlop={8}
               accessibilityLabel="Close search"
-              style={[styles.closeButton, glass(colors)]}
+              style={styles.closeButton}
             >
               <Feather name="x" size={15} color={colors.textPrimary} />
-            </Pressable>
+            </GlassPressable>
           </View>
           {/* The same controls mean different things in the two modes, so
               the sheet says which one is in force. */}
@@ -118,7 +122,7 @@ export default function SearchNotesModal({
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.label, { color: colors.stoneDim }]}>Text</Text>
-            <View style={[styles.field, glass(colors), { borderColor: textFocus.border }]}>
+            <GlassSurface colors={colors} style={[styles.field, { borderColor: textFocus.border }]}>
               <Feather name="search" size={15} color={textFocus.focused ? colors.stone : colors.stoneDim} />
               <TextInput
                 value={query.text}
@@ -131,11 +135,11 @@ export default function SearchNotesModal({
                 {...textFocus.handlers}
               />
               {query.text.length > 0 && (
-                <Pressable onPress={() => onQueryChange({ ...query, text: "" })} hitSlop={8}>
+                <PressableScale onPress={() => onQueryChange({ ...query, text: "" })} hitSlop={8}>
                   <Feather name="x" size={14} color={colors.stoneDim} />
-                </Pressable>
+                </PressableScale>
               )}
-            </View>
+            </GlassSurface>
 
             <Text style={[styles.label, { color: colors.stoneDim }]}>Tags</Text>
             {tags.length > 0 ? (
@@ -143,19 +147,18 @@ export default function SearchNotesModal({
                 {tags.map((tag) => {
                   const active = query.tagIds.includes(tag.id);
                   return (
-                    <Pressable
+                    //* flat, not glass: one per tag with no upper bound, and a
+                    //* screenful of live glass views is costly to draw
+                    <PressableScale
                       key={tag.id}
                       onPress={() => toggleTag(tag.id)}
-                      style={[
-                        styles.tagChip,
-                        glass(colors, active ? { tint: colors.teal } : undefined),
-                      ]}
+                      style={[styles.tagChip, flatSurface(colors, active ? { tint: colors.teal } : undefined)]}
                     >
                       <Feather name="tag" size={12} color={active ? colors.teal : colors.stone} />
                       <Text style={[styles.tagLabel, { color: active ? colors.teal : colors.stone }]}>
                         #{tag.title}
                       </Text>
-                    </Pressable>
+                    </PressableScale>
                   );
                 })}
               </View>
@@ -215,7 +218,7 @@ export default function SearchNotesModal({
           </ScrollView>
 
           <View style={styles.footer}>
-            <Pressable
+            <PressableScale
               //* EMPTY_QUERY rather than a literal, so a field added to the
               //* query later is cleared here without anyone remembering to
               onPress={() => onQueryChange(EMPTY_QUERY)}
@@ -225,15 +228,18 @@ export default function SearchNotesModal({
               <Text style={[styles.clearLabel, { color: filtering ? colors.accent : colors.stoneDim }]}>
                 Clear all
               </Text>
-            </Pressable>
-            <Pressable
+            </PressableScale>
+            <GlassPressable
+              colors={colors}
+              tint={colors.accent}
+              strength="fill"
               onPress={onClose}
-              style={[styles.confirm, glass(colors, { tint: colors.accent, strength: "fill" })]}
+              style={styles.confirm}
             >
               <Text style={[styles.confirmLabel, { color: colors.onAccent }]}>
                 Show {resultCount} {resultCount === 1 ? "result" : "results"}
               </Text>
-            </Pressable>
+            </GlassPressable>
           </View>
         </Animated.View>
       </View>
@@ -252,17 +258,15 @@ type FolderChipProps = {
   onPress: () => void;
 };
 
+//* flat for the same reason as the tag chips: one per folder, unbounded
 function FolderChip({ label, icon, tint, active, colors, onPress }: FolderChipProps) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={`Folder ${label}`}
-      style={[
-        styles.tagChip,
-        glass(colors, active ? { tint } : undefined),
-      ]}
+      style={[styles.tagChip, flatSurface(colors, active ? { tint } : undefined)]}
     >
       <Feather name={icon} size={12} color={active ? tint : colors.stone} />
       <Text
@@ -271,7 +275,7 @@ function FolderChip({ label, icon, tint, active, colors, onPress }: FolderChipPr
       >
         {label}
       </Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -309,7 +313,7 @@ function DateField({ caption, value, colors, onChange, onUnsupported }: DateFiel
   return (
     <View style={styles.dateCol}>
       <Text style={[styles.dateCaption, { color: colors.stone }]}>{caption}</Text>
-      <View style={[styles.dateBox, glass(colors)]}>
+      <GlassSurface colors={colors} style={styles.dateBox}>
         <Feather name="calendar" size={14} color={colors.stone} />
 
         {!set ? (
@@ -339,15 +343,15 @@ function DateField({ caption, value, colors, onChange, onUnsupported }: DateFiel
         )}
 
         {set && (
-          <Pressable
+          <PressableScale
             onPress={() => onChange("")}
             hitSlop={8}
             accessibilityLabel={`Clear ${caption} date`}
           >
             <Feather name="x" size={13} color={colors.stoneDim} />
-          </Pressable>
+          </PressableScale>
         )}
-      </View>
+      </GlassSurface>
     </View>
   );
 }

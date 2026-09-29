@@ -1,7 +1,9 @@
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
+import GlassSurface from "./GlassSurface";
+import PressableScale from "./PressableScale";
 import { describeQuery, EMPTY_QUERY, isEmptyQuery } from "@/lib/noteHelper";
 import { DATE_PRESETS, withPreset } from "@/lib/dateHelper";
 import type { FolderModel } from "@/models/FolderModel";
@@ -53,12 +55,11 @@ export default function GalleryToolbar({
   return (
     <View style={styles.wrap}>
       <View style={styles.searchRow}>
-        <Pressable
+        <GlassPressable
+          colors={colors}
+          tint={filtering ? colors.accent : undefined}
           onPress={onOpenSearch}
-          style={[
-            styles.searchButton,
-            glass(colors, filtering ? { tint: colors.accent } : undefined),
-          ]}
+          style={styles.searchButton}
         >
           <Feather name="search" size={15} color={filtering ? colors.accent : colors.stoneDim} />
           <Text
@@ -69,26 +70,25 @@ export default function GalleryToolbar({
               ? `${resultCount} result${resultCount === 1 ? "" : "s"}  ·  ${summary}`
               : "Search notes by tag or date"}
           </Text>
-        </Pressable>
+        </GlassPressable>
 
         {/* the same button leaves the mode it entered: a cross reads as "stop
             picking" where the columns icon would read as "compare now" */}
-        <Pressable
+        <GlassPressable
+          colors={colors}
+          tint={selectMode ? colors.accent : undefined}
           onPress={onToggleSelectMode}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel={selectMode ? "Cancel" : "Select picture-notes"}
-          style={[
-            styles.selectButton,
-            glass(colors, selectMode ? { tint: colors.accent } : undefined),
-          ]}
+          style={styles.selectButton}
         >
           <Feather
             name={selectMode ? "x" : "columns"}
             size={16}
             color={selectMode ? colors.accent : colors.stoneDim}
           />
-        </Pressable>
+        </GlassPressable>
       </View>
 
       <ScrollView
@@ -102,30 +102,24 @@ export default function GalleryToolbar({
         {DATE_PRESETS.map((preset) => {
           const active = query.preset === preset.id;
           return (
-            <Pressable
+            <GlassPressable
               key={preset.id}
+              colors={colors}
+              tint={active ? colors.accent : undefined}
               onPress={() => onQueryChange(withPreset(query, preset.id))}
-              style={[
-                styles.chip,
-                glass(colors, active ? { tint: colors.accent } : undefined),
-              ]}
+              style={styles.chip}
             >
               <Text style={[styles.chipLabel, { color: active ? colors.accent : colors.stone }]}>
                 {preset.label}
               </Text>
-            </Pressable>
+            </GlassPressable>
           );
         })}
 
         {query.preset === "custom" && (
-          <View
-            style={[
-              styles.chip,
-              glass(colors, { tint: colors.accent }),
-            ]}
-          >
+          <GlassSurface colors={colors} tint={colors.accent} style={styles.chip}>
             <Text style={[styles.chipLabel, { color: colors.accent }]}>Custom range</Text>
-          </View>
+          </GlassSurface>
         )}
       </ScrollView>
 
@@ -139,12 +133,12 @@ export default function GalleryToolbar({
             <Text style={[styles.summaryLabel, { color: colors.stoneDim }]}>
               {resultCount} {resultCount === 1 ? "match" : "matches"}
             </Text>
-            <Pressable
+            <PressableScale
               onPress={() => onQueryChange(EMPTY_QUERY)}
               hitSlop={8}
             >
               <Text style={[styles.clearLabel, { color: colors.accent }]}>Clear</Text>
-            </Pressable>
+            </PressableScale>
           </View>
         )
       )}

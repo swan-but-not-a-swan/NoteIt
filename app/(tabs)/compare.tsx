@@ -1,6 +1,5 @@
 import { useState } from "react";
 import {
-    Pressable,
     ScrollView,
     Text,
     View,
@@ -19,6 +18,7 @@ import MarkdownText from "@/components/MarkdownText";
 import { useLibrary } from "@/lib/LibraryContext";
 import { NoteModel, TagModel } from "@/models/NoteModel";
 import { compareScreenStyles as styles, COMPARE_H_PADDING, COMPARE_GAP } from "@/theme/styles/gallery.styles";
+import PressableScale from "@/components/PressableScale";
 
 /** Fixed width once three or more are side by side, so a fourth is reachable
  *  by scrolling rather than by shrinking every card past legibility. */
@@ -130,14 +130,14 @@ function CompareCard({ note, tags, colors, width, onRemove }: CardProps) {
                     would be upscaled at this size. */}
                 <MediaThumb note={note} preferFullMedia showPlayBadge={false} />
 
-                <Pressable
+                <PressableScale
                     onPress={onRemove}
                     hitSlop={6}
                     accessibilityLabel="Remove from comparison"
                     style={styles.removeButton}
                 >
                     <Feather name="x" size={14} color="#fff" />
-                </Pressable>
+                </PressableScale>
 
                 {note.date.length > 0 && (
                     <View style={styles.datePill}>

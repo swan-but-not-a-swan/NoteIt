@@ -34,6 +34,11 @@ export function useExportTransfer(tags: TagModel[]) {
     if (folder == null && notes.length === 0) return;
     const signal: TransferSignal = { cancelled: false };
     signalRef.current = signal;
+    //* every export but the viewer's starts from something that is closing:
+    //* the edit-folder dialog, the long-press menu, the More menu. iOS can't
+    //* present a modal while another is dismissing — the progress dialog then
+    //* never appears but still takes every touch, and the app looks frozen
+    if (Platform.OS === "ios") await delay(MODAL_DISMISS_MS);
     setProgress({ done: 0, total: 0 });
 
     try {
@@ -48,7 +53,7 @@ export function useExportTransfer(tags: TagModel[]) {
       //* the dialog goes before the share sheet comes: iOS won't present one
       //* over a modal that is still closing
       setProgress(null);
-      if (Platform.OS === "ios") await new Promise((resolve) => setTimeout(resolve, MODAL_DISMISS_MS));
+      if (Platform.OS === "ios") await delay(MODAL_DISMISS_MS);
       await shareExportFileAsync(fileUri, fileNameFor(notes, folder));
     } catch (error) {
       setProgress(null);
@@ -68,6 +73,8 @@ export function useExportTransfer(tags: TagModel[]) {
 
   return { exporting: progress != null, progress, exportAsync, cancel };
 }
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** What the file is called in the share sheet and the chat it lands in. */
 function fileNameFor(notes: NoteModel[], folder: FolderModel | null): string {

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Alert, Platform, Pressable, Text, View } from "react-native";
+import { Alert, Platform, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/theme/ThemeContext";
-import { glass } from "@/theme/glass";
+import GlassPressable from "@/components/GlassPressable";
 import TopBar from "@/components/TopBar";
 import ViewNote from "@/components/ViewNote";
 import AdBannerStrip from "@/components/AdBannerStrip";
@@ -166,38 +166,38 @@ export default function ViewNotes() {
                         {/* Lit while the note is showing, so the header says
                             which of the two you are looking at without a label
                             that has to flip its wording to do it. */}
-                        <Pressable
+                        <GlassPressable
+                            colors={colors}
+                            tint={noteOpen ? colors.accent : undefined}
                             onPress={() => setNoteOpen(!noteOpen)}
                             hitSlop={8}
                             accessibilityRole="button"
                             accessibilityState={{ selected: noteOpen }}
                             accessibilityLabel={noteOpen ? "Hide the note" : "Show the note"}
-                            style={[
-                                styles.headerButton,
-                                glass(colors, noteOpen ? { tint: colors.accent, strength: "fill" } : undefined),
-                            ]}
+                            style={styles.headerButton}
                         >
                             <Feather
                                 name="file-text"
                                 size={16}
-                                color={noteOpen ? colors.onAccent : colors.textPrimary}
+                                color={noteOpen ? colors.accent : colors.textPrimary}
                             />
-                        </Pressable>
+                        </GlassPressable>
 
                         {/* Exports the note as a .noteit file. It replaced
                             sharing the note as text: one share button, and it
                             sends the whole picture-note rather than its words. */}
-                        <Pressable
+                        <GlassPressable
+                            colors={colors}
                             onPress={exportNoteAsync}
                             disabled={exporting}
                             hitSlop={8}
                             accessibilityRole="button"
                             accessibilityLabel="Export this picture-note"
                             accessibilityState={{ disabled: exporting, busy: exporting }}
-                            style={[styles.headerButton, glass(colors), { opacity: exporting ? 0.5 : 1 }]}
+                            style={[styles.headerButton, { opacity: exporting ? 0.5 : 1 }]}
                         >
                             <Feather name="share" size={16} color={colors.textPrimary} />
-                        </Pressable>
+                        </GlassPressable>
 
                         <OverflowMenu
                             colors={colors}

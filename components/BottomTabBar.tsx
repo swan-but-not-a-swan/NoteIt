@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Text, View, type LayoutRectangle } from "react-native";
 import { Image } from "expo-image";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,12 +7,15 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
+  withSequence,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 import { hexToRgba, type ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import { flatSurface } from "@/theme/glass";
 import GlassSurface from "./GlassSurface";
+import PressableScale from "./PressableScale";
 import type { FolderModel } from "@/models/FolderModel";
 import { bottomTabBarStyles as styles } from "@/theme/styles/app.styles";
 
@@ -36,6 +39,12 @@ const SWIPE_TRIGGER_DISTANCE = 44;
 /** The dock's gap to the screen's bottom edge where there's no safe-area inset
  *  to sit on. The side gaps are in the stylesheet. */
 const DOCK_EDGE_GAP = 12;
+
+/** The lens's footprint — the same as a dock button's (dockButton). */
+const LENS_W = 64;
+const LENS_H = 46;
+//* a touch of overshoot, so the lens lands the way iOS 26's tab bar glass does
+const LENS_SPRING = { damping: 17, stiffness: 190, mass: 0.8 };
 
 // Fully controlled, same as NewFolder/TopBar — this component only renders
 // what it's given and reports taps back up; the screen (or router) owns
@@ -82,6 +91,33 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
     transform: [{ translateY: -progress.value * 8 }],
   }));
 
+  // The lens that marks the tab you're on. One lens that travels between the
+  // two tabs, rather than one per tab fading in and out, so moving between
+  // Folders and Gallery reads as the glass sliding across — stretching as it
+  // goes and settling where it lands, the way iOS 26's tab bars move theirs.
+  const [slots, setSlots] = useState<Partial<Record<MainTab, LayoutRectangle>>>({});
+  const lensX = useSharedValue(0);
+  const lensStretch = useSharedValue(1);
+  const lensPlaced = useRef(false);
+  const target = slots[activeTab];
+  useEffect(() => {
+    if (target == null) return;
+    const x = target.x + (target.width - LENS_W) / 2;
+    //* the first placement just appears; only a change of tab travels
+    if (!lensPlaced.current) {
+      lensPlaced.current = true;
+      lensX.set(x);
+      return;
+    }
+    lensX.set(withSpring(x, LENS_SPRING));
+    lensStretch.set(withSequence(withTiming(1.35, { duration: 140 }), withSpring(1, LENS_SPRING)));
+  }, [target?.x, target?.width, activeTab, lensX, lensStretch, target]);
+  const lensStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: lensX.get() }, { scaleX: lensStretch.get() }],
+  }));
+  const placeSlot = (tab: MainTab) => (layout: LayoutRectangle) =>
+    setSlots((current) => ({ ...current, [tab]: layout }));
+
   return (
     <GestureDetector gesture={swipeUpGesture}>
       {/* the full-width strip only holds the dock off the screen's edges; the
@@ -91,12 +127,31 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
             else — the dock is the app's most-seen chrome, so it is the surface
             worth spending the native material on */}
         <GlassSurface colors={colors} lift="float" style={styles.dock}>
+          {/* behind the buttons, so it lights the icon without covering it.
+              Its colour never changes after the first draw — on Android a
+              rounded view whose background colour changes loses its rounding */}
+          {target != null && (
+            <Animated.View
+              style={[
+                styles.dockLens,
+                {
+                  top: target.y + (target.height - LENS_H) / 2,
+                  width: LENS_W,
+                  height: LENS_H,
+                  backgroundColor: hexToRgba(colors.accent, 0.16),
+                },
+                lensStyle,
+              ]}
+            />
+          )}
+
           <DockButton
             icon="folder"
             label="Folders"
             active={activeTab === "folders"}
             colors={colors}
             onPress={() => onSelectTab("folders")}
+            onSlotLayout={placeSlot("folders")}
           />
 
           <View style={styles.addSlot}>
@@ -108,17 +163,19 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
               </View>
             </Animated.View>
 
-            <Pressable onPress={onAdd} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add a picture-note">
+            <PressableScale onPress={onAdd} hitSlop={8} accessibilityRole="button" accessibilityLabel="Add a picture-note">
               <Animated.View
                 style={[
                   styles.addButton,
                   addButtonStyle,
-                  glass(colors, { tint: colors.accent, strength: "fill" }),
+                  //* flat even on iOS 26: it sits on the dock's glass, and glass can't
+                  //* sample glass — a solid primary button on it, the way iOS draws one
+                  flatSurface(colors, { tint: colors.accent, strength: "fill" }),
                 ]}
               >
                 <Feather name="plus" size={25} color={colors.onAccent} />
               </Animated.View>
-            </Pressable>
+            </PressableScale>
           </View>
 
           <DockButton
@@ -132,6 +189,7 @@ export default function BottomTabBar({ activeTab, onSelectTab, onAdd, colors, ga
             active={activeTab === "gallery"}
             colors={colors}
             onPress={() => onSelectTab("gallery")}
+            onSlotLayout={placeSlot("gallery")}
           />
         </GlassSurface>
       </View>
@@ -148,30 +206,27 @@ type DockButtonProps = {
   active: boolean;
   colors: ThemeColors;
   onPress: () => void;
+  /** Where this button's slot sits in the dock, for the sliding lens. */
+  onSlotLayout: (layout: LayoutRectangle) => void;
 };
 
 //* icon only, like the dock it's modelled on. With no label to colour, the
-//* tab you're on is marked by a soft lens of the accent behind its icon
-function DockButton({ icon, iconNode, label, active, colors, onPress }: DockButtonProps) {
+//* tab you're on is marked by the dock's sliding lens behind its icon
+function DockButton({ icon, iconNode, label, active, colors, onPress, onSlotLayout }: DockButtonProps) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       hitSlop={8}
       style={styles.dockSlot}
+      onLayout={(e) => onSlotLayout(e.nativeEvent.layout)}
       accessibilityRole="tab"
       accessibilityLabel={label}
       accessibilityState={{ selected: active }}
     >
       <View style={styles.dockButton}>
-        {/* a layer of its own that fades rather than a background that
-            changes: on Android, changing a rounded view's background colour
-            after it has drawn loses the rounding */}
-        <View
-          style={[styles.dockLens, { backgroundColor: hexToRgba(colors.accent, 0.16), opacity: active ? 1 : 0 }]}
-        />
         {iconNode ?? <Feather name={icon} size={24} color={active ? colors.accent : colors.stone} />}
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 

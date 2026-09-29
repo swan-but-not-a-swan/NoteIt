@@ -1,7 +1,7 @@
 import { Linking, Modal, Pressable, Text, View } from "react-native";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import { sendFeedbackStyles as styles } from "@/theme/styles/settings.styles";
 
 /** Where feedback goes. Shown in the sheet as well as used for the mail link,
@@ -50,32 +50,28 @@ export default function SendFeedback({ visible, colors, onClose }: Props) {
           </View>
 
           <View style={styles.buttons}>
-            <Pressable
+            <GlassPressable
+              colors={colors}
               onPress={onClose}
               accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.button,
-                glass(colors),
-                { opacity: pressed ? 0.7 : 1 },
-              ]}
+              style={styles.button}
             >
               <Text style={[styles.buttonLabel, { color: colors.textPrimary }]}>Close</Text>
-            </Pressable>
-            <Pressable
+            </GlassPressable>
+            <GlassPressable
+              colors={colors}
+              tint={colors.accent}
+              strength="fill"
               onPress={openMail}
               accessibilityRole="button"
               accessibilityLabel={`Email ${FEEDBACK_EMAIL}`}
-              style={({ pressed }) => [
-                styles.button,
-                glass(colors, { tint: colors.accent, strength: "fill" }),
-                { opacity: pressed ? 0.75 : 1 },
-              ]}
+              style={styles.button}
             >
               <View style={styles.buttonRow}>
                 <Feather name="mail" size={14} color={colors.onAccent} />
                 <Text style={[styles.buttonLabel, { color: colors.onAccent }]}>Email</Text>
               </View>
-            </Pressable>
+            </GlassPressable>
           </View>
         </Pressable>
       </Pressable>

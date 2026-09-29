@@ -157,7 +157,7 @@ export async function writeExportFileAsync(
     throw new Error("writeExportFileAsync: mediaUris must match payload.files one to one");
   }
 
-  const sources = mediaUris.map((uri) => new File(uri));
+  const sources = mediaUris.map(resolveStoredFile);
   const files: ExportedFile[] = payload.files.map((entry, i) => {
     if (!sources[i].exists) {
       throw new TransferError("A photo or video in this export is missing from the phone, so it couldn't be exported.");
@@ -653,6 +653,32 @@ function safeFileName(name: string): string {
     .slice(0, 80);
   const base = cleaned.length > 0 && cleaned !== ".noteit" ? cleaned : "NoteIt export.noteit";
   return base.toLowerCase().endsWith(".noteit") ? base : `${base}.noteit`;
+}
+
+/**
+ * A file the library points at, found even if the app has moved since the uri
+ * was stored.
+ *
+ * Notes keep absolute uris, and on iOS the app's container folder changes on
+ * every update (…/Application/<new id>/Documents/…). A note saved before an
+ * update still names the old folder; its file is really at the same place
+ * under this install's Documents. So a uri that doesn't exist is re-pointed
+ * there, and used if the file is found. On Android the path doesn't move and
+ * the first check simply succeeds.
+ */
+function resolveStoredFile(uri: string): File {
+  const stored = new File(uri);
+  if (stored.exists) return stored;
+
+  const marker = "/Documents/";
+  const at = uri.indexOf(marker);
+  if (at < 0) return stored;
+  const segments = uri
+    .slice(at + marker.length)
+    .split("/")
+    .map((segment) => decodeURIComponent(segment));
+  const current = new File(Paths.document, ...segments);
+  return current.exists ? current : stored;
 }
 
 function deleteDirectoryIfExists(dir: Directory): void {

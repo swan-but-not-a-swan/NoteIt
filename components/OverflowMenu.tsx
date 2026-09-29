@@ -1,8 +1,9 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { Feather, type FeatherIconName } from "@react-native-vector-icons/feather/static";
 import type { ThemeColors } from "@/theme/colors";
-import { glass } from "@/theme/glass";
+import GlassPressable from "./GlassPressable";
 import { overflowMenuStyles as styles } from "@/theme/styles/app.styles";
 
 export type OverflowMenuItem = {
@@ -40,19 +41,20 @@ export default function OverflowMenu({
 
   return (
     <>
-      <Pressable
+      <GlassPressable
         ref={trigger}
+        colors={colors}
         onPress={open}
         hitSlop={8}
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        style={[label != null ? styles.labelledTrigger : styles.trigger, glass(colors)]}
+        style={label != null ? styles.labelledTrigger : styles.trigger}
       >
         <Feather name="more-horizontal" size={17} color={colors.textPrimary} />
         {label != null && (
           <Text style={[styles.triggerLabel, { color: colors.textPrimary }]}>{label}</Text>
         )}
-      </Pressable>
+      </GlassPressable>
 
       <OverflowMenuCard
         colors={colors}
@@ -88,15 +90,6 @@ export function anchorFor(
   };
 }
 
-/** Where a preview goes, given where the card went: the two sit on opposite
- *  sides of the finger, so neither covers the other and the thing being acted
- *  on stays in sight while the menu is read. */
-function previewAnchorFor(anchor: MenuAnchor, screenH: number): MenuAnchor {
-  return anchor.top != null
-    ? { bottom: screenH - anchor.top + 12 } //* menu opened downward, so this goes above
-    : { top: screenH - (anchor.bottom ?? 0) + 12 };
-}
-
 type CardProps = {
   colors: ThemeColors;
   items: OverflowMenuItem[];
@@ -109,10 +102,28 @@ type CardProps = {
   preview?: ReactNode;
 };
 
+//* the rise: picks up where the held tile's own swell left off and settles
+//* with the smallest overshoot. One spring for the picture and the card
+//* together, because they are one object arriving, not two
+const RISE = { damping: 16, stiffness: 230, mass: 0.7 };
+
 // The menu on its own, placed at an anchor rather than under a button of its
 // own — what a long press opens, where the thing pressed is the trigger.
 export function OverflowMenuCard({ colors, items, anchor, onClose, preview }: CardProps) {
-  const { height: screenH } = useWindowDimensions();
+  // Driven off `anchor` rather than mount: the Modal keeps this component
+  // alive between openings, so a mount-time animation would only ever play
+  // once. Resetting to 0 on close is what lets the next long press rise again.
+  const rise = useSharedValue(0);
+  useEffect(() => {
+    rise.set(anchor != null ? withSpring(1, RISE) : 0);
+  }, [anchor, rise]);
+
+  const risen = useAnimatedStyle(() => ({
+    opacity: rise.get(),
+    //* from just under the size the tile had grown to under the finger, so the
+    //* picture carries on swelling rather than restarting
+    transform: [{ scale: 0.88 + rise.get() * 0.12 }],
+  }));
 
   const runItem = (item: OverflowMenuItem) => {
     onClose();
@@ -123,28 +134,31 @@ export function OverflowMenuCard({ colors, items, anchor, onClose, preview }: Ca
 
   return (
     <Modal visible={anchor != null} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu" />
-
-      {anchor != null && preview != null && (
-        <View pointerEvents="box-none" style={[styles.previewSlot, previewAnchorFor(anchor, screenH)]}>
-          {preview}
-        </View>
-      )}
+      <Pressable
+        style={[styles.backdrop, preview != null && styles.backdropDim]}
+        onPress={onClose}
+        accessibilityLabel="Close menu"
+      />
 
       {anchor != null && (
-        <View
-          style={[
-            styles.card,
-            {
-              top: anchor.top,
-              bottom: anchor.bottom,
-              left: anchor.left,
-              right: anchor.right,
-              backgroundColor: colors.surface,
-              borderColor: colors.line,
-            },
-          ]}
+        <Animated.View
+          pointerEvents="box-none"
+          //* the whole screen in both modes: the card's anchor is measured from
+          //* the screen's edges, and without a size of its own this layer was
+          //* a zero-height strip at the top — a menu opening upward (More, by
+          //* the dock) then hung its card above the screen, out of sight
+          style={[styles.cardLayer, preview != null && styles.previewLayout, preview != null && risen]}
         >
+          {preview}
+          <View
+            style={[
+              styles.card,
+              preview != null
+                ? styles.cardInFlow
+                : { top: anchor.top, bottom: anchor.bottom, left: anchor.left, right: anchor.right },
+              { backgroundColor: colors.surface, borderColor: colors.line },
+            ]}
+          >
           {items.map((item, i) => (
             <Pressable
               key={item.key}
@@ -171,7 +185,8 @@ export function OverflowMenuCard({ colors, items, anchor, onClose, preview }: Ca
               </Text>
             </Pressable>
           ))}
-        </View>
+          </View>
+        </Animated.View>
       )}
     </Modal>
   );

@@ -223,7 +223,7 @@ export const endAdStyles = StyleSheet.create({
 });
 
 //* app/(tabs)/enter-note.tsx
-/** Horizontal inset for the whole screen — header, body, pills and footer. */
+/** Horizontal inset for the whole screen — header, body, fields and footer. */
 const ADD_NOTE_SIDE_PAD = 18;
 
 export const addNoteScreenStyles = StyleSheet.create({
@@ -232,15 +232,15 @@ export const addNoteScreenStyles = StyleSheet.create({
   headerButton: common.iconButton38,
   body: {
     paddingHorizontal: ADD_NOTE_SIDE_PAD,
-    paddingBottom: 10,
+    paddingTop: 4,
     gap: 14,
   },
-  //* the empty state is the screen: a note without a picture isn't a
-  //* picture-note, so the drop zone takes the room the photo will
+  //* the empty state leads the screen: a note without a picture isn't a
+  //* picture-note, so the drop zone takes the room the photo will. Flat, with a
+  //* dashed rim that says "an empty slot" — never glass
   pickButton: {
-    height: 330,
+    height: 250,
     borderRadius: 18,
-    borderWidth: 1,
     borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
@@ -262,6 +262,10 @@ export const addNoteScreenStyles = StyleSheet.create({
     borderBottomWidth: 1,
     paddingBottom: 12,
   },
+  //* the note and the snippet chips it offers while focused, as one block
+  noteBlock: {
+    gap: 10,
+  },
   //* the viewer's note type, so the text reads the same before and after saving
   caption: {
     fontFamily: fonts.frauncesMedium,
@@ -271,105 +275,21 @@ export const addNoteScreenStyles = StyleSheet.create({
     padding: 0,
     textAlignVertical: "top",
   },
-  snippets: common.wrapRow6,
-  snippetChip: common.snippetChip,
-  snippetLabel: common.snippetLabel,
-  tagRow: common.wrapRow6,
-  //* the viewer's tag pill, plus room for the remove cross
-  tagPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingLeft: 10,
-    paddingRight: 7,
-  },
-  tagLabel: common.semiBold10_5,
-  //* whichever foot pill is open drops its panel right above the pills, so
-  //* the thing you tapped and the thing that opened stay next to each other
-  panel: {
-    marginHorizontal: ADD_NOTE_SIDE_PAD,
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 10,
-  },
-  panelLabel: {
-    fontFamily: fonts.interBold,
-    fontSize: 10,
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  panelChips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  panelChip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-  },
-  panelChipLabel: {
-    fontFamily: fonts.interSemiBold,
-    fontSize: 12,
-  },
-  tagInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-  },
-  tagInput: {
-    flex: 1,
-    fontFamily: fonts.interRegular,
-    fontSize: 12.5,
-    paddingVertical: 9,
-  },
-  dateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  dateValue: {
-    fontFamily: fonts.interRegular,
-    fontSize: 13,
-  },
-  footPills: {
-    flexDirection: "row",
-    gap: 8,
+  draftArea: common.fill,
+  //* stationary: pinned to the bottom of the screen, so the keyboard and the
+  //* pickers slide up over it rather than carrying it along
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     paddingHorizontal: ADD_NOTE_SIDE_PAD,
-    paddingTop: 12,
-    paddingBottom: 12,
-  },
-  footPill: {
-    flex: 1,
-    height: 40,
-    borderRadius: 999,
-    borderWidth: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-  },
-  footPillLabel: {
-    flexShrink: 1,
-    fontFamily: fonts.interSemiBold,
-    fontSize: 11.5,
+    paddingTop: 10,
+    gap: 10,
   },
   error: {
     fontFamily: fonts.interRegular,
     fontSize: 11.5,
-    paddingHorizontal: ADD_NOTE_SIDE_PAD,
-    marginBottom: 10,
-  },
-  footer: {
-    paddingHorizontal: ADD_NOTE_SIDE_PAD,
-    gap: 10,
   },
   saveButton: {
     height: 50,
@@ -390,6 +310,200 @@ export const addNoteScreenStyles = StyleSheet.create({
   },
 });
 
+//* components/NoteFields.tsx — Tags, Folder and Date under the note
+export const noteFieldsStyles = StyleSheet.create({
+  fields: {
+    gap: 12,
+    paddingTop: 6,
+  },
+  field: {
+    gap: 6,
+  },
+  //* a field and the chips it offers while focused, kept as one block
+  fieldBlock: {
+    gap: 10,
+  },
+  label: {
+    fontFamily: fonts.interBold,
+    fontSize: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  box: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  //* the pills and the input share a wrapping row, so a long list of tags
+  //* grows the field downward instead of running off its edge
+  tagFlow: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+  },
+  //* the viewer's tag pill, plus room for the remove cross
+  tagPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingLeft: 10,
+    paddingRight: 7,
+  },
+  tagLabel: common.semiBold10_5,
+  tagInput: {
+    flexGrow: 1,
+    minWidth: 80,
+    fontFamily: fonts.interRegular,
+    fontSize: 14,
+    paddingVertical: 4,
+  },
+  value: {
+    flex: 1,
+    fontFamily: fonts.interRegular,
+    fontSize: 14,
+  },
+  swatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 4,
+  },
+});
+
+//* components/SuggestionRow.tsx — the chips under a focused field
+export const suggestionRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+  },
+  //* the scroll clips, so it gets room around the chips and hands it back
+  scroll: {
+    flex: 1,
+    marginVertical: -6,
+  },
+  chips: {
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 6,
+    paddingRight: 8,
+  },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    maxWidth: 220,
+  },
+  chipLabel: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 12,
+    flexShrink: 1,
+  },
+  empty: {
+    fontFamily: fonts.interRegular,
+    fontSize: 12,
+  },
+  hide: {
+    width: 36,
+    height: 32,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
+//* components/InputPanel.tsx — the folder wheel and date picker, in the
+//* keyboard's place
+export const INPUT_PANEL_BAR_HEIGHT = 46;
+export const INPUT_PANEL_BODY_HEIGHT = 216;
+
+export const inputPanelStyles = StyleSheet.create({
+  panel: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  bar: {
+    height: INPUT_PANEL_BAR_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  barSide: {
+    minWidth: 60,
+  },
+  barTitle: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 14,
+  },
+  barAction: {
+    fontFamily: fonts.interSemiBold,
+    fontSize: 15,
+  },
+  barActionEnd: {
+    textAlign: "right",
+  },
+  body: {
+    height: INPUT_PANEL_BODY_HEIGHT,
+    justifyContent: "center",
+  },
+});
+
+//* components/WheelPicker.tsx
+export const WHEEL_ROW_HEIGHT = 40;
+export const WHEEL_VISIBLE_ROWS = 5;
+
+export const wheelPickerStyles = StyleSheet.create({
+  wheel: {
+    height: WHEEL_ROW_HEIGHT * WHEEL_VISIBLE_ROWS,
+  },
+  //* the band the chosen row settles into, like iOS's own picker
+  band: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    top: WHEEL_ROW_HEIGHT * Math.floor(WHEEL_VISIBLE_ROWS / 2),
+    height: WHEEL_ROW_HEIGHT,
+    borderRadius: 9,
+    pointerEvents: "none",
+  },
+  content: {
+    paddingVertical: WHEEL_ROW_HEIGHT * Math.floor(WHEEL_VISIBLE_ROWS / 2),
+  },
+  row: {
+    height: WHEEL_ROW_HEIGHT,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  rowLabel: {
+    fontFamily: fonts.interRegular,
+    fontSize: 20,
+  },
+  swatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 4,
+  },
+});
+
 //* components/DraftNoteCard.tsx — the viewer's card for a note not saved yet.
 //* Everything it shares with ViewNote points at viewNoteStyles, so a change to
 //* the viewer's layout carries over rather than drifting.
@@ -406,18 +520,22 @@ export const draftNoteCardStyles = StyleSheet.create({
   noteDate: viewNoteStyles.noteDate,
   noteText: viewNoteStyles.noteText,
   hintText: viewNoteStyles.hintText,
-  snippets: viewNoteStyles.snippets,
-  snippetChip: viewNoteStyles.snippetChip,
-  snippetLabel: viewNoteStyles.snippetLabel,
-  tagsRow: viewNoteStyles.tagsRow,
-  tagLabel: viewNoteStyles.tagLabel,
-  tagPill: addNoteScreenStyles.tagPill,
   captionBox: addNoteScreenStyles.captionBox,
+  noteBlock: addNoteScreenStyles.noteBlock,
   //* laid over noteText: the input's own padding and height rules only
   caption: {
     padding: 0,
     minHeight: 52,
     textAlignVertical: "top",
+  },
+  //* covers the scroll under the pinned tile while the note is open; its
+  //* height is the tile's own (TILE.height), set inline from ViewNote
+  tileBand: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    pointerEvents: "none",
   },
   //* the strip's active-tile border (filmStripStyles.tile), drawn over the
   //* photo's edge since there is no strip tile to hand off to

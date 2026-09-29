@@ -1,7 +1,7 @@
 //! Manually reviewed since 14/09/2026
 
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector, GestureHandlerRootView } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,6 +10,7 @@ import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 import { Feather } from "@react-native-vector-icons/feather/static";
 import { DARK_THEME } from "@/theme/colors";
 import { fonts } from "@/theme/fonts";
+import PressableScale from "./PressableScale";
 
 const AnimatedImage = Animated.createAnimatedComponent(Image);
 
@@ -144,15 +145,15 @@ export function CropperContent({ sourceUri, onCancel, onConfirm }: CropperConten
   return (
     <GestureHandlerRootView style={styles.screen}>
       <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
-        <Pressable onPress={onCancel} hitSlop={8}>
+        <PressableScale onPress={onCancel} hitSlop={8}>
           <Text style={[styles.topBarAction, { color: colors.textPrimary }]}>Cancel</Text>
-        </Pressable>
+        </PressableScale>
         <Text style={[styles.topBarTitle, { color: colors.textPrimary }]}>Crop thumbnail</Text>
-        <Pressable onPress={handleConfirm} hitSlop={8} disabled={!canConfirm}>
+        <PressableScale onPress={handleConfirm} hitSlop={8} disabled={!canConfirm}>
           <Text style={[styles.topBarAction, { color: colors.accent, opacity: canConfirm ? 1 : 0.5 }]}>
             {saving ? "Saving…" : "Use Photo"}
           </Text>
-        </Pressable>
+        </PressableScale>
       </View>
 
       <View style={styles.stage}>
